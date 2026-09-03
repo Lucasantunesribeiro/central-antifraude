@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>CentralAntifraude.UnitTests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Precisa do framework ASP.NET Core para testar o tratador de excecoes
+         com um HttpContext real, sem subir servidor. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CentralAntifraude.Api\CentralAntifraude.Api.csproj" />
+    <ProjectReference Include="..\..\src\CentralAntifraude.Application\CentralAntifraude.Application.csproj" />
+    <ProjectReference Include="..\..\src\CentralAntifraude.Domain\CentralAntifraude.Domain.csproj" />
+    <ProjectReference Include="..\..\src\CentralAntifraude.Infrastructure\CentralAntifraude.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

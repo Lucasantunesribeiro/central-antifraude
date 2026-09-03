@@ -1,0 +1,21 @@
+<Project>
+
+  <!-- Herda as propriedades da raiz. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <!--
+      Regras de analise pensadas para biblioteca publica nao se aplicam a
+      codigo de teste. Elas continuam valendo integralmente em src/.
+    -->
+    <NoWarn>
+      $(NoWarn);
+      CA1707;  <!-- sublinhado em nome: e a convencao de nome de teste legivel -->
+      CA1859;  <!-- tipo de retorno concreto por desempenho: irrelevante em teste -->
+      CA1861;  <!-- array constante como argumento: comum em [InlineData] -->
+      CA1515   <!-- tipo publico poderia ser interno: xUnit exige classe publica -->
+    </NoWarn>
+  </PropertyGroup>
+
+</Project>
