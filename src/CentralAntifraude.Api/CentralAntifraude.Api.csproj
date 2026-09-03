@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>CentralAntifraude.Api</RootNamespace>
+    <UserSecretsId>central-antifraude-api</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CentralAntifraude.Application\CentralAntifraude.Application.csproj" />
+    <ProjectReference Include="..\CentralAntifraude.Infrastructure\CentralAntifraude.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+  </ItemGroup>
+
+</Project>
