@@ -2151,6 +2151,79 @@ Nunca executar silenciosamente:
 
 ---
 
+## 110-A. Comando permanente: “siga para a próxima fase”
+
+Autorização permanente concedida pelo usuário em **2026-09-03**, válida em
+**todas as sessões futuras**.
+
+### Gatilho
+
+Quando o usuário disser apenas:
+
+> **siga para a próxima fase**
+
+isso equivale a autorização explícita para **executar integralmente a próxima
+fase ainda não concluída do `ROADMAP.md`**.
+
+### Procedimento obrigatório antes de executar
+
+1. ler o `CLAUDE.md` por completo;
+2. ler o `ROADMAP.md` por completo;
+3. identificar a próxima fase com status `Não iniciada` cuja fase anterior
+   esteja concluída;
+4. revisar o estado real do repositório e os commits existentes;
+5. validar critérios, dependências e Security Gate daquela fase;
+6. executar a fase inteira até a conclusão.
+
+### Autonomia concedida
+
+Dentro da fase autorizada, Claude decide **sozinho** toda questão técnica
+reversível, segura e compatível com este documento e com o `ROADMAP.md`:
+
+estrutura de classes; nomes internos; organização de pastas; DTOs; validações;
+índices; constraints; bibliotecas compatíveis; configuração de testes;
+refatorações; estratégia de implementação; tratamento de erros; migrations;
+detalhes de UI; divisão de commits; e qualquer correção necessária para deixar
+build, testes e CI verdes.
+
+**Não apresentar alternativas para o usuário escolher** quando uma decisão
+técnica razoável puder ser tomada. Escolher sempre a opção que, nesta ordem:
+
+1. preserva as invariantes do projeto;
+2. resolve o problema real do domínio;
+3. é mais simples de manter e explicar;
+4. evita overengineering;
+5. tem boa cobertura de testes;
+6. é segura;
+7. é compatível com as decisões já registradas.
+
+### Não parar por
+
+Subetapa concluída; transição backend → frontend; migration; teste novo; erro
+de build; teste quebrado; bug encontrado; necessidade de refatorar; preferência
+de implementação; escolha de biblioteca compatível; primeira abordagem que
+falhou. **Resolver e continuar.**
+
+### Continuam exigindo parada
+
+As condições da seção 107 permanecem integralmente válidas — em especial
+`git push`, deploy, recurso remoto, custo pago, operação destrutiva, falta de
+secret, mudança de arquitetura/stack e conflito real entre fontes oficiais.
+
+### Encerramento
+
+Ao concluir: atualizar o status no `ROADMAP.md`, manter a árvore de trabalho
+coerente, criar commits locais, **não fazer push nem deploy**, e apresentar
+resumo com entregas, decisões, builds, testes, Security Gate, commits, débitos
+técnicos não bloqueantes e confirmação de que não houve push/deploy.
+
+### Limite
+
+Uma autorização vale para **uma** fase. Concluída a fase, parar e aguardar novo
+comando — a seção 10 do `ROADMAP.md` continua valendo.
+
+---
+
 # PARTE XX — PESQUISA
 
 ## 111. Fontes
