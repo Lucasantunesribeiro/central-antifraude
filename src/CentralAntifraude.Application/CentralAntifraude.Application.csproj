@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>CentralAntifraude.Application</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CentralAntifraude.Domain\CentralAntifraude.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

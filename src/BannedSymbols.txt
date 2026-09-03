@@ -1,0 +1,6 @@
+P:System.DateTime.Now;Use IRelogio.Agora. Horario local do servidor nao e autoridade (CLAUDE.md secao 100).
+P:System.DateTime.UtcNow;Use IRelogio.Agora para que o tempo seja injetavel e testavel (CLAUDE.md secao 100).
+P:System.DateTime.Today;Use IRelogio.Agora. Horario local do servidor nao e autoridade (CLAUDE.md secao 100).
+P:System.DateTimeOffset.Now;Use IRelogio.Agora. Horario local do servidor nao e autoridade (CLAUDE.md secao 100).
+P:System.DateTimeOffset.UtcNow;Use IRelogio.Agora para que o tempo seja injetavel e testavel (CLAUDE.md secao 100).
+M:System.Guid.NewGuid;Use Identificador.Novo(), que gera UUIDv7 ordenavel por tempo (docs/adr/0002).

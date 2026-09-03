@@ -1,0 +1,20 @@
+<Project>
+
+  <!-- Herda as propriedades da raiz. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!--
+    Analisador de API proibida.
+    Trava, em tempo de compilacao, as decisoes congeladas na Fase 0:
+    relogio injetado, UTC e identificadores UUIDv7 (ver docs/adr/0002 e 0004).
+    Aplicado apenas em src/ - testes podem precisar de tempo real no arranjo.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.txt" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Nucleo do dominio.
+    Regra arquitetural: zero dependencia de pacote de terceiro e zero
+    dependencia dos demais projetos. Protegido por teste de arquitetura.
+  -->
+  <PropertyGroup>
+    <RootNamespace>CentralAntifraude.Domain</RootNamespace>
+  </PropertyGroup>
+
+</Project>
