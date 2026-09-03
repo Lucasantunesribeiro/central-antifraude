@@ -1,0 +1,49 @@
+# Configuracao do gitleaks para a Central Antifraude.
+#
+# Estende o conjunto de regras padrao (chaves AWS, tokens, chaves privadas) e
+# acrescenta o que e especifico deste projeto.
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "string-de-conexao-postgres-com-senha"
+description = "String de conexao PostgreSQL com senha embutida"
+# Sem lookahead: o motor de regex do gitleaks e o RE2, que nao o suporta.
+regex = '''(?i)(host|server)\s*=\s*[^;'"\s]+;[^'"]{0,200}password\s*=\s*[^;'"\s]{3,}'''
+tags = ["banco", "credencial"]
+
+[[rules]]
+id = "credencial-neon"
+description = "URL de conexao do Neon com credencial"
+regex = '''postgres(ql)?://[^:@\s]+:[^@\s]+@[^/\s]*neon\.tech'''
+tags = ["banco", "credencial", "neon"]
+
+[allowlist]
+description = "Excecoes revisadas manualmente"
+
+paths = [
+  # Modelo publicado de proposito: nenhum valor real, so o formato.
+  '''\.env\.example$''',
+  # Bloqueios de dependencia contem hashes de integridade, nao segredos.
+  '''package-lock\.json$''',
+  '''\.lock$''',
+  # Artefatos de build.
+  '''(^|/)(bin|obj|dist|node_modules)/''',
+]
+
+# O alvo e a LINHA inteira, nao apenas o trecho que a regra capturou:
+# a regra de string de conexao captura o inicio da string, entao comparar o
+# valor descartavel contra o "segredo" nunca casaria.
+regexTarget = "line"
+
+regexes = [
+  # Valores descartaveis de desenvolvimento local, documentados como tais.
+  '''troque-este-valor-localmente''',
+  '''dev_local_descartavel''',
+  # Placeholder da fabrica de tempo de design: gerar migration nao abre conexao,
+  # entao este valor nunca autentica em lugar nenhum.
+  '''sem-uso-em-tempo-de-design''',
+  # Alvo inalcancavel de proposito no teste que verifica o health check de banco.
+  '''Password=nenhuma;''',
+]

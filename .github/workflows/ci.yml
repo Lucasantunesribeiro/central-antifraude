@@ -1,0 +1,141 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  backend:
+    name: Backend (.NET 10)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instalar o SDK .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Restaurar dependencias
+        run: dotnet restore CentralAntifraude.slnx
+
+      - name: Compilar
+        # TreatWarningsAsErrors esta em Directory.Build.props: warning novo
+        # quebra o build em vez de virar ruido acumulado.
+        run: dotnet build CentralAntifraude.slnx --configuration Release --no-restore
+
+      - name: Testes unitarios
+        run: >
+          dotnet test tests/CentralAntifraude.UnitTests/CentralAntifraude.UnitTests.csproj
+          --configuration Release --no-build --logger "console;verbosity=normal"
+
+      - name: Testes de arquitetura
+        run: >
+          dotnet test tests/CentralAntifraude.ArchitectureTests/CentralAntifraude.ArchitectureTests.csproj
+          --configuration Release --no-build --logger "console;verbosity=normal"
+
+      - name: Testes de integracao (PostgreSQL real via Testcontainers)
+        # O runner do GitHub ja tem Docker; o Testcontainers sobe o PostgreSQL
+        # sozinho. Nao ha service container declarado de proposito: o teste
+        # controla o ciclo de vida do banco.
+        run: >
+          dotnet test tests/CentralAntifraude.IntegrationTests/CentralAntifraude.IntegrationTests.csproj
+          --configuration Release --no-build --logger "console;verbosity=normal"
+
+      - name: Auditoria de dependencias
+        # `dotnet list package --vulnerable` sai com codigo 0 mesmo quando acha
+        # problema, entao a saida precisa ser inspecionada. A leitura e do JSON
+        # e nao do texto: a mensagem legivel muda com o idioma do runner, e um
+        # portao de seguranca nao pode depender de locale para funcionar.
+        # Um projeto so ganha a chave `frameworks` quando ha achado.
+        run: |
+          set -euo pipefail
+          dotnet list CentralAntifraude.slnx package --vulnerable --include-transitive \
+            --format json --output-version 1 > auditoria-dotnet.json
+          afetados=$(jq '[.projects[] | select(.frameworks != null)] | length' auditoria-dotnet.json)
+          if [ "$afetados" -ne 0 ]; then
+            echo "::error::$afetados projeto(s) com dependencia vulneravel."
+            jq '.projects[] | select(.frameworks != null)' auditoria-dotnet.json
+            exit 1
+          fi
+          echo "Nenhuma vulnerabilidade conhecida nas dependencias .NET."
+
+  frontend:
+    name: Frontend (React + Vite)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Formatacao
+        run: npm run format:check
+
+      - name: Testes
+        run: npm run test
+
+      - name: Build (inclui checagem de tipos)
+        run: npm run build
+
+      - name: Auditoria de dependencias
+        run: npm audit --audit-level=high
+
+  seguranca:
+    name: Varredura de segredos
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Historico completo: um segredo removido no ultimo commit continua
+          # recuperavel nos anteriores, entao varrer so a arvore atual daria
+          # uma sensacao falsa de seguranca.
+          fetch-depth: 0
+
+      - name: Instalar o gitleaks
+        env:
+          VERSAO: 8.30.1
+        run: |
+          set -euo pipefail
+          curl -sSfL -o gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${VERSAO}/gitleaks_${VERSAO}_linux_x64.tar.gz"
+          tar -xzf gitleaks.tar.gz gitleaks
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Varrer o historico do repositorio
+        # --redact garante que um segredo encontrado nao seja impresso no log
+        # publico da execucao - o que seria vazar de novo o que se quer proteger.
+        run: gitleaks git --config .gitleaks.toml --redact --verbose --no-banner .
