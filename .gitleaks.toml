@@ -46,4 +46,8 @@ regexes = [
   '''sem-uso-em-tempo-de-design''',
   # Alvo inalcancavel de proposito no teste que verifica o health check de banco.
   '''Password=nenhuma;''',
+  # Placeholder em maiusculas nos exemplos de documentacao. Mantido em vez de
+  # omitir o campo: quem le precisa ver o formato completo da string de
+  # conexao, e o valor obviamente falso deixa claro que ha algo a preencher.
+  '''Password=SUA_SENHA''',
 ]
