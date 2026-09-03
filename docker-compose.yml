@@ -1,0 +1,29 @@
+# Dependencias locais de desenvolvimento da Central Antifraude.
+#
+# Este arquivo NAO descreve a infraestrutura de producao: em producao o banco
+# e o Neon (PostgreSQL gerenciado) e a aplicacao roda em Lambda - ver
+# ROADMAP.md, Fase 14.
+#
+# As credenciais vem do arquivo `.env` (fora do Git). Copie `.env.example`.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: central-antifraude-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT:-5434}:5432"
+    volumes:
+      - postgres-dados:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-dados:
