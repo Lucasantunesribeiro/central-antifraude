@@ -1,0 +1,283 @@
+/*
+  Base visual do console operacional.
+
+  Direcao do CLAUDE.md secao 79: parecer software que um analista de fraude usa
+  durante o expediente. Densidade, tabelas e leitura rapida - sem gradiente
+  decorativo, sem card enfeitado, sem animacao inutil.
+
+  Esta e apenas a fundacao: tipografia, cor, espacamento e os tres estados.
+  O visual das telas operacionais amadurece junto de cada fase.
+*/
+
+:root {
+  --cor-fundo: #10151c;
+  --cor-superficie: #161d26;
+  --cor-borda: #26313e;
+  --cor-texto: #e6ebf2;
+  --cor-texto-suave: #93a1b3;
+  --cor-acento: #4c8dff;
+  --cor-ok: #3fb984;
+  --cor-falha: #e05a5a;
+
+  --espaco-1: 0.25rem;
+  --espaco-2: 0.5rem;
+  --espaco-3: 0.75rem;
+  --espaco-4: 1rem;
+  --espaco-6: 1.5rem;
+  --espaco-8: 2rem;
+
+  --raio: 4px;
+
+  color-scheme: dark;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--cor-fundo);
+  color: var(--cor-texto);
+}
+
+h1 {
+  font-size: 1.35rem;
+  margin: 0 0 var(--espaco-2);
+}
+
+h2 {
+  font-size: 1rem;
+  margin: 0 0 var(--espaco-3);
+}
+
+code {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.9em;
+}
+
+/* Foco sempre visivel: navegacao por teclado e requisito, nao enfeite. */
+:focus-visible {
+  outline: 2px solid var(--cor-acento);
+  outline-offset: 2px;
+}
+
+/* --------------------------------------------------------------- shell -- */
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app__cabecalho {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-6);
+  padding: var(--espaco-3) var(--espaco-6);
+  background: var(--cor-superficie);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.app__marca {
+  display: flex;
+  align-items: baseline;
+  gap: var(--espaco-2);
+}
+
+.app__marca-nome {
+  font-weight: 600;
+}
+
+.app__marca-ambiente {
+  font-size: 0.75rem;
+  color: var(--cor-texto-suave);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  padding: 0 var(--espaco-2);
+}
+
+.app__navegacao {
+  display: flex;
+  gap: var(--espaco-4);
+}
+
+.app__navegacao a {
+  color: var(--cor-texto-suave);
+  text-decoration: none;
+  padding: var(--espaco-1) 0;
+  border-bottom: 2px solid transparent;
+}
+
+.app__navegacao a:hover {
+  color: var(--cor-texto);
+}
+
+.app__navegacao a.active {
+  color: var(--cor-texto);
+  border-bottom-color: var(--cor-acento);
+}
+
+.app__sessao {
+  margin-left: auto;
+  font-size: 0.85rem;
+}
+
+.app__sessao-anonima {
+  color: var(--cor-texto-suave);
+}
+
+.app__conteudo {
+  flex: 1;
+  padding: var(--espaco-6);
+}
+
+/* -------------------------------------------------------------- pagina -- */
+
+.pagina {
+  max-width: 60rem;
+}
+
+.pagina__resumo {
+  color: var(--cor-texto-suave);
+  margin: 0 0 var(--espaco-6);
+}
+
+.cartao {
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  padding: var(--espaco-4);
+}
+
+/* -------------------------------------------------------------- tabela -- */
+
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.tabela__legenda {
+  text-align: left;
+  color: var(--cor-texto-suave);
+  font-size: 0.85rem;
+  padding-bottom: var(--espaco-2);
+}
+
+.tabela th,
+.tabela td {
+  padding: var(--espaco-2) var(--espaco-3);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.tabela thead th {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cor-texto-suave);
+  font-weight: 600;
+}
+
+.tabela tbody th {
+  font-weight: 400;
+}
+
+/* -------------------------------------------------------------- estados -- */
+
+.estado {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-2);
+  padding: var(--espaco-4);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+}
+
+.estado--carregando {
+  flex-direction: row;
+  align-items: center;
+  color: var(--cor-texto-suave);
+}
+
+.estado--erro {
+  border-color: var(--cor-falha);
+}
+
+.estado__titulo {
+  margin: 0;
+  font-weight: 600;
+}
+
+.estado__descricao {
+  margin: 0;
+  color: var(--cor-texto-suave);
+  font-size: 0.9rem;
+}
+
+.estado__indicador {
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 2px solid var(--cor-borda);
+  border-top-color: var(--cor-acento);
+  border-radius: 50%;
+  animation: girar 0.8s linear infinite;
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Respeita quem pediu menos movimento no sistema operacional. */
+@media (prefers-reduced-motion: reduce) {
+  .estado__indicador {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------- selo -- */
+
+.selo {
+  display: inline-block;
+  font-size: 0.8rem;
+  padding: 0 var(--espaco-2);
+  border-radius: var(--raio);
+  border: 1px solid currentcolor;
+}
+
+.selo--ok {
+  color: var(--cor-ok);
+}
+
+.selo--falha {
+  color: var(--cor-falha);
+}
+
+/* --------------------------------------------------------------- botao -- */
+
+.botao {
+  align-self: flex-start;
+  font: inherit;
+  color: var(--cor-texto);
+  background: transparent;
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  padding: var(--espaco-1) var(--espaco-3);
+  cursor: pointer;
+}
+
+.botao:hover {
+  border-color: var(--cor-acento);
+}
