@@ -1,0 +1,53 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{cs,csx}]
+indent_size = 4
+
+[*.{md,markdown}]
+trim_trailing_whitespace = false
+
+[*.{json,yml,yaml,ts,tsx,js,jsx,css,html}]
+indent_size = 2
+
+[*.cs]
+# Organizacao de usings
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+csharp_using_directive_placement = outside_namespace:warning
+
+# Estilo moderno adotado no projeto
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_prefer_braces = true:warning
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_prefer_primary_constructors = true:suggestion
+dotnet_style_readonly_field = true:warning
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:warning
+
+# Regras que protegem decisoes reais do projeto
+dotnet_diagnostic.CA1062.severity = none          # validacao de argumento publico: DTOs sao validados na borda
+dotnet_diagnostic.CA1848.severity = none          # LoggerMessage source-gen: adotar quando houver volume real
+dotnet_diagnostic.CA1305.severity = warning       # IFormatProvider explicito
+dotnet_diagnostic.CA1310.severity = warning       # StringComparison explicito
+dotnet_diagnostic.CA2007.severity = none          # ConfigureAwait: nao ha SynchronizationContext em ASP.NET Core
+dotnet_diagnostic.RS0030.severity = error         # simbolo proibido (src/BannedSymbols.txt)
+dotnet_diagnostic.IDE0055.severity = suggestion   # formatacao: nao quebrar build por espacamento
+
+# CA1710 exige sufixo "Exception" em ingles nos tipos de excecao. O idioma do
+# dominio deste projeto e portugues (CLAUDE.md), entao valem "ViolacaoDeInvariante"
+# e "ErroDeAplicacao" - a hierarquia continua obvia por herdarem de Exception.
+dotnet_diagnostic.CA1710.severity = none
+
+# Migrations sao codigo gerado pelo EF Core. Reescrever o estilo delas a cada
+# `migrations add` seria atrito puro, e o conteudo que importa (o SQL aplicado)
+# e revisado no code review, nao pelo analisador de estilo.
+[**/Migrations/*.cs]
+generated_code = true
+dotnet_diagnostic.IDE0161.severity = none

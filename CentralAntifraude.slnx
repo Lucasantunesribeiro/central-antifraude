@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CentralAntifraude.Api/CentralAntifraude.Api.csproj" />
+    <Project Path="src/CentralAntifraude.Application/CentralAntifraude.Application.csproj" />
+    <Project Path="src/CentralAntifraude.Domain/CentralAntifraude.Domain.csproj" />
+    <Project Path="src/CentralAntifraude.Infrastructure/CentralAntifraude.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CentralAntifraude.ArchitectureTests/CentralAntifraude.ArchitectureTests.csproj" />
+    <Project Path="tests/CentralAntifraude.IntegrationTests/CentralAntifraude.IntegrationTests.csproj" />
+    <Project Path="tests/CentralAntifraude.UnitTests/CentralAntifraude.UnitTests.csproj" />
+  </Folder>
+</Solution>

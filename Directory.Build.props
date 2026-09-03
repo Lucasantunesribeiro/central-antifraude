@@ -1,0 +1,31 @@
+<Project>
+
+  <!--
+    Propriedades compartilhadas por todos os projetos .NET da solucao.
+    Decisoes congeladas na Fase 0 - ver docs/adr/.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Warning e defeito: nao acumular ruido de compilacao ao longo das fases. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+
+    <!-- Precisao de origem e reprodutibilidade. -->
+    <Deterministic>true</Deterministic>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <!-- Nenhum projeto desta solucao e publicado como pacote NuGet. -->
+    <IsPackable>false</IsPackable>
+
+    <!-- Central Package Management: versoes vivem em Directory.Packages.props. -->
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+</Project>
