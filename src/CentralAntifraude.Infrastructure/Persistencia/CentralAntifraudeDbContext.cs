@@ -1,6 +1,8 @@
 using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Domain.Auditoria;
 using CentralAntifraude.Domain.Identidade;
+using CentralAntifraude.Domain.Integracoes;
+using CentralAntifraude.Domain.Transacoes;
 using Microsoft.EntityFrameworkCore;
 
 namespace CentralAntifraude.Infrastructure.Persistencia;
@@ -38,6 +40,12 @@ public class CentralAntifraudeDbContext : DbContext
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     public DbSet<RegistroDeAuditoria> RegistrosDeAuditoria => Set<RegistroDeAuditoria>();
+
+    public DbSet<Integracao> Integracoes => Set<Integracao>();
+
+    public DbSet<CredencialDeIntegracao> CredenciaisDeIntegracao => Set<CredencialDeIntegracao>();
+
+    public DbSet<Transacao> Transacoes => Set<Transacao>();
 
     /// <summary>
     /// Tenant efetivo da requisicao atual.
@@ -87,6 +95,15 @@ public class CentralAntifraudeDbContext : DbContext
 
         modelBuilder.Entity<RegistroDeAuditoria>()
             .HasQueryFilter(FiltroDeTenant, r => r.OrganizacaoId == OrganizacaoAtual);
+
+        modelBuilder.Entity<Integracao>()
+            .HasQueryFilter(FiltroDeTenant, i => i.OrganizacaoId == OrganizacaoAtual);
+
+        modelBuilder.Entity<CredencialDeIntegracao>()
+            .HasQueryFilter(FiltroDeTenant, c => c.OrganizacaoId == OrganizacaoAtual);
+
+        modelBuilder.Entity<Transacao>()
+            .HasQueryFilter(FiltroDeTenant, t => t.OrganizacaoId == OrganizacaoAtual);
 
         // Organizacao nao recebe filtro: ela e o tenant, nao pertence a um.
         // O acesso a ela e sempre por identificador ja derivado da identidade.

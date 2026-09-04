@@ -1,7 +1,10 @@
 using CentralAntifraude.Application.Auditoria;
 using CentralAntifraude.Application.Identidade;
+using CentralAntifraude.Application.Integracoes;
+using CentralAntifraude.Application.Transacoes;
 using CentralAntifraude.Domain.Tempo;
 using CentralAntifraude.Infrastructure.Identidade;
+using CentralAntifraude.Infrastructure.Integracoes;
 using CentralAntifraude.Infrastructure.Persistencia;
 using CentralAntifraude.Infrastructure.Persistencia.Repositorios;
 using CentralAntifraude.Infrastructure.Tempo;
@@ -64,6 +67,7 @@ public static class InjecaoDeDependencia
         servicos.AddSingleton<IRelogio, RelogioSistema>();
 
         AdicionarIdentidade(servicos, configuracao);
+        AdicionarIngestao(servicos, configuracao);
 
         servicos
             .AddHealthChecks()
@@ -94,6 +98,39 @@ public static class InjecaoDeDependencia
         opcoes.Validar();
 
         return opcoes;
+    }
+
+    /// <summary>
+    /// Le e valida as opcoes de ingestao. Publico pela mesma razao das opcoes
+    /// de autenticacao: mais de um ponto da composicao precisa dos valores.
+    /// </summary>
+    public static OpcoesDeIngestao LerOpcoesDeIngestao(IConfiguration configuracao)
+    {
+        ArgumentNullException.ThrowIfNull(configuracao);
+
+        var opcoes = new OpcoesDeIngestao();
+        configuracao.GetSection(OpcoesDeIngestao.Secao).Bind(opcoes);
+
+        // Falha fechada: sem a chave de fingerprint a aplicacao nao sobe. O
+        // contrario seria aceitar transacoes e gravar um fingerprint de IP
+        // derivado de chave vazia - reversivel, e portanto inutil.
+        opcoes.Validar();
+
+        return opcoes;
+    }
+
+    private static void AdicionarIngestao(IServiceCollection servicos, IConfiguration configuracao)
+    {
+        servicos.AddSingleton(LerOpcoesDeIngestao(configuracao));
+
+        servicos.AddSingleton<IProtetorDeCredencial, ProtetorDeCredencial>();
+        servicos.AddSingleton<IFingerprintDeIp, FingerprintDeIpComHmac>();
+
+        servicos.AddScoped<IRepositorioDeIntegracoes, RepositorioDeIntegracoes>();
+        servicos.AddScoped<IRepositorioDeTransacoes, RepositorioDeTransacoes>();
+
+        servicos.AddScoped<ServicoDeIntegracoes>();
+        servicos.AddScoped<ServicoDeIngestao>();
     }
 
     private static void AdicionarIdentidade(IServiceCollection servicos, IConfiguration configuracao)

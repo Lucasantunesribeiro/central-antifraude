@@ -2,8 +2,10 @@ using CentralAntifraude.Application.Comum;
 using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Domain.Auditoria;
 using CentralAntifraude.Domain.Identidade;
+using CentralAntifraude.Application.Erros;
 using CentralAntifraude.Domain.Primitivos;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace CentralAntifraude.Infrastructure.Persistencia.Repositorios;
 
@@ -185,12 +187,51 @@ public sealed class RegistradorDeAuditoria : Application.Auditoria.IRegistradorD
     }
 }
 
+/// <summary>
+/// Confirma as alteracoes pendentes.
+///
+/// Alem de salvar, traduz a violacao de restricao unica do PostgreSQL
+/// (SQLSTATE 23505) em <see cref="ConflitoDeUnicidadeNoBanco"/>. Sem essa
+/// traducao, a camada de aplicacao precisaria conhecer Npgsql para reagir a
+/// uma corrida de idempotencia — exatamente o que os testes de arquitetura
+/// impedem.
+/// </summary>
 public sealed class UnidadeDeTrabalho : IUnidadeDeTrabalho
 {
+    /// <summary>SQLSTATE de violacao de unicidade no PostgreSQL.</summary>
+    private const string ViolacaoDeUnicidade = "23505";
+
     private readonly CentralAntifraudeDbContext _contexto;
 
     public UnidadeDeTrabalho(CentralAntifraudeDbContext contexto) => _contexto = contexto;
 
-    public Task<int> SalvarAsync(CancellationToken cancellationToken) =>
-        _contexto.SaveChangesAsync(cancellationToken);
+    public async Task<int> SalvarAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _contexto.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException excecao)
+            when (excecao.InnerException is PostgresException { SqlState: ViolacaoDeUnicidade } postgres)
+        {
+            // As entidades que falharam continuam marcadas como Added. Sem
+            // solta-las, qualquer consulta seguinte no mesmo contexto - como a
+            // que procura quem venceu a corrida - devolveria a instancia
+            // fantasma que nunca foi gravada.
+            DesanexarPendentes();
+
+            throw new ConflitoDeUnicidadeNoBanco(postgres.ConstraintName, excecao);
+        }
+    }
+
+    private void DesanexarPendentes()
+    {
+        foreach (var entrada in _contexto.ChangeTracker.Entries().ToList())
+        {
+            if (entrada.State == EntityState.Added)
+            {
+                entrada.State = EntityState.Detached;
+            }
+        }
+    }
 }
