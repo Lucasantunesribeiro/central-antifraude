@@ -1,6 +1,8 @@
 import { Route, Routes } from 'react-router';
 import { LayoutDoApp } from '../layout/LayoutDoApp';
 import { PaginaDeLogin } from '../paginas/PaginaDeLogin';
+import { PaginaDeIntegracoes } from '../paginas/PaginaDeIntegracoes';
+import { PaginaDeTransacoes } from '../paginas/PaginaDeTransacoes';
 import { PaginaDeUsuarios } from '../paginas/PaginaDeUsuarios';
 import { PaginaDoPainel } from '../paginas/PaginaDoPainel';
 import { PaginaInicial } from '../paginas/PaginaInicial';
@@ -16,11 +18,15 @@ export function Rotas() {
 
         <Route element={<RotaProtegida />}>
           <Route path="painel" element={<PaginaDoPainel />} />
+          {/* Transacoes sao leitura: qualquer perfil autenticado enxerga as
+              da propria organizacao. */}
+          <Route path="transacoes" element={<PaginaDeTransacoes />} />
         </Route>
 
         {/* A restricao por perfil e repetida no backend, que e quem decide. */}
         <Route element={<RotaProtegida perfis={['Administrador']} />}>
           <Route path="usuarios" element={<PaginaDeUsuarios />} />
+          <Route path="integracoes" element={<PaginaDeIntegracoes />} />
         </Route>
 
         <Route path="*" element={<PaginaNaoEncontrada />} />

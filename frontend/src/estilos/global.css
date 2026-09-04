@@ -384,3 +384,56 @@ code {
 a.botao {
   text-decoration: none;
 }
+
+/* ------------------------------------------------------- integrações -- */
+
+.pagina--larga {
+  max-width: 80rem;
+}
+
+.formulario-em-linha {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--espaco-3);
+  flex-wrap: wrap;
+}
+
+.formulario-em-linha .campo {
+  flex: 1 1 18rem;
+}
+
+.acoes {
+  display: flex;
+  gap: var(--espaco-2);
+}
+
+.numerico {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.cartao--destaque {
+  border-color: var(--cor-acento);
+  margin-bottom: var(--espaco-4);
+}
+
+/* A chave quebra linha em vez de estourar a tela: ela precisa ser
+   selecionavel inteira, porque so aparece uma vez. */
+.chave {
+  margin: var(--espaco-2) 0;
+  padding: var(--espaco-3);
+  background: var(--cor-fundo);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: all;
+}
+
+.cartao + .tabela,
+.cartao + .cartao,
+.tabela + .cartao {
+  margin-top: var(--espaco-6);
+}
