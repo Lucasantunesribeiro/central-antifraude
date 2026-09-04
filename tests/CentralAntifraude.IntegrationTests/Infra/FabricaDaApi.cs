@@ -61,6 +61,14 @@ public sealed class FabricaDaApi : WebApplicationFactory<Program>
         // o motivo de uma recusa de autenticacao some do diagnostico.
         builder.UseSetting("Logging:LogLevel:Default", "Debug");
 
+        // O appsettings silencia os comandos do EF Core em Warning, o que
+        // e certo em producao e cego no teste: e por estas linhas que a
+        // baseline conta quantas consultas a operacao critica dispara, e
+        // que um N+1 introduzido por engano aparece.
+        builder.UseSetting(
+            "Logging:LogLevel:Microsoft.EntityFrameworkCore.Database.Command",
+            "Information");
+
         builder.ConfigureLogging(log =>
         {
             log.ClearProviders();
