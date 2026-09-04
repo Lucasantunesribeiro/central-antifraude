@@ -1,9 +1,13 @@
+using CentralAntifraude.Application.Comum;
+using CentralAntifraude.Application.Correlacao;
 using CentralAntifraude.Application.Erros;
+using CentralAntifraude.Application.Eventos;
 using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Application.Integracoes;
 using CentralAntifraude.Application.Risco;
-using CentralAntifraude.Domain.Risco;
+using CentralAntifraude.Domain.Eventos;
 using CentralAntifraude.Domain.Primitivos;
+using CentralAntifraude.Domain.Risco;
 using CentralAntifraude.Domain.Tempo;
 using CentralAntifraude.Domain.Transacoes;
 
@@ -22,22 +26,36 @@ public sealed record ResultadoDaIngestao(
     bool JaExistia);
 
 /// <summary>
-/// Recebe uma tentativa de pagamento e a registra exatamente uma vez.
+/// A operacao critica da Central Antifraude: recebe uma tentativa de
+/// pagamento, registra exatamente uma vez, avalia o risco e devolve a decisao.
 ///
-/// A idempotencia tem tres camadas, de proposito (CLAUDE.md secao 33):
+/// Tudo isso acontece **sincronamente e em uma unica transacao serializavel**
+/// (CLAUDE.md secao 28). O cliente precisa de `Permitir`, `Revisar` ou
+/// `Bloquear` na propria resposta — colocar uma fila entre a requisicao e a
+/// decisao inverteria o produto.
+///
+/// **A validacao fica de fora da transacao**, de proposito. Ela e
+/// deterministica e nao toca no banco; abrir uma transacao serializavel para
+/// recusar um payload malformado gastaria isolamento forte com quem nem chega
+/// a competir por nada.
+///
+/// **A idempotencia tem tres camadas** (CLAUDE.md secao 33), e a terceira
+/// muda de forma sob isolamento forte:
 ///
 /// 1. **Consulta antes de inserir.** Resolve o caso comum — o retry que chega
 ///    segundos depois — sem gerar erro no banco.
 /// 2. **Restricao unica no banco.** E a garantia de verdade. Duas requisicoes
-///    simultaneas passam as duas pela consulta e acham nada; uma delas perde
-///    no INSERT.
-/// 3. **Nova consulta apos o conflito.** Quem perdeu a corrida encontra a
-///    linha da vencedora e devolve o mesmo resultado.
+///    simultaneas passam as duas pela consulta e acham nada; uma perde no
+///    INSERT.
+/// 3. **Refazer a operacao inteira.** Quem perdeu a corrida NAO consegue
+///    encontrar a vencedora reconsultando dentro da mesma transacao: o
+///    snapshot dela e anterior ao commit da outra, e a linha e invisivel. O
+///    <see cref="IExecutorDeOperacaoCritica"/> aborta e refaz com um snapshot
+///    novo, no qual a camada 1 acha a vencedora e devolve o resultado dela.
 ///
-/// So a camada 1 seria a armadilha classica do <c>SELECT</c> seguido de
-/// <c>INSERT</c>, que o CLAUDE.md secao 33 proibe explicitamente: sob
-/// concorrencia ela cria duplicata. So a camada 2 devolveria 500 em vez do
-/// resultado correto.
+/// So a camada 1 seria a armadilha do <c>SELECT</c> seguido de <c>INSERT</c>
+/// que o CLAUDE.md secao 33 proibe explicitamente. So a camada 2 devolveria
+/// 500 em vez do resultado correto.
 /// </summary>
 public sealed class ServicoDeIngestao
 {
@@ -45,8 +63,11 @@ public sealed class ServicoDeIngestao
     private readonly IContextoDaIntegracaoAtual _integracao;
     private readonly IFingerprintDeIp _fingerprintDeIp;
     private readonly IUnidadeDeTrabalho _unidadeDeTrabalho;
+    private readonly IExecutorDeOperacaoCritica _operacaoCritica;
     private readonly ServicoDeAvaliacaoDeRisco _avaliacao;
     private readonly IRepositorioDeRisco _risco;
+    private readonly IRepositorioDeEventos _eventos;
+    private readonly IContextoDeCorrelacao _correlacao;
     private readonly IRelogio _relogio;
     private readonly OpcoesDeIngestao _opcoes;
 
@@ -55,8 +76,11 @@ public sealed class ServicoDeIngestao
         IContextoDaIntegracaoAtual integracao,
         IFingerprintDeIp fingerprintDeIp,
         IUnidadeDeTrabalho unidadeDeTrabalho,
+        IExecutorDeOperacaoCritica operacaoCritica,
         ServicoDeAvaliacaoDeRisco avaliacao,
         IRepositorioDeRisco risco,
+        IRepositorioDeEventos eventos,
+        IContextoDeCorrelacao correlacao,
         IRelogio relogio,
         OpcoesDeIngestao opcoes)
     {
@@ -64,33 +88,49 @@ public sealed class ServicoDeIngestao
         _integracao = integracao;
         _fingerprintDeIp = fingerprintDeIp;
         _unidadeDeTrabalho = unidadeDeTrabalho;
+        _operacaoCritica = operacaoCritica;
         _avaliacao = avaliacao;
         _risco = risco;
+        _eventos = eventos;
+        _correlacao = correlacao;
         _relogio = relogio;
         _opcoes = opcoes;
     }
 
-    public async Task<ResultadoDaIngestao> RegistrarAsync(
+    public Task<ResultadoDaIngestao> RegistrarAsync(
         ConteudoDaTransacao conteudo,
         string? chaveDeIdempotencia,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(conteudo);
 
-        var agora = _relogio.Agora;
-
-        ValidadorDaTransacao.Validar(conteudo, chaveDeIdempotencia, agora, _opcoes);
+        ValidadorDaTransacao.Validar(conteudo, chaveDeIdempotencia, _relogio.Agora, _opcoes);
 
         var chave = chaveDeIdempotencia!.Trim();
         var fingerprint = FingerprintDaRequisicao.Calcular(conteudo);
 
+        // Daqui para baixo, tudo roda dentro do boundary transacional forte -
+        // e pode rodar mais de uma vez. Por isso nada e capturado de fora: o
+        // relogio e relido, o contexto historico e relido e a avaliacao e
+        // refeita a cada tentativa.
+        return _operacaoCritica.ExecutarAsync(
+            ct => ExecutarRegistroAsync(conteudo, chave, fingerprint, ct),
+            cancellationToken);
+    }
+
+    private async Task<ResultadoDaIngestao> ExecutarRegistroAsync(
+        ConteudoDaTransacao conteudo,
+        string chave,
+        string fingerprint,
+        CancellationToken cancellationToken)
+    {
         // Camada 1.
         if (await LocalizarEquivalenteAsync(conteudo, chave, fingerprint, cancellationToken) is { } jaRegistrada)
         {
             return await ReplicarResultadoAsync(jaRegistrada, cancellationToken);
         }
 
-        var transacao = Montar(conteudo, chave, fingerprint, agora);
+        var transacao = Montar(conteudo, chave, fingerprint, _relogio.Agora);
         _transacoes.Adicionar(transacao);
 
         // A avaliacao entra na MESMA gravacao da transacao. Uma transacao
@@ -98,30 +138,21 @@ public sealed class ServicoDeIngestao
         // mostrar e que nenhuma regra sabe corrigir depois.
         var avaliacao = await _avaliacao.AvaliarAsync(transacao, cancellationToken);
 
-        try
-        {
-            // Camada 2.
-            await _unidadeDeTrabalho.SalvarAsync(cancellationToken);
+        // E o evento entra junto dos dois. Este e o ponto do Transactional
+        // Outbox (CLAUDE.md secao 38): decisao e intencao de publicar sao
+        // gravadas atomicamente, entao nao existe o estado "avaliei mas
+        // ninguem nunca vai saber" nem "avisei sobre algo que nao existe".
+        _eventos.Adicionar(EventoDeSaida.Registrar(
+            transacao.OrganizacaoId,
+            TransacaoAvaliadaV1.De(transacao, avaliacao),
+            avaliacao.AvaliadaEm,
+            _correlacao.IdDeCorrelacao));
 
-            return new ResultadoDaIngestao(transacao, avaliacao, JaExistia: false);
-        }
-        catch (ConflitoDeUnicidadeNoBanco)
-        {
-            // Camada 3: outra requisicao com a mesma chave venceu a corrida
-            // entre a consulta e o INSERT. A resposta correta e a dela -
-            // inclusive a avaliacao, que NAO e recalculada aqui.
-            var vencedora = await LocalizarEquivalenteAsync(conteudo, chave, fingerprint, cancellationToken);
+        // Camada 2. Uma violacao aqui significa que outra requisicao venceu a
+        // corrida; o executor aborta e refaz a operacao (camada 3).
+        await _unidadeDeTrabalho.SalvarAsync(cancellationToken);
 
-            if (vencedora is not null)
-            {
-                return await ReplicarResultadoAsync(vencedora, cancellationToken);
-            }
-
-            // Restricao violada sem que a linha correspondente exista: nao ha
-            // caminho conhecido que produza isso. Deixar subir como falha
-            // interna e mais honesto do que inventar uma resposta.
-            throw;
-        }
+        return new ResultadoDaIngestao(transacao, avaliacao, JaExistia: false);
     }
 
     /// <summary>
@@ -129,11 +160,12 @@ public sealed class ServicoDeIngestao
     ///
     /// A avaliacao e lida do banco, nunca recalculada. Recalcular faria o
     /// mesmo pedido receber decisoes diferentes conforme as regras mudassem
-    /// entre a primeira tentativa e o retry - e o integrador nao teria como
-    /// saber qual das duas vale.
+    /// entre a primeira tentativa e o retry — e o integrador nao teria como
+    /// saber qual das duas vale (ROADMAP secao 4.6).
     ///
-    /// A Fase 4 transforma isto em invariante testada explicitamente
-    /// (ROADMAP secao 4.6).
+    /// O replay tambem NAO gera um evento novo. O fato "esta transacao foi
+    /// avaliada" aconteceu uma vez so; publica-lo de novo criaria efeitos
+    /// duplicados a cada retry do integrador.
     /// </summary>
     private async Task<ResultadoDaIngestao> ReplicarResultadoAsync(
         Transacao transacao,

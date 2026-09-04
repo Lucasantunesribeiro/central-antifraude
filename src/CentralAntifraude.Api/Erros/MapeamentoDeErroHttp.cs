@@ -22,6 +22,7 @@ public static class MapeamentoDeErroHttp
         TipoDeErro.Conflito => StatusCodes.Status409Conflict,
         TipoDeErro.LimiteDeRequisicoes => StatusCodes.Status429TooManyRequests,
         TipoDeErro.Interno => StatusCodes.Status500InternalServerError,
+        TipoDeErro.Indisponivel => StatusCodes.Status503ServiceUnavailable,
         _ => StatusCodes.Status500InternalServerError,
     };
 
@@ -34,6 +35,7 @@ public static class MapeamentoDeErroHttp
         TipoDeErro.Conflito => "Conflito de estado",
         TipoDeErro.LimiteDeRequisicoes => "Limite de requisicoes excedido",
         TipoDeErro.Interno => "Falha interna",
+        TipoDeErro.Indisponivel => "Servico indisponivel no momento",
         _ => "Falha interna",
     };
 }

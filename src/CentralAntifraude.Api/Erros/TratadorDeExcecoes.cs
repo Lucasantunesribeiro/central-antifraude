@@ -66,6 +66,15 @@ public sealed partial class TratadorDeExcecoes : IExceptionHandler
 
         httpContext.Response.StatusCode = problema.Status ?? StatusCodes.Status500InternalServerError;
 
+        // Retry-After transforma "tente de novo" de conselho em contrato:
+        // um cliente HTTP comum ja sabe respeita-lo sozinho.
+        if (exception is ContencaoDeConcorrencia)
+        {
+            httpContext.Response.Headers.RetryAfter =
+                ContencaoDeConcorrencia.EsperaSugeridaEmSegundos.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+        }
+
         return await _problemDetails.TryWriteAsync(new ProblemDetailsContext
         {
             HttpContext = httpContext,
