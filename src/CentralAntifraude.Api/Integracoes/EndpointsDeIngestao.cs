@@ -1,7 +1,9 @@
 using CentralAntifraude.Api.Identidade;
+using CentralAntifraude.Api.Risco;
 using CentralAntifraude.Application.Comum;
 using CentralAntifraude.Application.Erros;
 using CentralAntifraude.Application.Integracoes;
+using CentralAntifraude.Application.Risco;
 using CentralAntifraude.Application.Transacoes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -78,7 +80,10 @@ public static class EndpointsDeIngestao
                     chave,
                     cancellationToken);
 
-                var corpo = RespostaDeIngestao.De(resultado.Transacao, resultado.JaExistia);
+                var corpo = RespostaDeIngestao.De(
+                    resultado.Transacao,
+                    resultado.Avaliacao,
+                    resultado.JaExistia);
 
                 // 201 quando criou agora; 200 quando o pedido era um retry.
                 // O integrador precisa dessa diferenca para saber se o retry
@@ -212,8 +217,9 @@ public static class EndpointsDeIngestao
     {
         ArgumentNullException.ThrowIfNull(rotas);
 
-        // Qualquer perfil autenticado le transacoes do proprio tenant.
-        // A tela operacional de verdade chega na Fase 3, com score e sinais.
+        // Qualquer perfil autenticado le transacoes do proprio tenant — o
+        // filtro global garante o "proprio tenant", e nao um parametro de
+        // consulta que alguem poderia trocar.
         var grupo = rotas
             .MapGroup($"{SessaoHttp.PrefixoDaApi}/transacoes")
             .WithTags("Transacoes")
@@ -224,7 +230,7 @@ public static class EndpointsDeIngestao
                 [FromQuery] int? tamanho,
                 [FromQuery] string? ordenarPor,
                 [FromQuery] string? direcao,
-                IRepositorioDeTransacoes transacoes,
+                ServicoDeConsultaDeRisco servico,
                 CancellationToken cancellationToken) =>
             {
                 var (paginacao, ordenacao) = LerConsulta(
@@ -235,22 +241,18 @@ public static class EndpointsDeIngestao
                     CamposDeOrdenacaoDeTransacao,
                     "recebidaEm");
 
-                var resultado = await transacoes.ListarAsync(paginacao, ordenacao, cancellationToken);
+                var resultado = await servico.ListarTransacoesAsync(paginacao, ordenacao, cancellationToken);
 
-                return Results.Ok(RespostaPaginada.De(resultado, TransacaoResumida.De));
+                return Results.Ok(RespostaPaginada.De(resultado, TransacaoAvaliadaResumida.De));
             })
             .WithName("ListarTransacoes");
 
         grupo.MapGet("/{id:guid}", async (
                 Guid id,
-                IRepositorioDeTransacoes transacoes,
+                ServicoDeConsultaDeRisco servico,
                 CancellationToken cancellationToken) =>
-            {
-                var transacao = await transacoes.BuscarPorIdAsync(id, cancellationToken)
-                    ?? throw new RecursoNaoEncontrado("Transacao");
-
-                return Results.Ok(TransacaoResumida.De(transacao));
-            })
+                Results.Ok(TransacaoDetalhada.De(
+                    await servico.ObterTransacaoAsync(id, cancellationToken))))
             .WithName("ObterTransacao");
     }
 

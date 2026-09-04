@@ -1,6 +1,8 @@
 using System.Security.Claims;
+using CentralAntifraude.Api.Risco;
 using CentralAntifraude.Application.Integracoes;
 using CentralAntifraude.Domain.Integracoes;
+using CentralAntifraude.Domain.Risco;
 using CentralAntifraude.Domain.Transacoes;
 
 namespace CentralAntifraude.Api.Integracoes;
@@ -67,17 +69,30 @@ public sealed record RequisicaoDeAtivacaoDeIntegracao(bool Ativa);
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// Confirmacao de recebimento.
+/// Resposta da ingestao: o recibo mais a decisao de risco.
 ///
-/// Na Fase 2 a resposta e um recibo: a transacao foi registrada, com este
-/// identificador. A decisao de risco entra na Fase 4, quando a avaliacao
-/// passa a fazer parte da mesma operacao.
+/// A decisao vai na MESMA resposta porque o integrador precisa dela para
+/// seguir com o pagamento; jogar a avaliacao para uma fila e responder "depois
+/// eu digo" quebraria o caminho critico sincrono (CLAUDE.md secao 28).
+///
+/// <see cref="Decisao"/> e recomendacao de risco — <c>Permitir</c>,
+/// <c>Revisar</c> ou <c>Bloquear</c>. Nao e autorizacao, captura nem
+/// liquidacao: a Central Antifraude nao processa dinheiro (CLAUDE.md secao
+/// 10).
+///
+/// Em um retry, estes campos sao os da avaliacao ORIGINAL, lida do banco. O
+/// mesmo pedido nao recebe duas decisoes diferentes so porque as regras
+/// mudaram no meio.
 /// </summary>
 public sealed record RespostaDeIngestao(
     Guid Id,
     string IdentificadorExterno,
     DateTimeOffset RecebidaEm,
-    string Situacao)
+    string Situacao,
+    int Score,
+    string Decisao,
+    DateTimeOffset AvaliadaEm,
+    IReadOnlyList<SinalResposta> Sinais)
 {
     /// <summary>Registrada agora, nesta requisicao.</summary>
     public const string Registrada = "registrada";
@@ -85,15 +100,25 @@ public sealed record RespostaDeIngestao(
     /// <summary>Ja existia. O pedido era um retry ou uma duplicata.</summary>
     public const string JaRegistrada = "ja_registrada";
 
-    public static RespostaDeIngestao De(Transacao transacao, bool jaExistia)
+    public static RespostaDeIngestao De(
+        Transacao transacao,
+        AvaliacaoDeRisco avaliacao,
+        bool jaExistia)
     {
         ArgumentNullException.ThrowIfNull(transacao);
+        ArgumentNullException.ThrowIfNull(avaliacao);
+
+        var resposta = AvaliacaoResposta.De(avaliacao);
 
         return new RespostaDeIngestao(
             transacao.Id,
             transacao.IdentificadorExterno,
             transacao.RecebidaEm,
-            jaExistia ? JaRegistrada : Registrada);
+            jaExistia ? JaRegistrada : Registrada,
+            resposta.Score,
+            resposta.Decisao,
+            resposta.AvaliadaEm,
+            resposta.Sinais);
     }
 }
 
@@ -183,29 +208,6 @@ public sealed record IntegracaoDetalhada(
     DateTimeOffset CriadaEm,
     IReadOnlyList<CredencialResumida> Credenciais);
 
-/// <summary>Transacao na listagem operacional.</summary>
-public sealed record TransacaoResumida(
-    Guid Id,
-    string IdentificadorExterno,
-    decimal Valor,
-    string Moeda,
-    DateTimeOffset OcorridaEm,
-    DateTimeOffset RecebidaEm,
-    string ClienteExternoId,
-    string? PaisDeOrigem)
-{
-    public static TransacaoResumida De(Transacao transacao)
-    {
-        ArgumentNullException.ThrowIfNull(transacao);
-
-        return new TransacaoResumida(
-            transacao.Id,
-            transacao.IdentificadorExterno,
-            transacao.Valor.Valor,
-            transacao.Valor.Moeda,
-            transacao.OcorridaEm,
-            transacao.RecebidaEm,
-            transacao.ClienteExternoId,
-            transacao.PaisDeOrigem);
-    }
-}
+// A transacao na listagem operacional mora em Risco/ContratosDeRisco.cs, como
+// TransacaoAvaliadaResumida: a partir da Fase 3 nenhuma tela mostra transacao
+// sem dizer o que o motor decidiu sobre ela.
