@@ -547,17 +547,91 @@ Testar:
 
 ## 1.9 Critérios de conclusão
 
-- [ ] Login funcional.
-- [ ] Refresh funcional.
-- [ ] Logout funcional.
-- [ ] RBAC no backend.
-- [ ] Tenant derivado da autenticação.
-- [ ] Cross-tenant coberto por integração.
-- [ ] Frontend restaura sessão corretamente.
-- [ ] Auditor não possui escrita indevida.
-- [ ] Administrador possui somente escopo previsto.
-- [ ] Security Gate 1 verde.
-- [ ] CI verde.
+- [x] Login funcional.
+- [x] Refresh funcional.
+- [x] Logout funcional.
+- [x] RBAC no backend.
+- [x] Tenant derivado da autenticação.
+- [x] Cross-tenant coberto por integração.
+- [x] Frontend restaura sessão corretamente.
+- [x] Auditor não possui escrita indevida.
+- [x] Administrador possui somente escopo previsto.
+- [x] Security Gate 1 verde.
+- [x] CI verde.
+
+---
+
+## 1.10 Resultado da Fase 1
+
+**Concluída em 2026-09-03.**
+
+### Evidências
+
+| Critério | Como foi verificado |
+|---|---|
+| Build backend | `dotnet build` em `Release`, **0 erros e 0 avisos**, com `TreatWarningsAsErrors` |
+| Build frontend | `npm run build` (`tsc -b` com `strict: true`), lint e formatação limpos |
+| Login / refresh / logout | 34 testes em `SecurityGate1Tests`, contra a API real em ambiente `Production` |
+| RBAC | os 3 perfis não-Administrador recebem 403 em `/api/usuarios` |
+| Tenant da autenticação | claim `org` assinada; nenhum parâmetro, cabeçalho ou rota troca de organização |
+| Cross-tenant | 9 testes em `IsolamentoDeTenantTests`, com **dois tenants reais** no banco |
+| Sessão no F5 | verificado nos testes e no navegador real, com Chrome |
+| Testes | 136 unitários + 15 arquitetura + 56 integração + 33 frontend = **240, todos verdes** |
+| Security Gate 1 | [`docs/security-gate-1.md`](docs/security-gate-1.md) |
+| Migration | `IdentidadeEMultiTenancy` aplicada em PostgreSQL real, sem alteração de modelo pendente |
+| Dependências | `dotnet list package --vulnerable`: nenhuma; `npm audit`: 0 |
+
+### Decisões congeladas
+
+| Decisão | Registro |
+|---|---|
+| E-mail único global; um usuário por organização | `docs/adr/0005-identidade-e-multi-tenancy.md` |
+| Isolamento em duas camadas: filtro nomeado do EF + testes com dois tenants | `docs/adr/0005` |
+| Recurso de outro tenant responde **404**, não 403 | `docs/adr/0005` |
+| Prefixo `/api` nas rotas de aplicação | `docs/adr/0005` |
+| Access token em memória; refresh em cookie HttpOnly com `Path` restrito | `docs/adr/0006-sessao-humana.md` |
+| Rotação com família e derrubada em caso de reuso | `docs/adr/0006` |
+| **PBKDF2-HMAC-SHA512, 220.000 iterações** (fonte: OWASP, 2026-09-03) | `docs/adr/0006` |
+| CSRF por verificação de `Origin` | `docs/adr/0006` |
+
+### Quatro defeitos reais encontrados e corrigidos
+
+Cada um teria virado incidente; os dois últimos só o **navegador real** revelou:
+
+1. **Corpo inválido virava 400 com corpo vazio em produção.**
+   `ThrowOnBadRequest` só é `true` em Development por padrão — o contrato de
+   erro quebrava justamente onde mais importa.
+2. **`/api/auth/eu` devolvia 404 com token válido.** O handler JWT remapeava a
+   claim `sub`; a autorização passava e só a identidade sumia.
+3. **Login pelo navegador respondia 403.** O proxy do `vite dev` faz o `Origin`
+   (`:5174`) não bater com o host da API (`:5175`). O `curl` não revela, porque
+   não envia `Origin`.
+4. **F5 em `/usuarios` devolvia JSON da API.** Rota do SPA e endpoint da API
+   colidiam no mesmo caminho.
+
+### Fora de escopo, deliberadamente
+
+- **Sem CORS real** — o `vite dev` faz proxy; a política depende do deploy
+  cross-site, decidido na Fase 14 e desenhado na 11.
+- **Sem consulta de auditoria** — a trilha é gravada e testada; a tela é a
+  Fase 10.
+- **Rate limiting só no login, por IP** — protege força bruta em uma conta,
+  não *password spraying* distribuído. Superfície da Fase 11.
+
+### Débito técnico não bloqueante
+
+1. **CI ainda não executado.** Cada comando do workflow roda localmente, mas o
+   GitHub Actions só roda após o primeiro `push`, que não foi autorizado.
+2. **Duas abas renovando ao mesmo tempo** podem disparar a detecção de reuso e
+   derrubar a sessão. Não observado — a renovação acontece perto da expiração,
+   não simultaneamente. É a primeira hipótese a investigar se aparecer relato
+   de "fui deslogado do nada".
+3. **Equalização de tempo no login é por construção, não medida.** Um teste de
+   temporização confiável exigiria estatística sobre muitas amostras e seria
+   intermitente no CI.
+4. **Sem tela de criação/edição de usuários no frontend.** A API está completa
+   e testada; a interface administrativa tem apenas a listagem, que é o que o
+   ROADMAP 1.6 pede nesta fase.
 
 ---
 
@@ -3136,7 +3210,7 @@ A autorização de uma fase não autoriza automaticamente a fase seguinte.
 | Fase | Status |
 |---|---|
 | 0 — Fundação Técnica | ✅ Concluída (2026-09-03) |
-| 1 — Identidade e Multi-tenancy | ⬜ Não iniciada |
+| 1 — Identidade e Multi-tenancy | ✅ Concluída (2026-09-03) |
 | 2 — Integrações e Ingestão | ⬜ Não iniciada |
 | 3 — Motor de Risco v1 | ⬜ Não iniciada |
 | 4 — Avaliação Síncrona e Concorrência | ⬜ Não iniciada |

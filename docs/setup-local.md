@@ -82,6 +82,35 @@ Sem a string configurada, a API **não sobe** e diz o motivo. É deliberado: um
 processo no ar que responde 200 no *liveness* e falha em toda operação é pior
 do que um processo que não subiu.
 
+## 4.1 Autenticação (Fase 1)
+
+Duas configurações a mais, pelo mesmo caminho da string de conexão:
+
+```bash
+# Chave HMAC-SHA256 dos access tokens (base64, minimo 32 bytes).
+export Autenticacao__ChaveDeAssinatura="$(node -e "console.log(require('crypto').randomBytes(48).toString('base64'))")"
+
+# Senha dos usuarios de desenvolvimento. Sem ela o seed NAO roda.
+export Seed__SenhaPadrao="escolha-uma-senha-longa"
+```
+
+Sem a chave, a API **não sobe** — é deliberado: uma configuração de
+autenticação errada precisa impedir a inicialização, e não virar "token
+inválido" em produção sem explicação.
+
+O seed cria, apenas em Development e apenas se `Seed:SenhaPadrao` existir, uma
+organização `demo` com um usuário de cada perfil:
+
+| E-mail | Perfil |
+|---|---|
+| `admin@demo.local` | Administrador |
+| `supervisor@demo.local` | SupervisorDeFraude |
+| `analista@demo.local` | AnalistaDeFraude |
+| `auditor@demo.local` | Auditor |
+
+Todos com a senha de `Seed:SenhaPadrao`. O seed é idempotente: rodar de novo
+não duplica nem sobrescreve senha.
+
 ## 5. Rodar
 
 ```bash
@@ -101,7 +130,22 @@ Confira:
 ```bash
 curl http://localhost:5175/health/live
 curl http://localhost:5175/health/ready
+
+# Login (o -c grava o cookie de sessao num arquivo)
+curl -i -X POST http://localhost:5175/api/auth/login   -H "Content-Type: application/json" -c cookies.txt   -d '{"email":"admin@demo.local","senha":"SUA_SENHA_DO_SEED"}'
 ```
+
+As rotas de aplicação ficam sob `/api`; `/health/*` fica na raiz, porque é
+consumido por orquestrador e não pela interface.
+
+> **Origem confiável.** Os endpoints de sessão recusam requisição cujo
+> cabeçalho `Origin` não esteja na lista de origens permitidas — é a defesa
+> contra CSRF. Em desenvolvimento, `http://localhost:5174` já vem declarado em
+> `appsettings.Development.json`.
+>
+> Se o login funcionar no `curl` e responder **403 no navegador**, é isto: o
+> `curl` não envia `Origin`, o navegador envia. Ajuste
+> `Autenticacao:OrigensPermitidas`.
 
 ## 6. Testes
 

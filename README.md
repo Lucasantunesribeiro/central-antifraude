@@ -18,16 +18,17 @@ solução certificada de compliance.
 
 | Fase | Nome | Status |
 |---|---|---|
-| **0** | **Fundação Técnica** | ✅ **concluída** |
-| 1 | Identidade e Multi-tenancy | não iniciada |
-| 2–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
+| 0 | Fundação Técnica | ✅ concluída |
+| **1** | **Identidade e Multi-tenancy** | ✅ **concluída** |
+| 2 | Integrações e Ingestão | não iniciada |
+| 3–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
 
-A Fase 0 é fundação: solução compilando, PostgreSQL real em teste de
-integração, contratos transversais congelados, CI e Security Gate 0.
+Hoje a plataforma tem organizações, usuários com quatro perfis, login com
+rotação de refresh token e isolamento de tenant testado nas duas camadas.
 
-**Ainda não existe** motor de risco, autenticação, multi-tenancy, ingestão de
-transações nem tela operacional. Isso é deliberado — cada capacidade chega na
-fase que o `ROADMAP.md` define.
+**Ainda não existe** motor de risco, ingestão de transações, alertas nem
+investigação. Isso é deliberado — cada capacidade chega na fase que o
+`ROADMAP.md` define.
 
 ---
 
@@ -51,7 +52,7 @@ src/
 
 tests/
   CentralAntifraude.UnitTests/         domínio, aplicação, contrato de erro
-  CentralAntifraude.IntegrationTests/  PostgreSQL real via Testcontainers
+  CentralAntifraude.IntegrationTests/  PostgreSQL real, isolamento e Security Gates
   CentralAntifraude.ArchitectureTests/ regras de dependência entre camadas
 
 frontend/                            shell React + Vite
@@ -60,6 +61,7 @@ docs/
   adr/                               decisões arquiteturais
   setup-local.md                     como rodar
   security-gate-0.md                 resultado do gate da Fase 0
+  security-gate-1.md                 resultado do gate da Fase 1
 ```
 
 A dependência corre em uma direção só, e testes de arquitetura seguram isso:
@@ -94,10 +96,23 @@ não sobe — e diz o motivo.
 
 ### Endpoints
 
-| Rota | O que faz |
-|---|---|
-| `GET /health/live` | o processo está vivo. Não toca em dependência externa. |
-| `GET /health/ready` | as dependências respondem. Pode falhar sozinho. |
+Rotas de aplicação ficam sob `/api`; `/health/*` fica na raiz, porque é
+consumido por orquestrador e não pela interface.
+
+| Rota | Perfil | O que faz |
+|---|---|---|
+| `GET /health/live` | anônimo | o processo está vivo. Não toca em dependência externa. |
+| `GET /health/ready` | anônimo | as dependências respondem. Pode falhar sozinho. |
+| `POST /api/auth/login` | anônimo | autentica e emite a sessão |
+| `POST /api/auth/refresh` | cookie | rotaciona a sessão |
+| `POST /api/auth/logout` | cookie | encerra a sessão |
+| `GET /api/auth/eu` | qualquer | dados da própria sessão |
+| `GET /api/usuarios` | Administrador | lista os usuários da organização |
+| `POST /api/usuarios` | Administrador | cria usuário |
+| `PUT /api/usuarios/{id}/perfil` | Administrador | altera perfil e corta sessões |
+| `PUT /api/usuarios/{id}/ativacao` | Administrador | ativa/desativa e corta sessões |
+| `PUT /api/usuarios/{id}/senha` | Administrador | redefine senha |
+| `PUT /api/usuarios/{id}/nome` | Administrador | altera nome |
 
 ---
 
@@ -125,6 +140,8 @@ tem — um teste de concorrência verde no SQLite não provaria nada.
 | Identificadores internos são UUIDv7 | [ADR 0002](docs/adr/0002-identificadores-internos.md) |
 | PostgreSQL real nos testes, via Testcontainers | [ADR 0003](docs/adr/0003-postgresql-e-testes-de-integracao.md) |
 | UTC, dinheiro, erros, JSON, correlação, paginação | [ADR 0004](docs/adr/0004-contratos-transversais.md) |
+| E-mail único global, filtro de tenant em duas camadas, prefixo `/api` | [ADR 0005](docs/adr/0005-identidade-e-multi-tenancy.md) |
+| Tokens, hash de senha, CSRF e detecção de reuso | [ADR 0006](docs/adr/0006-sessao-humana.md) |
 
 Três decisões são reforçadas em tempo de compilação por
 `src/BannedSymbols.txt`: `DateTime.UtcNow`, `DateTime.Now` e `Guid.NewGuid()`
