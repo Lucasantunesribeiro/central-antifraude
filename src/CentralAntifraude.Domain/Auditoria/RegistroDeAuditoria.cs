@@ -21,6 +21,15 @@ public enum OperacaoAuditada
     UsuarioDesativado = 8,
     UsuarioReativado = 9,
     SenhaDeUsuarioAlterada = 10,
+
+    // Integracoes (Fase 2)
+    IntegracaoCriada = 20,
+    IntegracaoAlterada = 21,
+    IntegracaoDesativada = 22,
+    IntegracaoReativada = 23,
+    CredencialDeIntegracaoEmitida = 24,
+    CredencialDeIntegracaoRevogada = 25,
+    IngestaoRecusadaPorCredencial = 26,
 }
 
 /// <summary>
