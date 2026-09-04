@@ -58,3 +58,6 @@ Desktop.ini
 # Ferramentas locais
 # ---------------------------------------------------------------------------
 .gitleaks-report.json
+
+# agent skills config (local, seeded from ~/.agents/mattpocock-config)
+docs/agents/

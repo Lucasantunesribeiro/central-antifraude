@@ -20,15 +20,22 @@ solução certificada de compliance.
 |---|---|---|
 | 0 | Fundação Técnica | ✅ concluída |
 | 1 | Identidade e Multi-tenancy | ✅ concluída |
-| **2** | **Integrações e Ingestão** | ✅ **concluída** |
-| 3 | Motor de Risco v1 | não iniciada |
+| 2 | Integrações e Ingestão | ✅ concluída |
+| **3** | **Motor de Risco v1** | ✅ **concluída** |
 | 4–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
 
 Hoje a plataforma recebe transações de sistemas externos autenticados por
 credencial própria, registra cada tentativa **exatamente uma vez** mesmo sob
-requisições simultâneas, e mantém o isolamento entre organizações.
+requisições simultâneas, **avalia o risco na mesma operação** e devolve
+`Permitir`, `Revisar` ou `Bloquear` com os sinais que justificam a decisão.
 
-**Ainda não existe** motor de risco, alertas nem investigação. Isso é
+O motor é determinístico e versionado: a mesma transação, o mesmo histórico e a
+mesma versão de perfil produzem sempre o mesmo resultado. Cada avaliação grava a
+versão do perfil e a versão de cada regra acionada, e o banco recusa apagar o
+que sustenta uma decisão — uma avaliação de meses atrás continua explicável pela
+configuração daquele momento.
+
+**Ainda não existe** alerta, caso, investigação nem gestão de regras. Isso é
 deliberado — cada capacidade chega na fase que o `ROADMAP.md` define.
 
 ---
@@ -64,6 +71,7 @@ docs/
   security-gate-0.md                 resultado do gate da Fase 0
   security-gate-1.md                 resultado do gate da Fase 1
   security-gate-2.md                 resultado do gate da Fase 2
+  security-gate-3.md                 resultado do gate da Fase 3
 ```
 
 A dependência corre em uma direção só, e testes de arquitetura seguram isso:
@@ -121,11 +129,56 @@ consumido por orquestrador e não pela interface.
 | `POST /api/integracoes/{id}/credenciais` | Administrador | emite chave para rotação |
 | `DELETE /api/integracoes/{id}/credenciais/{cid}` | Administrador | revoga uma chave |
 | `PUT /api/integracoes/{id}/ativacao` | Administrador | ativa/desativa e revoga chaves |
-| `GET /api/transacoes` | qualquer | transações da organização |
-| `POST /api/ingestao/transacoes` | **`ApiKey`** | recebe uma tentativa de pagamento |
+| `GET /api/transacoes` | qualquer | transações da organização, com score e decisão |
+| `GET /api/transacoes/{id}` | qualquer | detalhe com a avaliação e os sinais |
+| `GET /api/regras` | qualquer | catálogo de regras em vigor |
+| `GET /api/regras/perfil` | qualquer | perfil vigente, com os limiares |
+| `POST /api/ingestao/transacoes` | **`ApiKey`** | recebe uma tentativa de pagamento e devolve a decisão de risco |
 
 A ingestão usa esquema de autenticação **próprio** (`Authorization: ApiKey ...`):
 integração não é usuário, e um token humano não serve ali — nem o contrário.
+
+---
+
+## O motor de risco
+
+Quatro regras, um catálogo **fechado e tipado**. Não há DSL, SQL configurável
+nem script de usuário: configurar uma regra é escolher números dentro de um
+contrato conhecido, e um tipo desconhecido lido do banco **falha alto** em vez
+de virar comportamento.
+
+| Regra | O que reconhece | Peso (demo) | Configuração (demo) |
+|---|---|---|---|
+| Velocidade por cliente | várias tentativas em sequência — o padrão de *card testing* | 35 | mais de 3 em 10 min |
+| Dispositivo novo | aparelho nunca visto para aquele cliente | 20 | mínimo 3 no histórico |
+| Valor acima do histórico | gasto muito acima do habitual daquele cliente | 30 | 5× a média, mínimo 3 |
+| Divergência geográfica | país diferente dos já vistos | 25 | mínimo 3 no histórico |
+
+| Score | Decisão |
+|---|---|
+| 0–39 | Permitir |
+| 40–69 | Revisar |
+| 70–100 | Bloquear |
+
+As **práticas** são reais e têm fonte: U.S. Payments Forum, *"Card-Not-Present
+(CNP) Fraud Mitigation Techniques"* (2020) — a citação de cada regra está no
+[ADR 0008](docs/adr/0008-motor-de-risco.md).
+
+Os **números** não são. Pesos e limiares são configuração de demonstração deste
+projeto, escolhidos para que uma regra sozinha nunca bloqueie: bloquear exige ao
+menos duas evidências independentes, para que a investigação humana continue
+tendo propósito. Apresentá-los como padrão de mercado seria inventar.
+
+Três propriedades que o produto garante e testa:
+
+- **IA não participa.** Score, sinais e o texto de cada explicação são
+  produzidos por código determinístico.
+- **Ausência de dado não vira risco.** Sem fingerprint, sem país ou com
+  histórico curto demais, a regra se cala. Tratar "não sei" como "suspeito"
+  encheria a fila do analista de alertas que não dizem nada.
+- **Retry não recalcula.** A mesma requisição repetida devolve a avaliação
+  original, lida do banco — o mesmo pedido nunca recebe duas decisões
+  diferentes.
 
 ---
 
@@ -156,6 +209,7 @@ tem — um teste de concorrência verde no SQLite não provaria nada.
 | E-mail único global, filtro de tenant em duas camadas, prefixo `/api` | [ADR 0005](docs/adr/0005-identidade-e-multi-tenancy.md) |
 | Tokens, hash de senha, CSRF e detecção de reuso | [ADR 0006](docs/adr/0006-sessao-humana.md) |
 | Idempotência em três camadas, fingerprint canônico, credencial de integração | [ADR 0007](docs/adr/0007-ingestao-e-idempotencia.md) |
+| Motor determinístico, catálogo fechado, explicabilidade gravada | [ADR 0008](docs/adr/0008-motor-de-risco.md) |
 
 Três decisões são reforçadas em tempo de compilação por
 `src/BannedSymbols.txt`: `DateTime.UtcNow`, `DateTime.Now` e `Guid.NewGuid()`

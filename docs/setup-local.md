@@ -119,6 +119,27 @@ organização `demo` com um usuário de cada perfil:
 Todos com a senha de `Seed:SenhaPadrao`. O seed é idempotente: rodar de novo
 não duplica nem sobrescreve senha.
 
+O seed também provisiona o **catálogo de risco** da organização: o perfil padrão
+(limiares 40 e 70) e as quatro regras, cada uma na versão 1. Isso não é
+opcional — uma organização sem perfil ativo não consegue avaliar transação
+nenhuma, e descobrir isso na primeira ingestão seria tarde.
+
+### Ajuste opcional — janela de histórico
+
+O motor carrega o histórico do cliente com dois limites, para que o custo de
+avaliar seja previsível:
+
+```bash
+# Padrões. Só mexa se souber por quê.
+export Avaliacao__DiasDeHistorico=90
+export Avaliacao__MaximoDeTransacoesNoHistorico=200
+```
+
+`DiasDeHistorico` precisa cobrir ao menos 24 h — a maior janela que uma regra de
+velocidade pode declarar. Um valor menor faria a regra perguntar por um passado
+que o contexto não carregou e ficar **calada**: sem erro, sem aviso e com score
+menor do que o perfil pede. A API recusa subir nesse caso.
+
 ## 5. Rodar
 
 ```bash

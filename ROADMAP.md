@@ -1126,17 +1126,110 @@ mesma entrada + mesmo contexto + mesma versão
 
 ## 3.12 Critérios de conclusão
 
-- [ ] Motor determinístico criado.
-- [ ] Catálogo inicial de regras implementado.
-- [ ] Score 0..100.
-- [ ] Decisão derivada de profile version.
-- [ ] Sinais persistidos e explicáveis.
-- [ ] Versões registradas.
-- [ ] Transação antiga não depende de config atual.
-- [ ] Detalhe da transação funcional no frontend.
-- [ ] Fontes das práticas reais documentadas.
-- [ ] Security Gate 3 verde.
-- [ ] CI verde.
+- [x] Motor determinístico criado.
+- [x] Catálogo inicial de regras implementado.
+- [x] Score 0..100.
+- [x] Decisão derivada de profile version.
+- [x] Sinais persistidos e explicáveis.
+- [x] Versões registradas.
+- [x] Transação antiga não depende de config atual.
+- [x] Detalhe da transação funcional no frontend.
+- [x] Fontes das práticas reais documentadas.
+- [x] Security Gate 3 verde.
+- [ ] CI verde — *pendente do primeiro `push`, que não foi autorizado. Cada passo do workflow foi executado localmente e está verde.*
+
+---
+
+## 3.13 Resultado da Fase 3
+
+**Concluída em 2026-09-04.**
+
+### Evidências
+
+| Critério | Como foi verificado |
+|---|---|
+| Build backend | `dotnet build -c Release --no-incremental`, **0 erros e 0 avisos** |
+| Build frontend | `npm run build`, `oxlint` e `prettier --check` limpos |
+| Determinismo | mesma transação + mesmo contexto + mesma versão → score, decisão, ordem, versões **e texto de cada explicação** idênticos |
+| Score 0..100 | 4 regras de 40 pontos somam 160 → score 100, com `somaBrutaDosPontos` e `scoreFoiLimitado` visíveis na tela |
+| Decisão pela versão do perfil | limiares testados nas quatro bordas (39/40/69/70) |
+| Sinais explicáveis | cada sinal grava tipo, pontos, texto determinístico, evidência numérica e a **versão exata da regra** |
+| Explicabilidade histórica | FKs `RESTRICT` de avaliação → versão de perfil e de sinal → versão de regra: o banco recusa apagar o que sustenta uma decisão |
+| Uma avaliação por transação | 20 requisições simultâneas → **1× 201, 19× 200, 1 avaliação no banco** |
+| Retry não recalcula | `avaliadaEm` e `score` idênticos entre a primeira resposta e o retry |
+| Isolamento de histórico | mesmo `clienteExternoId` em dois tenants; rajada em A não produz sinal na primeira transação de B |
+| Fontes | U.S. Payments Forum (2020), citação por regra, em [`docs/adr/0008`](docs/adr/0008-motor-de-risco.md) |
+| Testes | 281 unitários + 15 arquitetura + 123 integração + 45 frontend = **464, todos verdes** |
+| Security Gate 3 | [`docs/security-gate-3.md`](docs/security-gate-3.md) |
+| Migration | `MotorDeRisco` aplicada em PostgreSQL real; `has-pending-model-changes` sem alteração pendente |
+| Dependências | `dotnet list package --vulnerable`: nenhuma; `npm audit`: 0 |
+| Segredos | `gitleaks detect`: nenhum |
+
+### Decisões congeladas
+
+| Decisão | Registro |
+|---|---|
+| **Motor é função pura** — sem banco, relógio, rede, aleatoriedade ou IA | `docs/adr/0008-motor-de-risco.md` |
+| Contexto histórico carregado de uma vez, limitado em janela e quantidade | `docs/adr/0008` |
+| Catálogo fechado e tipado; configuração é dado, nunca expressão | `docs/adr/0008` |
+| Janelas ancoradas em `OccurredAt`, intervalo semiaberto, transação avaliada contada | `docs/adr/0008` |
+| Ausência de dado nunca vira sinal de risco | `docs/adr/0008` |
+| Avaliação na mesma gravação da transação; retry lê, não recalcula | `docs/adr/0008` |
+| Catálogo padrão provisionado junto da organização | `docs/adr/0008` |
+| País declarado pela integração, sem GeoIP | `docs/adr/0008` |
+| Limiares 40/70, escolhidos para que uma regra sozinha nunca bloqueie | `docs/adr/0008` |
+
+### Defeitos reais encontrados e corrigidos
+
+**1. O horário mudava ao passar pelo banco.** O `DateTimeOffset` do .NET conta
+em ticks de 100 ns; o `timestamptz` do PostgreSQL guarda microssegundos. A
+resposta da ingestão devolvia `avaliadaEm` da memória na primeira requisição e
+do banco no retry — **o mesmo pedido retornava dois horários diferentes**, com
+9 ticks de diferença.
+
+Corrigido em `Instante.Normalizar`, aplicado no relógio do sistema e nos tempos
+da transação: o que entra na memória é exatamente o que o banco devolve.
+Truncar, e não arredondar, porque truncar é o que o driver faz na gravação.
+Quatro testes cobrem a regra.
+
+**2. A suíte do frontend saía com código 1 mesmo com tudo verde.** Um
+`mockResolvedValue(sessaoValida())` da Fase 1 reaproveitava a **mesma instância
+de `Response`** entre chamadas. O corpo de um `Response` só pode ser lido uma
+vez, então a segunda leitura estourava `Body has already been read` — um erro
+que não reprovava teste nenhum, mas fazia o `vitest run` sair com código 1.
+
+O CI teria ficado vermelho no primeiro `push` sem que nenhum teste falhasse.
+Corrigido com uma resposta nova a cada chamada, com o motivo documentado no
+arquivo.
+
+### Fora de escopo, deliberadamente
+
+- **Sem `SERIALIZABLE`.** A garantia desta fase é a restrição única de avaliação
+  por transação. O isolamento transacional da leitura de contexto sob
+  concorrência é a Fase 4, e é lá que a regra de velocidade vira teste de
+  concorrência de verdade.
+- **Sem gestão de regras.** Não existe rota que crie, edite ou publique regra ou
+  perfil — e há teste que verifica a ausência dessas rotas. Rascunho, backtest e
+  publicação são a Fase 8.
+- **Sem alerta.** Score alto ainda não gera alerta nem caso. Fases 6 e 7.
+- **Sem reavaliação retroativa.** Um evento atrasado é avaliado com o contexto
+  dele, e avaliações passadas não são recalculadas (`CLAUDE.md` seção 16).
+
+### Débito técnico não bloqueante
+
+1. **CI ainda não executado.** Cada comando do workflow roda localmente e está
+   verde, mas o GitHub Actions só roda após o primeiro `push`, que continua não
+   autorizado.
+2. **Verificação visual no navegador segue pendente.** A extensão do Chrome está
+   desconectada nesta máquina desde a Fase 2. As telas novas — lista com score,
+   detalhe com sinais e catálogo de regras — têm testes de componente, mas não
+   inspeção visual. Mesma dívida da fase anterior.
+3. **Sem índice novo para o contexto histórico.** A consulta usa o índice
+   `(organizacao, cliente_externo_id, ocorrida_em)` já existente. A Fase 4 mede
+   o plano real antes de acrescentar qualquer outro (`CLAUDE.md` seção 46).
+4. **Sem rate limit próprio nas consultas humanas.** `/api/transacoes` e
+   `/api/regras` não têm limite dedicado; não há operação cara nem enumerável
+   ali hoje. A Fase 10 revisita quando o painel agregar dados.
 
 ---
 
@@ -3287,7 +3380,7 @@ A autorização de uma fase não autoriza automaticamente a fase seguinte.
 | 0 — Fundação Técnica | ✅ Concluída (2026-09-03) |
 | 1 — Identidade e Multi-tenancy | ✅ Concluída (2026-09-03) |
 | 2 — Integrações e Ingestão | ✅ Concluída (2026-09-04) |
-| 3 — Motor de Risco v1 | ⬜ Não iniciada |
+| 3 — Motor de Risco v1 | ✅ Concluída (2026-09-04) |
 | 4 — Avaliação Síncrona e Concorrência | ⬜ Não iniciada |
 | 5 — Backbone Assíncrono | ⬜ Não iniciada |
 | 6 — Alertas | ⬜ Não iniciada |
