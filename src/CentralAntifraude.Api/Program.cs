@@ -5,11 +5,14 @@ using CentralAntifraude.Api.Correlacao;
 using CentralAntifraude.Api.Diagnostico;
 using CentralAntifraude.Api.Erros;
 using CentralAntifraude.Api.Identidade;
+using CentralAntifraude.Api.Integracoes;
 using CentralAntifraude.Application.Correlacao;
 using CentralAntifraude.Application.Identidade;
+using CentralAntifraude.Application.Integracoes;
 using CentralAntifraude.Infrastructure;
 using CentralAntifraude.Infrastructure.Identidade;
 using CentralAntifraude.Infrastructure.Persistencia;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
@@ -109,6 +112,7 @@ var opcoesDeAutenticacao = InjecaoDeDependencia.LerOpcoesDeAutenticacao(construt
 // ---------------------------------------------------------------------------
 construtor.Services.AddHttpContextAccessor();
 construtor.Services.AddScoped<IContextoDoUsuarioAtual, ContextoDoUsuarioAtual>();
+construtor.Services.AddScoped<IContextoDaIntegracaoAtual, ContextoDaIntegracaoAtual>();
 
 construtor.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -138,7 +142,20 @@ construtor.Services
         };
     });
 
-construtor.Services.AddAuthorization(PoliticasDeAutorizacao.Registrar);
+// Esquema separado para integracoes: uma API key nunca vira sessao humana, e
+// um access token humano nao serve na ingestao (CLAUDE.md secao 50). A
+// separacao fica visivel no codigo, no log e na configuracao de autorizacao.
+construtor.Services
+    .AddAuthentication()
+    .AddScheme<AuthenticationSchemeOptions, ManipuladorDeAutenticacaoDeIntegracao>(
+        ManipuladorDeAutenticacaoDeIntegracao.Esquema,
+        _ => { });
+
+construtor.Services.AddAuthorization(opcoes =>
+{
+    PoliticasDeAutorizacao.Registrar(opcoes);
+    EndpointsDeIngestao.RegistrarPoliticaDeIntegracao(opcoes);
+});
 
 // ---------------------------------------------------------------------------
 // Limite de tentativas de login.
@@ -161,6 +178,21 @@ construtor.Services.AddRateLimiter(opcoes =>
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
+
+    // A ingestao e particionada pela CREDENCIAL, e nao pelo IP: varias
+    // instancias do integrador saem de IPs diferentes e sao o mesmo cliente,
+    // e um limite por IP puniria uma delas sem proteger nada. Quando a
+    // credencial nao pode ser lida (chave malformada ou ausente), a particao
+    // cai no IP - que e justamente o caso de quem esta testando chaves.
+    opcoes.AddPolicy(EndpointsDeIngestao.LimiteDeIngestao, contexto =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ChaveDeLimiteDeIngestao(contexto),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 600,
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0,
             }));
@@ -212,6 +244,9 @@ if (aplicacao.Environment.IsDevelopment())
 
 aplicacao.MapearEndpointsDeAutenticacao();
 aplicacao.MapearEndpointsDeUsuarios();
+aplicacao.MapearEndpointsDeIntegracoes();
+aplicacao.MapearEndpointsDeTransacoes();
+aplicacao.MapearEndpointsDeIngestao();
 
 // ---------------------------------------------------------------------------
 // Saude.
@@ -237,6 +272,29 @@ await aplicacao.RunAsync();
 // Chave do limite de login: IP de origem.
 static string ChaveDeLimiteDeLogin(HttpContext contexto) =>
     contexto.Connection.RemoteIpAddress?.ToString() ?? "sem-ip";
+
+// Chave do limite de ingestao: o identificador PUBLICO da credencial - a
+// parte da chave que nao e segredo. O segredo nunca vira chave de dicionario
+// em memoria.
+static string ChaveDeLimiteDeIngestao(HttpContext contexto)
+{
+    const string prefixo = ManipuladorDeAutenticacaoDeIntegracao.PrefixoDoEsquema;
+    var cabecalho = contexto.Request.Headers.Authorization.ToString();
+
+    if (cabecalho.StartsWith(prefixo, StringComparison.Ordinal))
+    {
+        // Split limitado a 3, pelo mesmo motivo do interpretador de credencial:
+        // o segredo e base64url e pode conter "_".
+        var partes = cabecalho[prefixo.Length..].Split('_', 3);
+
+        if (partes.Length == 3)
+        {
+            return $"credencial:{partes[1]}";
+        }
+    }
+
+    return $"ip:{contexto.Connection.RemoteIpAddress?.ToString() ?? "sem-ip"}";
+}
 
 /// <summary>
 /// Exposto para que os testes de integracao possam hospedar a aplicacao real
