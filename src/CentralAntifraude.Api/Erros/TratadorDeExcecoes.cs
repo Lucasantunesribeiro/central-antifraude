@@ -78,6 +78,22 @@ public sealed partial class TratadorDeExcecoes : IExceptionHandler
     {
         var problema = new ProblemDetails();
 
+        // Corpo de requisicao ilegivel: JSON malformado, tipo errado ou campo
+        // desconhecido (o contrato e estrito, ver ADR 0004). O ASP.NET Core ja
+        // classificou como 400 - so falta nao deixar virar 500 aqui.
+        //
+        // A mensagem original cita o nome do parametro C# do endpoint; ela vai
+        // para o log e nao para a resposta.
+        if (excecao is BadHttpRequestException requisicaoInvalida)
+        {
+            problema.Status = requisicaoInvalida.StatusCode;
+            problema.Title = MapeamentoDeErroHttp.TituloPara(TipoDeErro.Validacao);
+            problema.Detail = "O corpo da requisicao e invalido ou contem campos nao suportados.";
+            problema.Extensions["codigo"] = "requisicao_malformada";
+
+            return problema;
+        }
+
         if (excecao is ErroDeAplicacao erro)
         {
             problema.Status = MapeamentoDeErroHttp.StatusPara(erro.Tipo);

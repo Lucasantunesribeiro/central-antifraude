@@ -1,11 +1,18 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using CentralAntifraude.Api.Correlacao;
 using CentralAntifraude.Api.Diagnostico;
 using CentralAntifraude.Api.Erros;
+using CentralAntifraude.Api.Identidade;
 using CentralAntifraude.Application.Correlacao;
+using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Infrastructure;
+using CentralAntifraude.Infrastructure.Identidade;
+using CentralAntifraude.Infrastructure.Persistencia;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.RateLimiting;
 
 var construtor = WebApplication.CreateBuilder(args);
 
@@ -56,6 +63,12 @@ construtor.Services.ConfigureHttpJsonOptions(opcoes =>
 // ---------------------------------------------------------------------------
 // Contrato de erro: Problem Details (RFC 9457) para toda falha.
 // ---------------------------------------------------------------------------
+// O padrao do ASP.NET Core so lanca BadHttpRequestException em Development.
+// Fora dele, um corpo invalido virava 400 com corpo VAZIO - quebrando a
+// promessa de que todo erro da API tem o mesmo formato justamente no ambiente
+// onde ela mais importa. Ligado aqui, a falha passa pelo tratador central.
+construtor.Services.Configure<RouteHandlerOptions>(opcoes => opcoes.ThrowOnBadRequest = true);
+
 construtor.Services.AddProblemDetails(opcoes =>
 {
     // Vale para toda resposta de erro, inclusive as que nao passam por
@@ -89,12 +102,91 @@ construtor.Services.AddScoped<IContextoDeCorrelacao>(
 // ---------------------------------------------------------------------------
 construtor.Services.AdicionarInfraestrutura(construtor.Configuration);
 
+var opcoesDeAutenticacao = InjecaoDeDependencia.LerOpcoesDeAutenticacao(construtor.Configuration);
+
+// ---------------------------------------------------------------------------
+// Identidade humana.
+// ---------------------------------------------------------------------------
+construtor.Services.AddHttpContextAccessor();
+construtor.Services.AddScoped<IContextoDoUsuarioAtual, ContextoDoUsuarioAtual>();
+
+construtor.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(opcoes =>
+    {
+        // Sem isto, o handler renomeia claims curtas para as URIs longas do
+        // WS-Federation - "sub" vira ".../nameidentifier" - e a leitura por
+        // nome original devolve vazio. O sintoma e traicoeiro: a autorizacao
+        // passa (as claims proprias nao sao remapeadas) e so a identidade
+        // some, virando 404 em vez de 401.
+        opcoes.MapInboundClaims = false;
+
+        opcoes.TokenValidationParameters =
+            EmissorDeAccessToken.MontarParametrosDeValidacao(opcoesDeAutenticacao);
+
+        // A resposta de falha e escrita pelo tratador central, para que 401
+        // saia no mesmo formato Problem Details de todos os outros erros.
+        opcoes.Events = new JwtBearerEvents
+        {
+            OnChallenge = contexto =>
+            {
+                contexto.HandleResponse();
+                throw new CentralAntifraude.Application.Erros.NaoAutenticado(
+                    "token_invalido",
+                    "Credencial ausente, invalida ou expirada.");
+            },
+        };
+    });
+
+construtor.Services.AddAuthorization(PoliticasDeAutorizacao.Registrar);
+
+// ---------------------------------------------------------------------------
+// Limite de tentativas de login.
+//
+// Particionado por IP de origem. Ler o e-mail do corpo para compor a chave
+// exigiria bufferizar a requisicao antes do roteamento - custo que so se
+// justifica com evidencia de abuso distribuido, e nao agora.
+//
+// O limite protege contra forca bruta em uma conta. Nao protege contra
+// password spraying vindo de muitos IPs: isso e superficie da Fase 11, junto
+// do resto do hardening.
+// ---------------------------------------------------------------------------
+construtor.Services.AddRateLimiter(opcoes =>
+{
+    opcoes.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    opcoes.AddPolicy(EndpointsDeIdentidade.LimiteDeLogin, contexto =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ChaveDeLimiteDeLogin(contexto),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
+});
+
 if (construtor.Environment.IsDevelopment())
 {
     construtor.Services.AddOpenApi();
 }
 
 var aplicacao = construtor.Build();
+
+// ---------------------------------------------------------------------------
+// Seed de desenvolvimento.
+//
+// So roda em Development e so quando Seed:SenhaPadrao esta configurado.
+// Em producao nao existe caminho que crie usuario com senha conhecida.
+// ---------------------------------------------------------------------------
+if (aplicacao.Environment.IsDevelopment())
+{
+    using var escopoDeInicializacao = aplicacao.Services.CreateScope();
+    await SeedDeDesenvolvimento.ExecutarAsync(
+        escopoDeInicializacao.ServiceProvider,
+        aplicacao.Configuration,
+        CancellationToken.None);
+}
 
 // Primeiro middleware do pipeline, de proposito: o tratador de excecoes esta
 // acima dele e so enxerga o escopo de log criado aqui se a correlacao vier
@@ -108,10 +200,18 @@ aplicacao.UseExceptionHandler();
 // promessa de que todo erro da API tem o mesmo formato.
 aplicacao.UseStatusCodePages();
 
+aplicacao.UseRateLimiter();
+
+aplicacao.UseAuthentication();
+aplicacao.UseAuthorization();
+
 if (aplicacao.Environment.IsDevelopment())
 {
     aplicacao.MapOpenApi();
 }
+
+aplicacao.MapearEndpointsDeAutenticacao();
+aplicacao.MapearEndpointsDeUsuarios();
 
 // ---------------------------------------------------------------------------
 // Saude.
@@ -124,15 +224,19 @@ aplicacao.MapHealthChecks("/health/live", new HealthCheckOptions
 {
     Predicate = _ => false,
     ResponseWriter = RespostaDeSaude.Escrever,
-});
+}).AllowAnonymous();
 
 aplicacao.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = registro => registro.Tags.Contains(InjecaoDeDependencia.TagDeProntidao),
     ResponseWriter = RespostaDeSaude.Escrever,
-});
+}).AllowAnonymous();
 
 await aplicacao.RunAsync();
+
+// Chave do limite de login: IP de origem.
+static string ChaveDeLimiteDeLogin(HttpContext contexto) =>
+    contexto.Connection.RemoteIpAddress?.ToString() ?? "sem-ip";
 
 /// <summary>
 /// Exposto para que os testes de integracao possam hospedar a aplicacao real
