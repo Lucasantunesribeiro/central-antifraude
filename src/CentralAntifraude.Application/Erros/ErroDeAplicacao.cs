@@ -119,3 +119,43 @@ public sealed class ConflitoDeEstado : ErroDeAplicacao
 
     public override string Codigo { get; }
 }
+
+/// <summary>
+/// Credencial ausente, invalida ou sessao que nao vale mais.
+///
+/// A mensagem e sempre generica de proposito: distinguir "e-mail nao existe"
+/// de "senha errada" entrega ao atacante metade do trabalho.
+/// </summary>
+public sealed class NaoAutenticado : ErroDeAplicacao
+{
+    public NaoAutenticado(string codigo, string mensagem)
+        : base(mensagem)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(codigo);
+        Codigo = codigo;
+    }
+
+    public override TipoDeErro Tipo => TipoDeErro.NaoAutenticado;
+
+    public override string Codigo { get; }
+}
+
+/// <summary>
+/// Identidade valida, mas sem permissao para a operacao.
+///
+/// Usado quando o RECURSO nao esta em jogo — por exemplo, um Auditor tentando
+/// criar usuario. Quando o recurso pertence a outro tenant, a resposta correta
+/// e <see cref="RecursoNaoEncontrado"/>, e nao esta: um 403 ali confirmaria a
+/// existencia do identificador.
+/// </summary>
+public sealed class NaoAutorizado : ErroDeAplicacao
+{
+    public NaoAutorizado(string mensagem = "Seu perfil nao permite esta operacao.")
+        : base(mensagem)
+    {
+    }
+
+    public override TipoDeErro Tipo => TipoDeErro.NaoAutorizado;
+
+    public override string Codigo => "acesso_negado";
+}
