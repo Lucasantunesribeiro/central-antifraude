@@ -3,8 +3,10 @@ using CentralAntifraude.Domain.Auditoria;
 using CentralAntifraude.Domain.Eventos;
 using CentralAntifraude.Domain.Identidade;
 using CentralAntifraude.Domain.Integracoes;
+using CentralAntifraude.Domain.Operacao;
 using CentralAntifraude.Domain.Risco;
 using CentralAntifraude.Domain.Transacoes;
+using CentralAntifraude.Infrastructure.Mensageria;
 using Microsoft.EntityFrameworkCore;
 
 namespace CentralAntifraude.Infrastructure.Persistencia;
@@ -60,6 +62,14 @@ public class CentralAntifraudeDbContext : DbContext
     public DbSet<AvaliacaoDeRisco> AvaliacoesDeRisco => Set<AvaliacaoDeRisco>();
 
     public DbSet<EventoDeSaida> EventosDeSaida => Set<EventoDeSaida>();
+
+    public DbSet<EventoProcessado> EventosProcessados => Set<EventoProcessado>();
+
+    public DbSet<ResumoDiarioDeDecisoes> ResumosDiarios => Set<ResumoDiarioDeDecisoes>();
+
+    public DbSet<MensagemDaFila> FilaDeMensagens => Set<MensagemDaFila>();
+
+    public DbSet<MensagemMorta> MensagensMortas => Set<MensagemMorta>();
 
     /// <summary>
     /// Tenant efetivo da requisicao atual.
@@ -146,6 +156,17 @@ public class CentralAntifraudeDbContext : DbContext
         // exatamente o que a avaliacao tem de mais sensivel.
         modelBuilder.Entity<EventoDeSaida>()
             .HasQueryFilter(FiltroDeTenant, e => e.OrganizacaoId == OrganizacaoAtual);
+
+        modelBuilder.Entity<EventoProcessado>()
+            .HasQueryFilter(FiltroDeTenant, e => e.OrganizacaoId == OrganizacaoAtual);
+
+        modelBuilder.Entity<ResumoDiarioDeDecisoes>()
+            .HasQueryFilter(FiltroDeTenant, r => r.OrganizacaoId == OrganizacaoAtual);
+
+        // A fila e a fila de mortas NAO recebem filtro: sao a simulacao de
+        // um servico externo, e o SQS tambem nao sabe o que e um tenant. O
+        // isolamento acontece no consumidor, que confere o tenant declarado
+        // contra o dado antes de aplicar qualquer efeito.
 
         // Organizacao nao recebe filtro: ela e o tenant, nao pertence a um.
         // O acesso a ela e sempre por identificador ja derivado da identidade.

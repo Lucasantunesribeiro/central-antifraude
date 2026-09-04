@@ -3,12 +3,14 @@ using CentralAntifraude.Application.Comum;
 using CentralAntifraude.Application.Eventos;
 using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Application.Integracoes;
+using CentralAntifraude.Application.Mensageria;
 using CentralAntifraude.Application.Risco;
 using CentralAntifraude.Application.Transacoes;
 using CentralAntifraude.Domain.Risco;
 using CentralAntifraude.Domain.Tempo;
 using CentralAntifraude.Infrastructure.Identidade;
 using CentralAntifraude.Infrastructure.Integracoes;
+using CentralAntifraude.Infrastructure.Mensageria;
 using CentralAntifraude.Infrastructure.Persistencia;
 using CentralAntifraude.Infrastructure.Persistencia.Repositorios;
 using CentralAntifraude.Infrastructure.Tempo;
@@ -73,6 +75,7 @@ public static class InjecaoDeDependencia
         AdicionarIdentidade(servicos, configuracao);
         AdicionarConcorrencia(servicos, configuracao);
         AdicionarRisco(servicos, configuracao);
+        AdicionarMensageria(servicos, configuracao);
         AdicionarIngestao(servicos, configuracao);
 
         servicos
@@ -153,6 +156,49 @@ public static class InjecaoDeDependencia
         opcoes.Validar();
 
         return opcoes;
+    }
+
+    /// <summary>Le e valida as opcoes da fila.</summary>
+    public static OpcoesDaFila LerOpcoesDaFila(IConfiguration configuracao)
+    {
+        ArgumentNullException.ThrowIfNull(configuracao);
+
+        var opcoes = new OpcoesDaFila();
+        configuracao.GetSection(OpcoesDaFila.Secao).Bind(opcoes);
+        opcoes.Validar();
+
+        return opcoes;
+    }
+
+    /// <summary>Le e valida as opcoes dos lacos de fundo.</summary>
+    public static OpcoesDeSegundoPlano LerOpcoesDeSegundoPlano(IConfiguration configuracao)
+    {
+        ArgumentNullException.ThrowIfNull(configuracao);
+
+        var opcoes = new OpcoesDeSegundoPlano();
+        configuracao.GetSection(OpcoesDeSegundoPlano.Secao).Bind(opcoes);
+        opcoes.Validar();
+
+        return opcoes;
+    }
+
+    private static void AdicionarMensageria(IServiceCollection servicos, IConfiguration configuracao)
+    {
+        servicos.AddSingleton(LerOpcoesDaFila(configuracao));
+        servicos.AddSingleton(LerOpcoesDeSegundoPlano(configuracao));
+
+        // Com escopo: os tres usam o DbContext da requisicao (ou do ciclo do
+        // laco de fundo, que abre o proprio escopo). Singleton aqui seria
+        // dependencia cativa.
+        servicos.AddScoped<IFilaDeMensagens, FilaEmPostgres>();
+        servicos.AddScoped<DespachanteDeEventos>();
+        servicos.AddScoped<ProcessadorDeEventos>();
+
+        // Os lacos so fazem alguma coisa quando SegundoPlano:Habilitado esta
+        // ligado. Registra-los sempre mantem uma unica composicao, em vez de
+        // dois caminhos de inicializacao diferentes entre teste e producao.
+        servicos.AddHostedService<LacoDoDespachante>();
+        servicos.AddHostedService<LacoDoConsumidor>();
     }
 
     private static void AdicionarConcorrencia(IServiceCollection servicos, IConfiguration configuracao)
