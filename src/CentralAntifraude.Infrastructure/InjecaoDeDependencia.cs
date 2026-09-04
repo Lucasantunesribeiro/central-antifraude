@@ -1,4 +1,6 @@
 using CentralAntifraude.Application.Auditoria;
+using CentralAntifraude.Application.Comum;
+using CentralAntifraude.Application.Eventos;
 using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Application.Integracoes;
 using CentralAntifraude.Application.Risco;
@@ -69,6 +71,7 @@ public static class InjecaoDeDependencia
         servicos.AddSingleton<IRelogio, RelogioSistema>();
 
         AdicionarIdentidade(servicos, configuracao);
+        AdicionarConcorrencia(servicos, configuracao);
         AdicionarRisco(servicos, configuracao);
         AdicionarIngestao(servicos, configuracao);
 
@@ -138,6 +141,31 @@ public static class InjecaoDeDependencia
         opcoes.Validar();
 
         return opcoes;
+    }
+
+    /// <summary>Le e valida as opcoes de retry de concorrencia.</summary>
+    public static OpcoesDeConcorrencia LerOpcoesDeConcorrencia(IConfiguration configuracao)
+    {
+        ArgumentNullException.ThrowIfNull(configuracao);
+
+        var opcoes = new OpcoesDeConcorrencia();
+        configuracao.GetSection(OpcoesDeConcorrencia.Secao).Bind(opcoes);
+        opcoes.Validar();
+
+        return opcoes;
+    }
+
+    private static void AdicionarConcorrencia(IServiceCollection servicos, IConfiguration configuracao)
+    {
+        servicos.AddSingleton(LerOpcoesDeConcorrencia(configuracao));
+
+        // Com escopo, e nao singleton: o executor abre transacao no
+        // DbContext da requisicao. Um singleton aqui seria dependencia
+        // cativa - ele guardaria para sempre o primeiro DbContext que
+        // recebesse, e a segunda requisicao gravaria pelo contexto da
+        // primeira.
+        servicos.AddScoped<IExecutorDeOperacaoCritica, ExecutorDeOperacaoCritica>();
+        servicos.AddScoped<IRepositorioDeEventos, RepositorioDeEventos>();
     }
 
     private static void AdicionarRisco(IServiceCollection servicos, IConfiguration configuracao)

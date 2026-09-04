@@ -1,5 +1,6 @@
 using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Domain.Auditoria;
+using CentralAntifraude.Domain.Eventos;
 using CentralAntifraude.Domain.Identidade;
 using CentralAntifraude.Domain.Integracoes;
 using CentralAntifraude.Domain.Risco;
@@ -57,6 +58,8 @@ public class CentralAntifraudeDbContext : DbContext
     public DbSet<VersaoDePerfilDeRisco> VersoesDePerfilDeRisco => Set<VersaoDePerfilDeRisco>();
 
     public DbSet<AvaliacaoDeRisco> AvaliacoesDeRisco => Set<AvaliacaoDeRisco>();
+
+    public DbSet<EventoDeSaida> EventosDeSaida => Set<EventoDeSaida>();
 
     /// <summary>
     /// Tenant efetivo da requisicao atual.
@@ -137,6 +140,12 @@ public class CentralAntifraudeDbContext : DbContext
         // do sinal.
         modelBuilder.Entity<SinalDeRisco>()
             .HasQueryFilter(FiltroDeTenant, s => s.OrganizacaoId == OrganizacaoAtual);
+
+        // A Outbox tambem e filtrada. Ela guarda decisao, score e sinais
+        // de um tenant; uma consulta futura escrita sem o filtro vazaria
+        // exatamente o que a avaliacao tem de mais sensivel.
+        modelBuilder.Entity<EventoDeSaida>()
+            .HasQueryFilter(FiltroDeTenant, e => e.OrganizacaoId == OrganizacaoAtual);
 
         // Organizacao nao recebe filtro: ela e o tenant, nao pertence a um.
         // O acesso a ela e sempre por identificador ja derivado da identidade.
