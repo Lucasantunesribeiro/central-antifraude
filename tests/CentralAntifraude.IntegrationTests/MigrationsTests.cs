@@ -1,4 +1,5 @@
 using CentralAntifraude.IntegrationTests.Infra;
+using CentralAntifraude.Infrastructure.Identidade;
 using CentralAntifraude.Infrastructure.Persistencia;
 using Microsoft.EntityFrameworkCore;
 
@@ -95,6 +96,6 @@ public sealed class MigrationsTests
         var construtor = new DbContextOptionsBuilder<CentralAntifraudeDbContext>();
         OpcoesDoDbContext.Configurar(construtor, _banco.StringDeConexao);
 
-        return new CentralAntifraudeDbContext(construtor.Options);
+        return new CentralAntifraudeDbContext(construtor.Options, ContextoDeUsuarioFixo.Anonimo);
     }
 }

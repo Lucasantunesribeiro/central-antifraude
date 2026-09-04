@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using CentralAntifraude.Api.Correlacao;
 using CentralAntifraude.IntegrationTests.Infra;
+using CentralAntifraude.Infrastructure.Identidade;
 using CentralAntifraude.Infrastructure.Persistencia;
 using Microsoft.EntityFrameworkCore;
 
@@ -28,7 +29,7 @@ public sealed class ApiTests : IAsyncLifetime
     {
         var construtor = new DbContextOptionsBuilder<CentralAntifraudeDbContext>();
         OpcoesDoDbContext.Configurar(construtor, _banco.StringDeConexao);
-        await using var contexto = new CentralAntifraudeDbContext(construtor.Options);
+        await using var contexto = new CentralAntifraudeDbContext(construtor.Options, ContextoDeUsuarioFixo.Anonimo);
         await contexto.Database.MigrateAsync(TestContext.Current.CancellationToken);
 
         _fabrica = new FabricaDaApi(_banco.StringDeConexao);
@@ -117,27 +118,18 @@ public sealed class ApiTests : IAsyncLifetime
     // -----------------------------------------------------------------------
 
     [Fact]
-    public async Task Rota_inexistente_devolve_problem_details_e_nao_corpo_vazio()
+    public async Task Rota_inexistente_para_anonimo_responde_401_e_nao_404()
     {
+        // Desde a Fase 1 existe uma FallbackPolicy que exige autenticacao em
+        // tudo que nao declare o contrario. O efeito colateral e desejavel:
+        // um anonimo nao consegue mapear quais rotas existem comparando 404
+        // com 401.
         var resposta = await _cliente.GetAsync(
             new Uri("/rota-que-nao-existe", UriKind.Relative),
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.NotFound, resposta.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, resposta.StatusCode);
         Assert.Equal("application/problem+json", resposta.Content.Headers.ContentType?.MediaType);
-
-        var texto = await resposta.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-
-        using var corpo = JsonDocument.Parse(texto);
-        Assert.Equal(404, corpo.RootElement.GetProperty("status").GetInt32());
-
-        // Todo erro carrega o identificador de correlacao, inclusive os que
-        // nao passam por excecao. E o que o suporte pede primeiro.
-        Assert.True(corpo.RootElement.TryGetProperty("idDeCorrelacao", out var correlacao));
-        Assert.False(string.IsNullOrWhiteSpace(correlacao.GetString()));
-
-        Assert.DoesNotContain("Microsoft.AspNetCore", texto, StringComparison.Ordinal);
-        Assert.DoesNotContain("   at ", texto, StringComparison.Ordinal);
     }
 
     // -----------------------------------------------------------------------
