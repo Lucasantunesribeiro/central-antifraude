@@ -29,13 +29,33 @@ function respostaDeSaude() {
   );
 }
 
+function semSessao() {
+  return new Response(JSON.stringify({ status: 401 }), {
+    status: 401,
+    headers: { 'Content-Type': 'application/problem+json' },
+  });
+}
+
+/**
+ * O shell monta dentro do ProvedorDeSessao, que consulta /auth/refresh ao
+ * carregar. Este roteador de mock responde por caminho, em vez de devolver a
+ * mesma coisa para tudo - senao a resposta de saude chegaria como sessao.
+ */
+function fetchDeMock(saude: () => Response | Promise<Response>) {
+  return vi.fn((url: string) =>
+    String(url).includes('/api/auth/')
+      ? Promise.resolve(semSessao())
+      : Promise.resolve(saude()),
+  );
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe('App', () => {
   it('monta o shell com a marca e a navegacao', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(respostaDeSaude()));
+    vi.stubGlobal('fetch', fetchDeMock(respostaDeSaude));
 
     render(<App cliente={clienteSilencioso()} />);
 
@@ -46,12 +66,21 @@ describe('App', () => {
       screen.getByRole('navigation', { name: 'Navegacao principal' }),
     ).toBeInTheDocument();
 
-    // Sem sessao, a Fase 0 nao mostra link para area autenticada.
-    expect(screen.queryByRole('link', { name: 'Console' })).not.toBeInTheDocument();
+    // Sem sessao, o menu nao mostra area autenticada - so o convite a entrar.
+    expect(screen.queryByRole('link', { name: 'Painel' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Usuarios' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Entrar' })).toBeInTheDocument();
   });
 
   it('mostra o estado de carregamento antes da resposta da API', () => {
-    vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise(() => {})));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        String(url).includes('/api/auth/')
+          ? Promise.resolve(semSessao())
+          : new Promise<Response>(() => {}),
+      ),
+    );
 
     render(<App cliente={clienteSilencioso()} />);
 

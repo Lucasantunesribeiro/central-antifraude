@@ -15,8 +15,11 @@ export default defineConfig({
       // so deve ser desenhada na Fase 11, junto do modelo de deploy real
       // (frontend na Vercel, API em Lambda). Configurar CORS agora seria
       // congelar uma decisao de seguranca antes de conhecer o desenho final.
-      '/health': { target: ALVO_DA_API, changeOrigin: true },
+      // Prefixo unico para as rotas de aplicacao. Sem ele, /usuarios seria ao
+      // mesmo tempo uma rota do SPA e um endpoint da API - e um F5 nessa rota
+      // devolveria JSON no lugar da aplicacao.
       '/api': { target: ALVO_DA_API, changeOrigin: true },
+      '/health': { target: ALVO_DA_API, changeOrigin: true },
     },
   },
 

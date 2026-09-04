@@ -281,3 +281,106 @@ code {
 .botao:hover {
   border-color: var(--cor-acento);
 }
+
+/* ------------------------------------------------------------- entrada -- */
+
+.entrada {
+  display: flex;
+  justify-content: center;
+  padding-top: var(--espaco-8);
+}
+
+.entrada__formulario {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+  width: min(24rem, 100%);
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  padding: var(--espaco-6);
+}
+
+.entrada__resumo {
+  margin: -0.75rem 0 0;
+  color: var(--cor-texto-suave);
+  font-size: 0.9rem;
+}
+
+.entrada__erro {
+  margin: 0;
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 1px solid var(--cor-falha);
+  border-radius: var(--raio);
+  color: var(--cor-falha);
+  font-size: 0.9rem;
+}
+
+.entrada__correlacao {
+  display: block;
+  margin-top: var(--espaco-1);
+  color: var(--cor-texto-suave);
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-1);
+}
+
+.campo__rotulo {
+  font-size: 0.85rem;
+  color: var(--cor-texto-suave);
+}
+
+.campo input {
+  font: inherit;
+  color: var(--cor-texto);
+  background: var(--cor-fundo);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  padding: var(--espaco-2) var(--espaco-3);
+}
+
+.campo input:disabled {
+  opacity: 0.6;
+}
+
+.botao--principal {
+  align-self: stretch;
+  text-align: center;
+  border-color: var(--cor-acento);
+  color: var(--cor-acento);
+  padding: var(--espaco-2) var(--espaco-3);
+}
+
+.botao--principal:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* --------------------------------------------------------- sessao no topo -- */
+
+.app__sessao {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-3);
+  font-size: 0.85rem;
+}
+
+.app__sessao-usuario {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  text-align: right;
+}
+
+.app__sessao-perfil {
+  color: var(--cor-texto-suave);
+  font-size: 0.75rem;
+}
+
+a.botao {
+  text-decoration: none;
+}

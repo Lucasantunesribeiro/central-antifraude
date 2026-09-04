@@ -16,19 +16,44 @@ const PRAZO_PADRAO_EM_MS = 15_000;
 
 export const CABECALHO_DE_CORRELACAO = 'X-Correlation-Id';
 
+/**
+ * Access token da sessao atual.
+ *
+ * Vive em memoria, e so. Nunca em localStorage nem em sessionStorage: um XSS
+ * na aplicacao leria qualquer um dos dois e levaria a sessao junto. Aqui, o
+ * valor morre quando a aba fecha - e a continuidade entre recargas vem do
+ * cookie HttpOnly, que o JavaScript nao enxerga.
+ */
+let tokenDeAcesso: string | null = null;
+
+export function definirTokenDeAcesso(token: string | null): void {
+  tokenDeAcesso = token;
+}
+
 export interface OpcoesDaRequisicao {
   metodo?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   corpo?: unknown;
   /** Cancelamento vindo de quem chamou (TanStack Query fornece o seu). */
   sinal?: AbortSignal;
   prazoEmMs?: number;
+  /**
+   * Nao envia o token de acesso. Usado pelas rotas de sessao, que se
+   * autenticam pelo cookie ou pelo proprio corpo.
+   */
+  semAutenticacao?: boolean;
 }
 
 export async function requisitar<T>(
   caminho: string,
   opcoes: OpcoesDaRequisicao = {},
 ): Promise<T> {
-  const { metodo = 'GET', corpo, sinal, prazoEmMs = PRAZO_PADRAO_EM_MS } = opcoes;
+  const {
+    metodo = 'GET',
+    corpo,
+    sinal,
+    prazoEmMs = PRAZO_PADRAO_EM_MS,
+    semAutenticacao = false,
+  } = opcoes;
 
   const prazo = AbortSignal.timeout(prazoEmMs);
   const cancelamento = sinal ? AbortSignal.any([sinal, prazo]) : prazo;
@@ -40,6 +65,10 @@ export async function requisitar<T>(
 
   if (corpo !== undefined) {
     cabecalhos['Content-Type'] = 'application/json';
+  }
+
+  if (!semAutenticacao && tokenDeAcesso !== null) {
+    cabecalhos.Authorization = `Bearer ${tokenDeAcesso}`;
   }
 
   let resposta: Response;
@@ -63,6 +92,12 @@ export async function requisitar<T>(
   }
 
   if (resposta.status === 204) {
+    return undefined as T;
+  }
+
+  // Corpo vazio com 200: acontece em respostas sem conteudo declarado.
+  const tipo = resposta.headers.get('Content-Type') ?? '';
+  if (!tipo.includes('json')) {
     return undefined as T;
   }
 
