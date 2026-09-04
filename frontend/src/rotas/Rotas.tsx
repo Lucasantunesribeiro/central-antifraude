@@ -2,6 +2,8 @@ import { Route, Routes } from 'react-router';
 import { LayoutDoApp } from '../layout/LayoutDoApp';
 import { PaginaDeLogin } from '../paginas/PaginaDeLogin';
 import { PaginaDeIntegracoes } from '../paginas/PaginaDeIntegracoes';
+import { PaginaDeRegras } from '../paginas/PaginaDeRegras';
+import { PaginaDeTransacao } from '../paginas/PaginaDeTransacao';
 import { PaginaDeTransacoes } from '../paginas/PaginaDeTransacoes';
 import { PaginaDeUsuarios } from '../paginas/PaginaDeUsuarios';
 import { PaginaDoPainel } from '../paginas/PaginaDoPainel';
@@ -21,6 +23,11 @@ export function Rotas() {
           {/* Transacoes sao leitura: qualquer perfil autenticado enxerga as
               da propria organizacao. */}
           <Route path="transacoes" element={<PaginaDeTransacoes />} />
+          <Route path="transacoes/:id" element={<PaginaDeTransacao />} />
+          {/* O catalogo de regras e leitura para todos os perfis: o
+              analista precisa dele para entender o proprio score. A
+              gestao das regras chega na Fase 8, com o Supervisor. */}
+          <Route path="regras" element={<PaginaDeRegras />} />
         </Route>
 
         {/* A restricao por perfil e repetida no backend, que e quem decide. */}

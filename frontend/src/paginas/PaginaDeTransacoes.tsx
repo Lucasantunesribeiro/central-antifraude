@@ -1,37 +1,29 @@
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router';
 import { requisitar } from '../api/clienteHttp';
+import type { TransacaoDaLista } from '../api/risco';
+import { Score, SeloDeDecisao } from '../componentes/Risco';
 import {
   EstadoDeCarregamento,
   EstadoDeErro,
   EstadoVazio,
 } from '../componentes/Estados';
 
-interface Transacao {
-  id: string;
-  identificadorExterno: string;
-  valor: number;
-  moeda: string;
-  ocorridaEm: string;
-  recebidaEm: string;
-  clienteExternoId: string;
-  paisDeOrigem: string | null;
-}
-
 interface ListaDeTransacoes {
-  itens: Transacao[];
+  itens: TransacaoDaLista[];
   total: number;
 }
 
 /**
- * Transações recebidas.
+ * Fila de transações avaliadas.
  *
- * Ainda não é a tela operacional do produto: não há score, sinais nem
- * decisão — isso chega na Fase 3, junto do motor de risco. O que existe aqui
- * é a confirmação de que a ingestão está funcionando e o registro do que
- * chegou.
+ * Esta é a tela onde o analista começa o expediente, então ela é ordenada
+ * pelo que ele precisa ver: o que aconteceu, quanto pesou e o que o motor
+ * recomendou. A ordenação padrão é por chegada, decrescente — o backend
+ * decide isso, e o campo de ordenação nunca vem livre da tela.
  *
- * A coluna "atraso" já aparece porque é a diferença entre os dois tempos que
- * a Fase 4 vai usar para tratar evento atrasado.
+ * Score e decisão podem vir nulos: transações registradas antes da Fase 3
+ * existem sem avaliação. A linha diz "sem avaliação" em vez de fingir zero.
  */
 export function PaginaDeTransacoes() {
   const consulta = useQuery({
@@ -44,7 +36,9 @@ export function PaginaDeTransacoes() {
     <section className="pagina pagina--larga">
       <h1>Transações</h1>
       <p className="pagina__resumo">
-        Tentativas de pagamento recebidas das integrações desta organização.
+        Tentativas de pagamento recebidas das integrações desta organização, com o
+        resultado do motor de risco. A decisão é uma recomendação — quem confirma fraude
+        é a investigação humana.
       </p>
 
       {consulta.isPending ? (
@@ -78,13 +72,17 @@ export function PaginaDeTransacoes() {
               <th scope="col">Ocorrida em</th>
               <th scope="col">Atraso</th>
               <th scope="col">País</th>
+              <th scope="col">Score</th>
+              <th scope="col">Decisão</th>
             </tr>
           </thead>
           <tbody>
             {consulta.data.itens.map((transacao) => (
               <tr key={transacao.id}>
                 <th scope="row">
-                  <code>{transacao.identificadorExterno}</code>
+                  <Link to={`/transacoes/${transacao.id}`} className="ligacao">
+                    <code>{transacao.identificadorExterno}</code>
+                  </Link>
                 </th>
                 <td>{transacao.clienteExternoId}</td>
                 <td className="numerico">
@@ -96,6 +94,12 @@ export function PaginaDeTransacoes() {
                 <td>{new Date(transacao.ocorridaEm).toLocaleString('pt-BR')}</td>
                 <td className="numerico">{formatarAtraso(transacao)}</td>
                 <td>{transacao.paisDeOrigem ?? '—'}</td>
+                <td>
+                  <Score valor={transacao.score} />
+                </td>
+                <td>
+                  <SeloDeDecisao decisao={transacao.decisao} />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -112,7 +116,7 @@ export function PaginaDeTransacoes() {
  * chega com horas de atraso não pode ser tratada como se tivesse acabado de
  * acontecer.
  */
-function formatarAtraso(transacao: Transacao): string {
+function formatarAtraso(transacao: TransacaoDaLista): string {
   const atrasoEmMs =
     new Date(transacao.recebidaEm).getTime() - new Date(transacao.ocorridaEm).getTime();
 

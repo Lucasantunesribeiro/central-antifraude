@@ -437,3 +437,218 @@ a.botao {
 .tabela + .cartao {
   margin-top: var(--espaco-6);
 }
+
+/* --------------------------------------------------------------- risco -- */
+
+/*
+  A cor nunca carrega sozinha a informacao: todo selo traz o texto junto.
+  Quem nao distingue verde de vermelho le exatamente o mesmo que os outros.
+*/
+
+.selo {
+  display: inline-block;
+  padding: 0.1rem var(--espaco-2);
+  border-radius: var(--raio);
+  border: 1px solid currentcolor;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.selo--permitir {
+  color: var(--cor-ok);
+}
+
+.selo--revisar {
+  color: #e0b45a;
+}
+
+.selo--bloquear {
+  color: var(--cor-falha);
+}
+
+.selo--ausente {
+  color: var(--cor-texto-suave);
+  font-weight: 400;
+  font-style: italic;
+}
+
+/* O numero e o que vale; a barra e leitura periferica ao varrer a coluna. */
+.score {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-2);
+}
+
+.score__numero {
+  min-width: 2ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.score__barra {
+  flex: 1 1 4rem;
+  min-width: 3rem;
+  height: 4px;
+  background: var(--cor-borda);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.score__preenchimento {
+  display: block;
+  height: 100%;
+  background: var(--cor-acento);
+}
+
+.score--ausente {
+  color: var(--cor-texto-suave);
+}
+
+/* ------------------------------------------------------------ avaliacao -- */
+
+.avaliacao__resultado {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-4);
+  font-size: 1.4rem;
+}
+
+.avaliacao__resultado .score {
+  flex: 0 0 8rem;
+}
+
+.avaliacao__aviso {
+  margin: var(--espaco-3) 0 0;
+  color: var(--cor-texto-suave);
+  font-size: 0.85rem;
+}
+
+.avaliacao__procedencia,
+.descricao {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--espaco-3) var(--espaco-6);
+  margin: var(--espaco-4) 0 0;
+}
+
+.descricao {
+  margin: 0;
+}
+
+.avaliacao__procedencia dt,
+.descricao dt {
+  color: var(--cor-texto-suave);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.avaliacao__procedencia dd,
+.descricao dd {
+  margin: var(--espaco-1) 0 0;
+}
+
+/* -------------------------------------------------------------- sinais -- */
+
+.sinais {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--espaco-3);
+}
+
+.sinal {
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  background: var(--cor-superficie);
+  padding: var(--espaco-4);
+}
+
+.sinal__cabecalho {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--espaco-3);
+}
+
+.sinal__tipo {
+  font-weight: 600;
+}
+
+.sinal__pontos {
+  color: var(--cor-acento);
+  font-weight: 600;
+}
+
+.sinal__explicacao {
+  margin: var(--espaco-2) 0 0;
+}
+
+/* Os numeros que sustentam a frase, para quem quer conferir a conta. */
+.sinal__evidencia {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2) var(--espaco-4);
+  margin: var(--espaco-3) 0 0;
+  font-size: 0.8rem;
+}
+
+.sinal__par {
+  display: flex;
+  gap: var(--espaco-1);
+}
+
+.sinal__par dt {
+  color: var(--cor-texto-suave);
+}
+
+.sinal__par dt::after {
+  content: ':';
+}
+
+.sinal__par dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.sinal__origem {
+  margin: var(--espaco-2) 0 0;
+  color: var(--cor-texto-suave);
+  font-size: 0.75rem;
+}
+
+/* -------------------------------------------------------------- faixas -- */
+
+.faixas {
+  list-style: none;
+  margin: var(--espaco-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-4);
+}
+
+.faixa {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-2);
+}
+
+.faixa__intervalo {
+  font-variant-numeric: tabular-nums;
+  color: var(--cor-texto-suave);
+}
+
+/* ------------------------------------------------------------ ligacoes -- */
+
+.ligacao {
+  color: var(--cor-acento);
+}
+
+.pagina__migalha {
+  margin: 0 0 var(--espaco-3);
+  font-size: 0.85rem;
+}

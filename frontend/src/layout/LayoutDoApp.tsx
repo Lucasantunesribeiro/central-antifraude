@@ -11,6 +11,7 @@ const NAVEGACAO: readonly {
 }[] = [
   { para: '/painel', rotulo: 'Painel' },
   { para: '/transacoes', rotulo: 'Transações' },
+  { para: '/regras', rotulo: 'Regras' },
   { para: '/integracoes', rotulo: 'Integrações', perfis: ['Administrador'] },
   { para: '/usuarios', rotulo: 'Usuários', perfis: ['Administrador'] },
 ];

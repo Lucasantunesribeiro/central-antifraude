@@ -13,6 +13,14 @@ import { useSessao } from './contextoDeSessao';
  * token vive. Estes testes existem para que ela nao mude por descuido.
  */
 
+/**
+ * Uma resposta NOVA a cada chamada.
+ *
+ * O corpo de um `Response` so pode ser lido uma vez. Reaproveitar a mesma
+ * instancia entre duas chamadas do fetch simulado fazia a segunda leitura
+ * estourar "Body has already been read" — um erro que nao reprovava teste
+ * nenhum, mas deixava o `vitest run` sair com codigo 1 e o CI vermelho.
+ */
 function sessaoValida(perfil = 'Administrador', token = 'token-de-teste') {
   return new Response(
     JSON.stringify({
@@ -83,7 +91,9 @@ afterEach(() => {
 
 describe('ProvedorDeSessao', () => {
   it('tenta restaurar a sessao pelo cookie ao montar', async () => {
-    const espiao = vi.fn().mockResolvedValue(sessaoValida());
+    const espiao = vi.fn((_url: string, _opcoes?: RequestInit) =>
+      Promise.resolve(sessaoValida()),
+    );
     vi.stubGlobal('fetch', espiao);
 
     montar();
@@ -99,7 +109,9 @@ describe('ProvedorDeSessao', () => {
   it('a requisicao de refresh envia o cookie da sessao', async () => {
     // credentials: 'include' e o que faz o navegador anexar o cookie
     // HttpOnly. Sem isso, a restauracao de sessao nunca funcionaria.
-    const espiao = vi.fn().mockResolvedValue(sessaoValida());
+    const espiao = vi.fn((_url: string, _opcoes?: RequestInit) =>
+      Promise.resolve(sessaoValida()),
+    );
     vi.stubGlobal('fetch', espiao);
 
     montar();
@@ -125,7 +137,9 @@ describe('ProvedorDeSessao', () => {
     // sessionStorage; nao le uma variavel de modulo.
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(sessaoValida('Auditor', 'segredo-do-token')),
+      vi.fn((_url: string, _opcoes?: RequestInit) =>
+        Promise.resolve(sessaoValida('Auditor', 'segredo-do-token')),
+      ),
     );
 
     montar();
@@ -144,11 +158,13 @@ describe('ProvedorDeSessao', () => {
       .fn()
       .mockResolvedValueOnce(semSessao())
       .mockResolvedValueOnce(sessaoValida('Administrador', 'token-apos-login'))
-      .mockResolvedValue(
-        new Response('{}', {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }),
+      .mockImplementation(() =>
+        Promise.resolve(
+          new Response('{}', {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        ),
       );
     vi.stubGlobal('fetch', espiao);
 
@@ -174,7 +190,9 @@ describe('ProvedorDeSessao', () => {
   });
 
   it('o login nao envia o token antigo no cabecalho', async () => {
-    const espiao = vi.fn().mockResolvedValue(sessaoValida());
+    const espiao = vi.fn((_url: string, _opcoes?: RequestInit) =>
+      Promise.resolve(sessaoValida()),
+    );
     vi.stubGlobal('fetch', espiao);
 
     montar();
@@ -224,7 +242,7 @@ describe('ProvedorDeSessao', () => {
     const espiao = vi
       .fn()
       .mockResolvedValueOnce(sessaoValida())
-      .mockResolvedValue(new Response(null, { status: 204 }));
+      .mockImplementation(() => Promise.resolve(new Response(null, { status: 204 })));
     vi.stubGlobal('fetch', espiao);
 
     montar();
