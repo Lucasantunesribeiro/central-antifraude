@@ -162,6 +162,42 @@ clientes sem relação nenhuma conflitarem entre si.
 Esgotadas as tentativas, a API responde **503 com `Retry-After`**. Não é erro:
 é um convite a repetir com a mesma chave de idempotência.
 
+### Ajuste opcional — fila e processos de fundo
+
+Em `Development` o despachante da Outbox e o worker sobem junto com a API. Em
+outros ambientes eles vêm **desligados**, e é deliberado: nos testes, um laço
+rodando sozinho tornaria "quantas mensagens sobraram na fila" uma pergunta sem
+resposta estável.
+
+```bash
+# Liga os dois laços de fundo dentro do processo da API.
+export SegundoPlano__Habilitado=true
+export SegundoPlano__IntervaloOciosoEmMs=2000
+export SegundoPlano__IntervaloAtivoEmMs=100
+
+# Parâmetros da fila. Os limites são os do próprio SQS.
+export Fila__VisibilidadeEmSegundos=30
+export Fila__MaximoDeRecebimentos=5
+export Fila__TamanhoDoLote=10
+```
+
+`VisibilidadeEmSegundos` precisa ser confortavelmente maior que o
+processamento mais lento: se expirar antes do fim, outro consumidor recebe a
+mesma mensagem e o trabalho é jogado fora. `MaximoDeRecebimentos` é o
+`maxReceiveCount` da política de redrive — sem ele, uma mensagem defeituosa
+circula para sempre.
+
+Para olhar a fila e a fila de mortas durante o desenvolvimento:
+
+```sql
+SELECT fila, count(*), min(disponivel_em) FROM fila_de_mensagens GROUP BY fila;
+SELECT fila, recebimentos, motivo, movida_em FROM mensagens_mortas ORDER BY movida_em DESC;
+SELECT count(*) FROM eventos_de_saida WHERE publicado_em IS NULL;
+```
+
+Não há endpoint para nenhuma das três: a DLQ guarda corpos de mensagens de
+qualquer tenant, e a inspeção é por acesso administrativo ao banco.
+
 ## 5. Rodar
 
 ```bash

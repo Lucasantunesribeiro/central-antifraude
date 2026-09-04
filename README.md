@@ -22,8 +22,9 @@ solução certificada de compliance.
 | 1 | Identidade e Multi-tenancy | ✅ concluída |
 | 2 | Integrações e Ingestão | ✅ concluída |
 | 3 | Motor de Risco v1 | ✅ concluída |
-| **4** | **Avaliação Síncrona e Concorrência** | ✅ **concluída** |
-| 5–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
+| 4 | Avaliação Síncrona e Concorrência | ✅ concluída |
+| **5** | **Backbone Assíncrono** | ✅ **concluída** |
+| 6–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
 
 Hoje a plataforma recebe transações de sistemas externos autenticados por
 credencial própria, registra cada tentativa **exatamente uma vez** mesmo sob
@@ -42,9 +43,13 @@ equivalente a alguma ordem serial válida, e um retry do integrador devolve a
 avaliação original em vez de recalcular. Cada avaliação grava também um evento
 na Outbox, no mesmo commit — a publicação chega na Fase 5.
 
-**Ainda não existe** publicação de eventos, alerta, caso, investigação nem
-gestão de regras. Isso é deliberado — cada capacidade chega na fase que o
-`ROADMAP.md` define.
+Depois de responder, o evento sai pelo caminho assíncrono: a Outbox é
+publicada em uma fila, um worker consome e aplica o efeito **uma vez** — mesmo
+com entrega repetida, processo caindo no meio ou vários despachantes ao mesmo
+tempo.
+
+**Ainda não existe** alerta, caso, investigação nem gestão de regras. Isso é
+deliberado — cada capacidade chega na fase que o `ROADMAP.md` define.
 
 ---
 
@@ -81,6 +86,7 @@ docs/
   security-gate-2.md                 resultado do gate da Fase 2
   security-gate-3.md                 resultado do gate da Fase 3
   security-gate-4.md                 resultado do gate da Fase 4
+  security-gate-5.md                 resultado do gate da Fase 5
   baseline-de-performance.md         números medidos do caminho crítico
 ```
 
@@ -229,6 +235,45 @@ Os números medidos estão em
 
 ---
 
+## O caminho assíncrono
+
+A decisão sai na resposta. O **efeito** sai depois — e é aí que entram as três
+peças que fazem um sistema de eventos ser confiável em vez de otimista.
+
+```text
+avaliação + evento          um commit só (Outbox)
+        ↓
+despachante                 publica, depois marca
+        ↓
+fila                        entrega ao menos uma vez, sem ordem
+        ↓
+worker                      Inbox + efeito, um commit só
+        ↓
+confirma na fila            só depois do commit
+```
+
+Cada ordem acima é uma escolha, e a escolha oposta tem um custo conhecido:
+
+| Escolha | Se fosse ao contrário |
+|---|---|
+| Publicar **antes** de marcar | mensagem perdida para sempre, em vez de duplicata |
+| Confirmar **depois** do commit | efeito perdido, em vez de reentrega |
+| Inbox no **mesmo** commit do efeito | existiria o instante em que o efeito aconteceu e a marca não |
+
+**A promessa não é entrega única — essa ninguém cumpre. É efeito único.** O
+efeito escolhido para provar isso é um contador de decisões por dia, e a
+escolha é deliberada: somar duas vezes não deixa rastro nenhum. Um efeito com
+chave única passaria mesmo com a Inbox desligada, porque o banco seguraria a
+duplicata.
+
+A fila é PostgreSQL até a Fase 14, reproduzindo o contrato do SQS Standard —
+visibilidade, recibo por entrega, contagem de recebimentos e redrive para DLQ.
+Ela é testada por um conjunto que **não cita PostgreSQL**, para que a troca pelo
+SDK seja um adaptador e não uma reescrita. Detalhes no
+[ADR 0010](docs/adr/0010-backbone-assincrono.md).
+
+---
+
 ## Testes
 
 ```bash
@@ -258,6 +303,7 @@ tem — um teste de concorrência verde no SQLite não provaria nada.
 | Idempotência em três camadas, fingerprint canônico, credencial de integração | [ADR 0007](docs/adr/0007-ingestao-e-idempotencia.md) |
 | Motor determinístico, catálogo fechado, explicabilidade gravada | [ADR 0008](docs/adr/0008-motor-de-risco.md) |
 | `SERIALIZABLE` na ingestão, retry da operação inteira, Outbox | [ADR 0009](docs/adr/0009-operacao-critica-e-concorrencia.md) |
+| Fila, envelope versionado, Inbox e DLQ | [ADR 0010](docs/adr/0010-backbone-assincrono.md) |
 
 Três decisões são reforçadas em tempo de compilação por
 `src/BannedSymbols.txt`: `DateTime.UtcNow`, `DateTime.Now` e `Guid.NewGuid()`

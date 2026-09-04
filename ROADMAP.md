@@ -1645,16 +1645,118 @@ Vai para fluxo de falha/DLQ definido.
 
 ## 5.12 Critérios de conclusão
 
-- [ ] Outbox transacional funcionando.
-- [ ] Dispatcher idempotente/reexecutável.
-- [ ] SQS Standard configurada em arquitetura.
-- [ ] Inbox persistente.
-- [ ] Worker idempotente.
-- [ ] Correlation ID preservado.
-- [ ] DLQ desenhada/testada.
-- [ ] Falhas críticas simuladas.
-- [ ] Security Gate 5 verde.
-- [ ] CI verde.
+- [x] Outbox transacional funcionando.
+- [x] Dispatcher idempotente/reexecutável.
+- [x] SQS Standard configurada em arquitetura.
+- [x] Inbox persistente.
+- [x] Worker idempotente.
+- [x] Correlation ID preservado.
+- [x] DLQ desenhada/testada.
+- [x] Falhas críticas simuladas.
+- [x] Security Gate 5 verde.
+- [ ] CI verde — *pendente do primeiro `push`, que não foi autorizado. Cada passo do workflow foi executado localmente e está verde.*
+
+---
+
+## 5.13 Resultado da Fase 5
+
+**Concluída em 2026-09-04.**
+
+### Evidências
+
+| Critério | Como foi verificado |
+|---|---|
+| Build backend | `dotnet build -c Release --no-incremental`, **0 erros e 0 avisos** |
+| Build frontend | `npm run build`, `oxlint` e `prettier --check` limpos |
+| Outbox transacional | evento na mesma transação da avaliação (Fase 4); despacho separado, verificável |
+| Dispatcher reexecutável | publica **antes** de marcar; falha parcial não derruba o lote |
+| Dispatcher concorrente | 3 despachantes simultâneos, 12 eventos → **cada um publicado uma vez** |
+| Contrato SQS Standard | 10 testes descrevem visibilidade, recibo por entrega, contagem, redrive e ausência de ordem — sem citar PostgreSQL |
+| Inbox persistente | restrição única `(consumidor, evento)`; efeito e marca no mesmo commit |
+| Worker idempotente | 5 replays → **5 repetidos, 0 processados, contador em 1** |
+| Correlation ID | 4 elos verificados: cabeçalho HTTP, linha da Outbox, corpo da mensagem e **linha da Inbox** |
+| DLQ | corpo, contagem de entregas e motivo preservados; não alcançável por rota HTTP |
+| Falhas obrigatórias | as 5 cenários do 5.11, cada um com teste próprio |
+| Testes | 316 unitários + 15 arquitetura + 186 integração + 45 frontend = **562, todos verdes** |
+| Security Gate 5 | [`docs/security-gate-5.md`](docs/security-gate-5.md) |
+| Migration | `MensageriaEProjecoes` aplicada em PostgreSQL real; `has-pending-model-changes` sem alteração pendente |
+| Dependências | `npm audit`: 0; nenhum pacote novo no backend |
+| Segredos | `gitleaks detect`: nenhum |
+
+### As cinco falhas obrigatórias (ROADMAP 5.11)
+
+| Cenário | Resultado |
+|---|---|
+| **Falha após commit e antes do publish** | evento fica pendente; um processo novo o encontra e publica |
+| **Publish duplicado** | 2 mensagens, mesmo `eventId` → 1 processado, 1 repetido, contador em 1 |
+| **Worker cai após efeito e antes do ACK** | reentrega reconhecida pela Inbox; contador não muda |
+| **Dispatcher concorrente** | `SKIP LOCKED`: cada evento publicado uma vez, zero pendentes |
+| **Mensagem inválida recorrente** | 5 entregas sem confirmação → fila de mortas, com o corpo guardado |
+
+### Decisões congeladas
+
+| Decisão | Registro |
+|---|---|
+| Fila em PostgreSQL reproduzindo o contrato do SQS Standard até a Fase 14 | `docs/adr/0010-backbone-assincrono.md` |
+| Publicar antes de marcar: duplicata é aceitável, perda não é | `docs/adr/0010` |
+| Envelope com tipo e versão **separados**, fora do payload | `docs/adr/0010` |
+| Inbox decide pela restrição única, no mesmo commit do efeito | `docs/adr/0010` |
+| Efeito é um **contador**, porque é o pior caso para duplicata | `docs/adr/0010` |
+| O que chega da fila é dado: tenant conferido contra o banco | `docs/adr/0010` |
+| Não se apaga o que não se entende — o redrive decide | `docs/adr/0010` |
+| Laços de fundo desligados por padrão, ligados em Development | `docs/adr/0010` |
+| Duas filas desde já: operacional e backtests | `docs/adr/0010` |
+
+### Defeitos reais encontrados e corrigidos
+
+**1. SQL cru NÃO escapa do filtro global de tenant.** O despachante usava
+`FromSql` para o `FOR UPDATE SKIP LOCKED` e publicava **zero eventos** — sem
+erro nenhum no caminho. O EF Core compõe o filtro **por cima** do `FromSql`,
+como se fosse uma subconsulta; como o despachante roda sem identidade, o tenant
+efetivo é vazio e a consulta devolvia zero linha.
+
+A Fase 4 tinha registrado a suspeita ao encontrar o inverso em um teste. Aqui
+ela apareceu no caminho principal. Corrigido com `IgnoreQueryFilters` pelo
+**nome** do filtro.
+
+**2. A fila guardava o corpo como `jsonb`, e isso a tornava mais rígida do que
+o SQS.** Um corpo corrompido era recusado **pelo banco**, e não pelo consumidor
+— o caminho de mensagem envenenada nunca era exercitado. E um corpo válido
+voltava com as chaves reordenadas, escondendo qualquer teste sobre o formato de
+fio exato. Para o SQS, o corpo é uma cadeia de bytes opaca. Corrigido para
+`text`.
+
+**3. Isolamento entre classes de teste.** O despachante lê a Outbox de todos os
+tenants — é inerente ao desenho. As outras classes ingerem e nunca despacham,
+deixando eventos pendentes; um teste de mensageria publicava o acúmulo delas
+junto com o próprio evento. Passava isolado e falhava na suíte. Corrigido com
+uma limpeza explícita do estado global no preparo, com o motivo documentado.
+
+### Fora de escopo, deliberadamente
+
+- **Sem SQS real.** ROADMAP 5.5 permite infra simulada até a Fase 14. O
+  contrato está testado de forma independente da implementação: lá é adaptador,
+  não reescrita.
+- **Sem alerta.** O efeito desta fase é uma projeção de contagem. Alertas são a
+  Fase 6, e é o mesmo evento que vai alimentá-los.
+- **Sem tela.** A projeção diária não é exposta por nenhuma rota. Fase 10.
+- **Sem métrica exportada.** Profundidade de fila e idade da mensagem mais
+  antiga são Fase 12.
+
+### Débito técnico não bloqueante
+
+1. **CI ainda não executado.** Cada comando roda localmente e está verde; o
+   GitHub Actions só roda após o primeiro `push`, que continua não autorizado.
+2. **Sem ferramenta de reprocessamento da DLQ.** A estratégia existe
+   (inspecionar, corrigir a causa, reenviar); a ferramenta é a Fase 12. Hoje a
+   inspeção é por acesso administrativo ao banco.
+3. **A fila divide o banco com os dados.** Em volume de portfólio não é
+   problema; a Fase 14 separa.
+4. **O efeito aparece com atraso de até um intervalo de laço** (2 s ociosos).
+   Esperado para um caminho assíncrono, mas registrado para que ninguém trate a
+   projeção como leitura imediata.
+5. **Verificação visual no navegador segue pendente** — extensão do Chrome
+   desconectada desde a Fase 2. Nenhuma tela nova nesta fase.
 
 ---
 
@@ -3477,7 +3579,7 @@ A autorização de uma fase não autoriza automaticamente a fase seguinte.
 | 2 — Integrações e Ingestão | ✅ Concluída (2026-09-04) |
 | 3 — Motor de Risco v1 | ✅ Concluída (2026-09-04) |
 | 4 — Avaliação Síncrona e Concorrência | ✅ Concluída (2026-09-04) |
-| 5 — Backbone Assíncrono | ⬜ Não iniciada |
+| 5 — Backbone Assíncrono | ✅ Concluída (2026-09-04) |
 | 6 — Alertas | ⬜ Não iniciada |
 | 7 — Casos e Investigação | ⬜ Não iniciada |
 | 8 — Gestão e Versionamento de Regras | ⬜ Não iniciada |
