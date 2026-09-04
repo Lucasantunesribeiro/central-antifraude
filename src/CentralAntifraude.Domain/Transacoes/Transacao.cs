@@ -1,4 +1,5 @@
 using CentralAntifraude.Domain.Primitivos;
+using CentralAntifraude.Domain.Tempo;
 
 namespace CentralAntifraude.Domain.Transacoes;
 
@@ -178,8 +179,12 @@ public sealed class Transacao
             integracaoId,
             identificadorExterno.Trim(),
             valor,
-            ocorridaEm.ToUniversalTime(),
-            recebidaEm.ToUniversalTime(),
+            // Normalizado, e nao apenas convertido para UTC: o horario que
+            // a integracao envia pode ter precisao maior do que o banco
+            // guarda, e sem truncar aqui a transacao em memoria e a lida
+            // de volta teriam OcorridaEm diferentes.
+            Instante.Normalizar(ocorridaEm),
+            Instante.Normalizar(recebidaEm),
             clienteExternoId.Trim(),
             referenciaDoInstrumento.Trim(),
             fingerprintDoDispositivo?.Trim(),
