@@ -26,6 +26,15 @@ public enum TipoDeErro
 
     /// <summary>Falha nao prevista. HTTP 500.</summary>
     Interno,
+
+    /// <summary>
+    /// Nao deu para concluir agora, mas tentar de novo deve resolver. HTTP 503.
+    ///
+    /// Separado de <see cref="Interno"/> de proposito: 500 diz "algo quebrou,
+    /// nao insista"; 503 diz "estava disputado, repita". Para um integrador
+    /// com retry automatico, a diferenca decide se ele repete ou desiste.
+    /// </summary>
+    Indisponivel,
 }
 
 /// <summary>
@@ -138,6 +147,38 @@ public sealed class NaoAutenticado : ErroDeAplicacao
     public override TipoDeErro Tipo => TipoDeErro.NaoAutenticado;
 
     public override string Codigo { get; }
+}
+
+/// <summary>
+/// A operacao nao pode ser concluida porque outras requisicoes disputaram os
+/// mesmos dados alem do limite de retentativas.
+///
+/// **Nao e falha do cliente nem defeito do servidor.** E contencao: varias
+/// operacoes tentaram avaliar o mesmo cliente ao mesmo tempo, e o banco
+/// abortou esta para preservar a consistencia. Repetir com a MESMA chave de
+/// idempotencia e seguro por construcao — ou a transacao ja existe, e o
+/// cliente recebe a avaliacao original, ou ela nao existe e sera criada uma
+/// vez so.
+///
+/// Por isso 503 com <c>Retry-After</c>, e nao 500: o integrador precisa saber
+/// que insistir e a acao correta.
+/// </summary>
+public sealed class ContencaoDeConcorrencia : ErroDeAplicacao
+{
+    /// <summary>Segundos sugeridos no cabecalho <c>Retry-After</c>.</summary>
+    public const int EsperaSugeridaEmSegundos = 1;
+
+    public ContencaoDeConcorrencia(Exception causa)
+        : base(
+            "A operacao disputou os mesmos dados com outras requisicoes e nao pode ser concluida. " +
+            "Repita a requisicao com a mesma chave de idempotencia.",
+            causa)
+    {
+    }
+
+    public override TipoDeErro Tipo => TipoDeErro.Indisponivel;
+
+    public override string Codigo => "contencao_de_concorrencia";
 }
 
 /// <summary>
