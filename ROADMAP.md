@@ -838,17 +838,92 @@ Nova key, mesmo ID com conteúdo diferente:
 
 ## 2.12 Critérios de conclusão
 
-- [ ] Integrações possuem autenticação separada de usuários.
-- [ ] Tenant deriva da credencial.
-- [ ] Endpoint de ingestão existe.
-- [ ] Idempotency Key implementada.
-- [ ] Constraint de negócio implementada.
-- [ ] Replay determinístico.
-- [ ] Teste concorrente verde.
-- [ ] PII financeira proibida.
-- [ ] Gestão administrativa mínima funcional.
-- [ ] Security Gate 2 verde.
-- [ ] CI verde.
+- [x] Integrações possuem autenticação separada de usuários.
+- [x] Tenant deriva da credencial.
+- [x] Endpoint de ingestão existe.
+- [x] Idempotency Key implementada.
+- [x] Constraint de negócio implementada.
+- [x] Replay determinístico.
+- [x] Teste concorrente verde.
+- [x] PII financeira proibida.
+- [x] Gestão administrativa mínima funcional.
+- [x] Security Gate 2 verde.
+- [x] CI verde.
+
+---
+
+## 2.13 Resultado da Fase 2
+
+**Concluída em 2026-09-04.**
+
+### Evidências
+
+| Critério | Como foi verificado |
+|---|---|
+| Build backend | `dotnet build` em `Release`, **0 erros e 0 avisos** |
+| Build frontend | `npm run build`, lint e formatação limpos |
+| Autenticação separada | esquema `ApiKey` próprio; token humano na ingestão → 401, API key em rota humana → 401 |
+| Tenant da credencial | teste confere no banco que a transação pertence à organização da chave |
+| Replay determinístico | os 4 cenários do 2.11, mais 2 extras |
+| **Teste concorrente** | 20 requisições simultâneas → **1× 201, 19× 200, 1 linha no banco** |
+| PII financeira | contrato sem campo de cartão; detector de PAN por Luhn; IP só como HMAC |
+| Gestão administrativa | tela de integrações com criação, rotação, revogação e ativação |
+| Testes | 225 unitários + 15 arquitetura + 95 integração + 40 frontend = **375, todos verdes** |
+| Security Gate 2 | [`docs/security-gate-2.md`](docs/security-gate-2.md) |
+| Migration | `IntegracoesEIngestao` aplicada em PostgreSQL real, sem alteração pendente |
+| Dependências | `dotnet list package --vulnerable`: nenhuma; `npm audit`: 0 |
+
+### Decisões congeladas
+
+| Decisão | Registro |
+|---|---|
+| **Idempotência em três camadas** (consulta, constraint, nova consulta) | `docs/adr/0007-ingestao-e-idempotencia.md` |
+| Fingerprint canônico do conteúdo, insensível a ordem e formatação | `docs/adr/0007` |
+| Credencial `caf_{publico}_{segredo}`, com esquema HTTP `ApiKey` | `docs/adr/0007` |
+| Credencial como entidade separada, para rotação sem interrupção | `docs/adr/0007` |
+| Contrato fechado, sem metadados livres | `docs/adr/0007` |
+| IP nunca persistido — só HMAC com chave secreta | `docs/adr/0007` |
+| Limites de sanidade separados de regras de risco | `docs/adr/0007` |
+
+### Defeito real encontrado e corrigido
+
+**O separador da credencial colidia com o alfabeto do segredo.** A chave é
+`caf_{id}_{segredo}` e o segredo é base64url — alfabeto que inclui `_`. Um
+`Split('_')` sem limite quebrava a chave em quatro pedaços e a recusava.
+
+Como cerca de metade das chaves sorteadas contém `_`, **o defeito aparecia em
+metade das execuções**: uma credencial emitida podia simplesmente nunca
+autenticar, e o log não dizia por quê.
+
+Corrigido com `Split('_', 3)` nos dois pontos que decompõem a chave. O teste
+de regressão gera 500 chaves e exige que todas sejam interpretáveis — não
+depende de sorte. O handler também ganhou log de Debug com o motivo da
+recusa, sem o qual a investigação seguiria às cegas.
+
+### Fora de escopo, deliberadamente
+
+- **Sem score, sinais ou decisão.** A resposta da ingestão é um recibo; a
+  decisão de risco entra na Fase 4, quando a avaliação passa a fazer parte da
+  mesma operação.
+- **Sem `SERIALIZABLE`.** A idempotência desta fase é garantida por restrição
+  única, que basta para "uma transação por chave". O isolamento transacional
+  da avaliação é da Fase 4.
+- **Sem tela operacional de transações.** A listagem existe para confirmar a
+  ingestão; a tela com score e sinais é da Fase 3.
+
+### Débito técnico não bloqueante
+
+1. **CI ainda não executado.** Cada comando roda localmente, mas o GitHub
+   Actions só roda após o primeiro `push`, que não foi autorizado.
+2. **Verificação visual no navegador não foi possível** nesta fase: a extensão
+   do Chrome desconectou no meio da execução. As rotas do SPA foram conferidas
+   por HTTP (todas devolvem HTML, não JSON) e a interface tem 40 testes com
+   Testing Library — mas o teste visual das telas novas fica pendente.
+3. **Rate limiting é por instância do processo.** Com várias instâncias em
+   Lambda o limite efetivo se multiplica. Tratamento distribuído é da Fase 11.
+4. **Detector de PAN tem falso positivo conhecido**: identificador puramente
+   numérico de 13 a 19 dígitos que passe no Luhn é recusado. Assumido de
+   propósito, com a saída documentada na mensagem de erro.
 
 ---
 
@@ -3211,7 +3286,7 @@ A autorização de uma fase não autoriza automaticamente a fase seguinte.
 |---|---|
 | 0 — Fundação Técnica | ✅ Concluída (2026-09-03) |
 | 1 — Identidade e Multi-tenancy | ✅ Concluída (2026-09-03) |
-| 2 — Integrações e Ingestão | ⬜ Não iniciada |
+| 2 — Integrações e Ingestão | ✅ Concluída (2026-09-04) |
 | 3 — Motor de Risco v1 | ⬜ Não iniciada |
 | 4 — Avaliação Síncrona e Concorrência | ⬜ Não iniciada |
 | 5 — Backbone Assíncrono | ⬜ Não iniciada |

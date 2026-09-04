@@ -19,16 +19,17 @@ solução certificada de compliance.
 | Fase | Nome | Status |
 |---|---|---|
 | 0 | Fundação Técnica | ✅ concluída |
-| **1** | **Identidade e Multi-tenancy** | ✅ **concluída** |
-| 2 | Integrações e Ingestão | não iniciada |
-| 3–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
+| 1 | Identidade e Multi-tenancy | ✅ concluída |
+| **2** | **Integrações e Ingestão** | ✅ **concluída** |
+| 3 | Motor de Risco v1 | não iniciada |
+| 4–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
 
-Hoje a plataforma tem organizações, usuários com quatro perfis, login com
-rotação de refresh token e isolamento de tenant testado nas duas camadas.
+Hoje a plataforma recebe transações de sistemas externos autenticados por
+credencial própria, registra cada tentativa **exatamente uma vez** mesmo sob
+requisições simultâneas, e mantém o isolamento entre organizações.
 
-**Ainda não existe** motor de risco, ingestão de transações, alertas nem
-investigação. Isso é deliberado — cada capacidade chega na fase que o
-`ROADMAP.md` define.
+**Ainda não existe** motor de risco, alertas nem investigação. Isso é
+deliberado — cada capacidade chega na fase que o `ROADMAP.md` define.
 
 ---
 
@@ -62,6 +63,7 @@ docs/
   setup-local.md                     como rodar
   security-gate-0.md                 resultado do gate da Fase 0
   security-gate-1.md                 resultado do gate da Fase 1
+  security-gate-2.md                 resultado do gate da Fase 2
 ```
 
 A dependência corre em uma direção só, e testes de arquitetura seguram isso:
@@ -113,6 +115,17 @@ consumido por orquestrador e não pela interface.
 | `PUT /api/usuarios/{id}/ativacao` | Administrador | ativa/desativa e corta sessões |
 | `PUT /api/usuarios/{id}/senha` | Administrador | redefine senha |
 | `PUT /api/usuarios/{id}/nome` | Administrador | altera nome |
+| `GET /api/integracoes` | Administrador | lista integrações |
+| `POST /api/integracoes` | Administrador | cria integração e emite a primeira chave |
+| `GET /api/integracoes/{id}` | Administrador | integração e suas credenciais |
+| `POST /api/integracoes/{id}/credenciais` | Administrador | emite chave para rotação |
+| `DELETE /api/integracoes/{id}/credenciais/{cid}` | Administrador | revoga uma chave |
+| `PUT /api/integracoes/{id}/ativacao` | Administrador | ativa/desativa e revoga chaves |
+| `GET /api/transacoes` | qualquer | transações da organização |
+| `POST /api/ingestao/transacoes` | **`ApiKey`** | recebe uma tentativa de pagamento |
+
+A ingestão usa esquema de autenticação **próprio** (`Authorization: ApiKey ...`):
+integração não é usuário, e um token humano não serve ali — nem o contrário.
 
 ---
 
@@ -142,6 +155,7 @@ tem — um teste de concorrência verde no SQLite não provaria nada.
 | UTC, dinheiro, erros, JSON, correlação, paginação | [ADR 0004](docs/adr/0004-contratos-transversais.md) |
 | E-mail único global, filtro de tenant em duas camadas, prefixo `/api` | [ADR 0005](docs/adr/0005-identidade-e-multi-tenancy.md) |
 | Tokens, hash de senha, CSRF e detecção de reuso | [ADR 0006](docs/adr/0006-sessao-humana.md) |
+| Idempotência em três camadas, fingerprint canônico, credencial de integração | [ADR 0007](docs/adr/0007-ingestao-e-idempotencia.md) |
 
 Três decisões são reforçadas em tempo de compilação por
 `src/BannedSymbols.txt`: `DateTime.UtcNow`, `DateTime.Now` e `Guid.NewGuid()`

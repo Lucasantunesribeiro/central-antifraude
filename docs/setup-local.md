@@ -98,6 +98,14 @@ Sem a chave, a API **não sobe** — é deliberado: uma configuração de
 autenticação errada precisa impedir a inicialização, e não virar "token
 inválido" em produção sem explicação.
 
+```bash
+# Chave HMAC do fingerprint de IP. O endereco nunca e persistido - so o HMAC.
+export Ingestao__ChaveDeFingerprint="$(node -e "console.log(require('crypto').randomBytes(48).toString('base64'))")"
+```
+
+Sem ela a API também não sobe: aceitar transações e gravar um fingerprint
+derivado de chave vazia produziria um valor reversível — ou seja, o IP.
+
 O seed cria, apenas em Development e apenas se `Seed:SenhaPadrao` existir, uma
 organização `demo` com um usuário de cada perfil:
 
@@ -137,6 +145,32 @@ curl -i -X POST http://localhost:5175/api/auth/login   -H "Content-Type: applica
 
 As rotas de aplicação ficam sob `/api`; `/health/*` fica na raiz, porque é
 consumido por orquestrador e não pela interface.
+
+### Enviar uma transação
+
+A ingestão usa credencial de integração, com esquema **próprio** — não é
+`Bearer`, porque integração não é usuário:
+
+```bash
+# 1. Crie a integracao (como Administrador) e guarde a chave: ela aparece uma vez so.
+curl -s -X POST http://localhost:5175/api/integracoes   -H "Authorization: Bearer $SEU_ACCESS_TOKEN"   -H "Content-Type: application/json"   -d '{"nome":"Checkout web"}'
+
+# 2. Envie a transacao. Idempotency-Key e obrigatorio.
+curl -i -X POST http://localhost:5175/api/ingestao/transacoes   -H "Authorization: ApiKey caf_..."   -H "Content-Type: application/json"   -H "Idempotency-Key: pedido-1001-tentativa-1"   -d '{
+        "identificadorExterno": "pedido-1001",
+        "valor": 249.90,
+        "moeda": "BRL",
+        "ocorridaEm": "2026-09-03T20:00:00Z",
+        "clienteExternoId": "cli-777",
+        "referenciaDoInstrumento": "pi_demo_123",
+        "fingerprintDoDispositivo": "disp-abc",
+        "enderecoIp": "203.0.113.10",
+        "paisDeOrigem": "BR"
+      }'
+```
+
+Repita o mesmo comando: a resposta vira **200** com `"situacao":"ja_registrada"`,
+e continua havendo uma única transação. Mude o valor mantendo a chave: **409**.
 
 > **Origem confiável.** Os endpoints de sessão recusam requisição cujo
 > cabeçalho `Origin` não esteja na lista de origens permitidas — é a defesa
