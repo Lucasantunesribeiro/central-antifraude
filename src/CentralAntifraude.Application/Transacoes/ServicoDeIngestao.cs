@@ -1,6 +1,8 @@
 using CentralAntifraude.Application.Erros;
 using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Application.Integracoes;
+using CentralAntifraude.Application.Risco;
+using CentralAntifraude.Domain.Risco;
 using CentralAntifraude.Domain.Primitivos;
 using CentralAntifraude.Domain.Tempo;
 using CentralAntifraude.Domain.Transacoes;
@@ -14,7 +16,10 @@ namespace CentralAntifraude.Application.Transacoes;
 /// tinha sido registrado" (HTTP 200). O integrador precisa dessa diferenca
 /// para saber se o retry dele foi necessario.
 /// </summary>
-public sealed record ResultadoDaIngestao(Transacao Transacao, bool JaExistia);
+public sealed record ResultadoDaIngestao(
+    Transacao Transacao,
+    AvaliacaoDeRisco Avaliacao,
+    bool JaExistia);
 
 /// <summary>
 /// Recebe uma tentativa de pagamento e a registra exatamente uma vez.
@@ -40,6 +45,8 @@ public sealed class ServicoDeIngestao
     private readonly IContextoDaIntegracaoAtual _integracao;
     private readonly IFingerprintDeIp _fingerprintDeIp;
     private readonly IUnidadeDeTrabalho _unidadeDeTrabalho;
+    private readonly ServicoDeAvaliacaoDeRisco _avaliacao;
+    private readonly IRepositorioDeRisco _risco;
     private readonly IRelogio _relogio;
     private readonly OpcoesDeIngestao _opcoes;
 
@@ -48,6 +55,8 @@ public sealed class ServicoDeIngestao
         IContextoDaIntegracaoAtual integracao,
         IFingerprintDeIp fingerprintDeIp,
         IUnidadeDeTrabalho unidadeDeTrabalho,
+        ServicoDeAvaliacaoDeRisco avaliacao,
+        IRepositorioDeRisco risco,
         IRelogio relogio,
         OpcoesDeIngestao opcoes)
     {
@@ -55,6 +64,8 @@ public sealed class ServicoDeIngestao
         _integracao = integracao;
         _fingerprintDeIp = fingerprintDeIp;
         _unidadeDeTrabalho = unidadeDeTrabalho;
+        _avaliacao = avaliacao;
+        _risco = risco;
         _relogio = relogio;
         _opcoes = opcoes;
     }
@@ -76,28 +87,34 @@ public sealed class ServicoDeIngestao
         // Camada 1.
         if (await LocalizarEquivalenteAsync(conteudo, chave, fingerprint, cancellationToken) is { } jaRegistrada)
         {
-            return new ResultadoDaIngestao(jaRegistrada, JaExistia: true);
+            return await ReplicarResultadoAsync(jaRegistrada, cancellationToken);
         }
 
         var transacao = Montar(conteudo, chave, fingerprint, agora);
         _transacoes.Adicionar(transacao);
+
+        // A avaliacao entra na MESMA gravacao da transacao. Uma transacao
+        // registrada sem avaliacao seria um estado que nenhuma tela sabe
+        // mostrar e que nenhuma regra sabe corrigir depois.
+        var avaliacao = await _avaliacao.AvaliarAsync(transacao, cancellationToken);
 
         try
         {
             // Camada 2.
             await _unidadeDeTrabalho.SalvarAsync(cancellationToken);
 
-            return new ResultadoDaIngestao(transacao, JaExistia: false);
+            return new ResultadoDaIngestao(transacao, avaliacao, JaExistia: false);
         }
         catch (ConflitoDeUnicidadeNoBanco)
         {
             // Camada 3: outra requisicao com a mesma chave venceu a corrida
-            // entre a consulta e o INSERT. A resposta correta e a dela.
+            // entre a consulta e o INSERT. A resposta correta e a dela -
+            // inclusive a avaliacao, que NAO e recalculada aqui.
             var vencedora = await LocalizarEquivalenteAsync(conteudo, chave, fingerprint, cancellationToken);
 
             if (vencedora is not null)
             {
-                return new ResultadoDaIngestao(vencedora, JaExistia: true);
+                return await ReplicarResultadoAsync(vencedora, cancellationToken);
             }
 
             // Restricao violada sem que a linha correspondente exista: nao ha
@@ -105,6 +122,29 @@ public sealed class ServicoDeIngestao
             // interna e mais honesto do que inventar uma resposta.
             throw;
         }
+    }
+
+    /// <summary>
+    /// Devolve o resultado ORIGINAL de uma transacao ja registrada.
+    ///
+    /// A avaliacao e lida do banco, nunca recalculada. Recalcular faria o
+    /// mesmo pedido receber decisoes diferentes conforme as regras mudassem
+    /// entre a primeira tentativa e o retry - e o integrador nao teria como
+    /// saber qual das duas vale.
+    ///
+    /// A Fase 4 transforma isto em invariante testada explicitamente
+    /// (ROADMAP secao 4.6).
+    /// </summary>
+    private async Task<ResultadoDaIngestao> ReplicarResultadoAsync(
+        Transacao transacao,
+        CancellationToken cancellationToken)
+    {
+        var avaliacao = await _risco.BuscarAvaliacaoPorTransacaoAsync(transacao.Id, cancellationToken)
+            ?? throw new ConflitoDeEstado(
+                "avaliacao_ausente",
+                "A transacao existe sem avaliacao de risco associada.");
+
+        return new ResultadoDaIngestao(transacao, avaliacao, JaExistia: true);
     }
 
     /// <summary>

@@ -2,6 +2,7 @@ using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Domain.Auditoria;
 using CentralAntifraude.Domain.Identidade;
 using CentralAntifraude.Domain.Integracoes;
+using CentralAntifraude.Domain.Risco;
 using CentralAntifraude.Domain.Transacoes;
 using Microsoft.EntityFrameworkCore;
 
@@ -46,6 +47,16 @@ public class CentralAntifraudeDbContext : DbContext
     public DbSet<CredencialDeIntegracao> CredenciaisDeIntegracao => Set<CredencialDeIntegracao>();
 
     public DbSet<Transacao> Transacoes => Set<Transacao>();
+
+    public DbSet<Regra> Regras => Set<Regra>();
+
+    public DbSet<VersaoDeRegra> VersoesDeRegra => Set<VersaoDeRegra>();
+
+    public DbSet<PerfilDeRisco> PerfisDeRisco => Set<PerfilDeRisco>();
+
+    public DbSet<VersaoDePerfilDeRisco> VersoesDePerfilDeRisco => Set<VersaoDePerfilDeRisco>();
+
+    public DbSet<AvaliacaoDeRisco> AvaliacoesDeRisco => Set<AvaliacaoDeRisco>();
 
     /// <summary>
     /// Tenant efetivo da requisicao atual.
@@ -104,6 +115,28 @@ public class CentralAntifraudeDbContext : DbContext
 
         modelBuilder.Entity<Transacao>()
             .HasQueryFilter(FiltroDeTenant, t => t.OrganizacaoId == OrganizacaoAtual);
+
+        modelBuilder.Entity<Regra>()
+            .HasQueryFilter(FiltroDeTenant, r => r.OrganizacaoId == OrganizacaoAtual);
+
+        modelBuilder.Entity<VersaoDeRegra>()
+            .HasQueryFilter(FiltroDeTenant, v => v.OrganizacaoId == OrganizacaoAtual);
+
+        modelBuilder.Entity<PerfilDeRisco>()
+            .HasQueryFilter(FiltroDeTenant, p => p.OrganizacaoId == OrganizacaoAtual);
+
+        modelBuilder.Entity<VersaoDePerfilDeRisco>()
+            .HasQueryFilter(FiltroDeTenant, v => v.OrganizacaoId == OrganizacaoAtual);
+
+        modelBuilder.Entity<AvaliacaoDeRisco>()
+            .HasQueryFilter(FiltroDeTenant, a => a.OrganizacaoId == OrganizacaoAtual);
+
+        // O sinal tambem carrega a organizacao e tambem e filtrado. Ele so e
+        // alcancado atraves da avaliacao, que ja esta filtrada — mas a defesa
+        // dupla custa nada e sobrevive a uma consulta futura que parta direto
+        // do sinal.
+        modelBuilder.Entity<SinalDeRisco>()
+            .HasQueryFilter(FiltroDeTenant, s => s.OrganizacaoId == OrganizacaoAtual);
 
         // Organizacao nao recebe filtro: ela e o tenant, nao pertence a um.
         // O acesso a ela e sempre por identificador ja derivado da identidade.

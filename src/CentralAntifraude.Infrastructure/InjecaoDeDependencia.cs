@@ -1,7 +1,9 @@
 using CentralAntifraude.Application.Auditoria;
 using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Application.Integracoes;
+using CentralAntifraude.Application.Risco;
 using CentralAntifraude.Application.Transacoes;
+using CentralAntifraude.Domain.Risco;
 using CentralAntifraude.Domain.Tempo;
 using CentralAntifraude.Infrastructure.Identidade;
 using CentralAntifraude.Infrastructure.Integracoes;
@@ -67,6 +69,7 @@ public static class InjecaoDeDependencia
         servicos.AddSingleton<IRelogio, RelogioSistema>();
 
         AdicionarIdentidade(servicos, configuracao);
+        AdicionarRisco(servicos, configuracao);
         AdicionarIngestao(servicos, configuracao);
 
         servicos
@@ -117,6 +120,41 @@ public static class InjecaoDeDependencia
         opcoes.Validar();
 
         return opcoes;
+    }
+
+    /// <summary>
+    /// Le e valida as opcoes de avaliacao de risco.
+    /// </summary>
+    public static OpcoesDeAvaliacao LerOpcoesDeAvaliacao(IConfiguration configuracao)
+    {
+        ArgumentNullException.ThrowIfNull(configuracao);
+
+        var opcoes = new OpcoesDeAvaliacao();
+        configuracao.GetSection(OpcoesDeAvaliacao.Secao).Bind(opcoes);
+
+        // Falha fechada: uma janela de historico menor que a maior janela de
+        // regra faria a regra de velocidade ficar calada em vez de errar. Isso
+        // nao pode passar despercebido ate producao.
+        opcoes.Validar();
+
+        return opcoes;
+    }
+
+    private static void AdicionarRisco(IServiceCollection servicos, IConfiguration configuracao)
+    {
+        servicos.AddSingleton(LerOpcoesDeAvaliacao(configuracao));
+
+        // O motor nao tem estado nem dependencia com escopo: e uma funcao pura
+        // de (transacao, contexto, versao do perfil) para avaliacao. Singleton
+        // deixa isso explicito - se um dia alguem tentar injetar um DbContext
+        // nele, o container reclama na inicializacao.
+        servicos.AddSingleton<MotorDeRisco>();
+
+        servicos.AddScoped<IRepositorioDeRisco, RepositorioDeRisco>();
+        servicos.AddScoped<IProvedorDeContextoDeRisco, ProvedorDeContextoDeRisco>();
+
+        servicos.AddScoped<ServicoDeAvaliacaoDeRisco>();
+        servicos.AddScoped<ServicoDeConsultaDeRisco>();
     }
 
     private static void AdicionarIngestao(IServiceCollection servicos, IConfiguration configuracao)

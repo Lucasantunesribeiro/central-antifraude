@@ -1,6 +1,7 @@
 using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Domain.Identidade;
 using CentralAntifraude.Domain.Primitivos;
+using CentralAntifraude.Domain.Risco;
 using CentralAntifraude.Domain.Tempo;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -76,6 +77,20 @@ public static partial class SeedDeDesenvolvimento
             RegistrarOrganizacaoCriada(log, CodigoDaOrganizacao);
         }
 
+        // Fora do `if`: uma organizacao criada antes da Fase 3 existe sem
+        // perfil de risco, e sem perfil nenhuma transacao dela pode ser
+        // avaliada. A chamada e idempotente, entao rodar sempre e seguro.
+        if (await ProvisionamentoDeRisco.GarantirCatalogoAsync(
+                contexto,
+                organizacao.Id,
+                agora,
+                cancellationToken))
+        {
+            await contexto.SaveChangesAsync(cancellationToken);
+
+            RegistrarCatalogoProvisionado(log, CatalogoPadraoDeRisco.Definicoes.Count);
+        }
+
         var criados = 0;
 
         foreach (var (email, nome, perfil) in Usuarios)
@@ -130,4 +145,10 @@ public static partial class SeedDeDesenvolvimento
         Level = LogLevel.Information,
         Message = "Seed de desenvolvimento criou {Quantidade} usuario(s).")]
     private static partial void RegistrarUsuariosCriados(ILogger logger, int quantidade);
+
+    [LoggerMessage(
+        EventId = 103,
+        Level = LogLevel.Information,
+        Message = "Catalogo de risco provisionado com {Quantidade} regra(s).")]
+    private static partial void RegistrarCatalogoProvisionado(ILogger logger, int quantidade);
 }
