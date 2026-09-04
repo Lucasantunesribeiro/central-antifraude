@@ -1,3 +1,4 @@
+using CentralAntifraude.Infrastructure.Identidade;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
@@ -30,6 +31,8 @@ public sealed class FabricaDeDbContextEmTempoDeDesign
         var construtor = new DbContextOptionsBuilder<CentralAntifraudeDbContext>();
         OpcoesDoDbContext.Configurar(construtor, conexao);
 
-        return new CentralAntifraudeDbContext(construtor.Options);
+        // Contexto anonimo: gerar migration so precisa do modelo, e o modelo
+        // nao depende de quem esta autenticado. Nenhuma consulta e executada.
+        return new CentralAntifraudeDbContext(construtor.Options, ContextoDeUsuarioFixo.Anonimo);
     }
 }

@@ -1,0 +1,133 @@
+using CentralAntifraude.Application.Identidade;
+using CentralAntifraude.Domain.Identidade;
+using CentralAntifraude.Domain.Primitivos;
+using CentralAntifraude.Domain.Tempo;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+
+namespace CentralAntifraude.Infrastructure.Persistencia;
+
+/// <summary>
+/// Cria a organizacao e os usuarios necessarios para operar o sistema em
+/// desenvolvimento.
+///
+/// Tres regras de seguranca:
+///
+/// 1. **Nunca roda sozinho.** So executa se
+///    <c>Seed:SenhaPadrao</c> estiver configurado. Sem isso nao ha seed e nao
+///    ha usuario — falha fechada, em vez de criar contas com senha conhecida.
+///
+/// 2. **A senha nunca esta no codigo.** Ela vem de variavel de ambiente ou
+///    user-secrets, do mesmo jeito que a string de conexao.
+///
+/// 3. **E idempotente.** Rodar de novo nao duplica nem sobrescreve senha de
+///    usuario existente.
+///
+/// O seed narrativo da demonstracao — com historias de fraude — e a Fase 13.
+/// Este aqui existe apenas para que haja com quem entrar no sistema.
+/// </summary>
+public static partial class SeedDeDesenvolvimento
+{
+    public const string ChaveDaSenha = "Seed:SenhaPadrao";
+
+    public const string CodigoDaOrganizacao = "demo";
+
+    private static readonly (string Email, string Nome, PerfilDeUsuario Perfil)[] Usuarios =
+    [
+        ("admin@demo.local", "Administradora Demo", PerfilDeUsuario.Administrador),
+        ("supervisor@demo.local", "Supervisor Demo", PerfilDeUsuario.SupervisorDeFraude),
+        ("analista@demo.local", "Analista Demo", PerfilDeUsuario.AnalistaDeFraude),
+        ("auditor@demo.local", "Auditor Demo", PerfilDeUsuario.Auditor),
+    ];
+
+    public static async Task ExecutarAsync(
+        IServiceProvider provedor,
+        IConfiguration configuracao,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(provedor);
+        ArgumentNullException.ThrowIfNull(configuracao);
+
+        var log = provedor.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(SeedDeDesenvolvimento));
+        var senha = configuracao[ChaveDaSenha];
+
+        if (string.IsNullOrWhiteSpace(senha))
+        {
+            RegistrarSeedIgnorado(log, ChaveDaSenha);
+            return;
+        }
+
+        var contexto = provedor.GetRequiredService<CentralAntifraudeDbContext>();
+        var hash = provedor.GetRequiredService<IHashDeSenha>();
+        var relogio = provedor.GetRequiredService<IRelogio>();
+        var agora = relogio.Agora;
+
+        var organizacao = await contexto.Organizacoes
+            .FirstOrDefaultAsync(o => o.Codigo == CodigoDaOrganizacao, cancellationToken);
+
+        if (organizacao is null)
+        {
+            organizacao = Organizacao.Criar("Organizacao Demo", CodigoDaOrganizacao, agora);
+            contexto.Organizacoes.Add(organizacao);
+            await contexto.SaveChangesAsync(cancellationToken);
+
+            RegistrarOrganizacaoCriada(log, CodigoDaOrganizacao);
+        }
+
+        var criados = 0;
+
+        foreach (var (email, nome, perfil) in Usuarios)
+        {
+            var enderecoNormalizado = Email.De(email);
+
+            // Ignora o filtro de tenant: o seed roda fora de uma requisicao,
+            // entao nao ha identidade e o filtro devolveria vazio para tudo.
+            var jaExiste = await contexto.Usuarios
+                .IgnoreQueryFilters([CentralAntifraudeDbContext.FiltroDeTenant])
+                .AnyAsync(u => u.Email == enderecoNormalizado, cancellationToken);
+
+            if (jaExiste)
+            {
+                continue;
+            }
+
+            contexto.Usuarios.Add(Usuario.Criar(
+                organizacao.Id,
+                enderecoNormalizado,
+                nome,
+                hash.Gerar(senha),
+                perfil,
+                agora));
+
+            criados++;
+        }
+
+        if (criados > 0)
+        {
+            await contexto.SaveChangesAsync(cancellationToken);
+
+            // A senha nao entra no log. Quem rodou o seed a definiu e ja a tem.
+            RegistrarUsuariosCriados(log, criados);
+        }
+    }
+
+    [LoggerMessage(
+        EventId = 100,
+        Level = LogLevel.Information,
+        Message = "Seed de desenvolvimento ignorado: {Chave} nao configurado.")]
+    private static partial void RegistrarSeedIgnorado(ILogger logger, string chave);
+
+    [LoggerMessage(
+        EventId = 101,
+        Level = LogLevel.Information,
+        Message = "Organizacao de desenvolvimento criada: {Codigo}.")]
+    private static partial void RegistrarOrganizacaoCriada(ILogger logger, string codigo);
+
+    [LoggerMessage(
+        EventId = 102,
+        Level = LogLevel.Information,
+        Message = "Seed de desenvolvimento criou {Quantidade} usuario(s).")]
+    private static partial void RegistrarUsuariosCriados(ILogger logger, int quantidade);
+}

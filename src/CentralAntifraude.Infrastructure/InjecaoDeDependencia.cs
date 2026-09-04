@@ -1,6 +1,11 @@
+using CentralAntifraude.Application.Auditoria;
+using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Domain.Tempo;
+using CentralAntifraude.Infrastructure.Identidade;
 using CentralAntifraude.Infrastructure.Persistencia;
+using CentralAntifraude.Infrastructure.Persistencia.Repositorios;
 using CentralAntifraude.Infrastructure.Tempo;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,6 +26,16 @@ public static class InjecaoDeDependencia
 
     /// <summary>Tag que separa dependencias externas do liveness do processo.</summary>
     public const string TagDeProntidao = "pronto";
+
+    /// <summary>
+    /// Iteracoes de PBKDF2-HMAC-SHA512 para senha.
+    ///
+    /// Valor recomendado pela OWASP Password Storage Cheat Sheet (consultada
+    /// em 2026-09-03) para PBKDF2-HMAC-SHA512. O padrao da biblioteca sao
+    /// 100.000; este numero e uma escolha do projeto com fonte, e nao um
+    /// "padrao de mercado" inventado.
+    /// </summary>
+    public const int IteracoesDeHashDeSenha = 220_000;
 
     public static IServiceCollection AdicionarInfraestrutura(
         this IServiceCollection servicos,
@@ -48,6 +63,8 @@ public static class InjecaoDeDependencia
 
         servicos.AddSingleton<IRelogio, RelogioSistema>();
 
+        AdicionarIdentidade(servicos, configuracao);
+
         servicos
             .AddHealthChecks()
             .AddDbContextCheck<CentralAntifraudeDbContext>(
@@ -55,5 +72,50 @@ public static class InjecaoDeDependencia
                 tags: [TagDeProntidao]);
 
         return servicos;
+    }
+
+    /// <summary>
+    /// Le e valida as opcoes de autenticacao.
+    ///
+    /// Publico porque a Api precisa dos mesmos valores para configurar a
+    /// validacao do JWT. Chamar isto e melhor do que a Api montar um provedor
+    /// de servicos paralelo so para espiar um singleton ja registrado.
+    /// </summary>
+    public static OpcoesDeAutenticacao LerOpcoesDeAutenticacao(IConfiguration configuracao)
+    {
+        ArgumentNullException.ThrowIfNull(configuracao);
+
+        var opcoes = new OpcoesDeAutenticacao();
+        configuracao.GetSection(OpcoesDeAutenticacao.Secao).Bind(opcoes);
+
+        // Falha fechada: configuracao de autenticacao invalida derruba a
+        // inicializacao, em vez de virar "token invalido" em producao sem
+        // ninguem entender por que.
+        opcoes.Validar();
+
+        return opcoes;
+    }
+
+    private static void AdicionarIdentidade(IServiceCollection servicos, IConfiguration configuracao)
+    {
+        var opcoes = LerOpcoesDeAutenticacao(configuracao);
+
+        servicos.AddSingleton(opcoes);
+
+        servicos.Configure<PasswordHasherOptions>(
+            o => o.IterationCount = IteracoesDeHashDeSenha);
+
+        servicos.AddSingleton<IHashDeSenha, HashDeSenhaPbkdf2>();
+        servicos.AddSingleton<IProtetorDeRefreshToken, ProtetorDeRefreshToken>();
+        servicos.AddSingleton<IEmissorDeAccessToken, EmissorDeAccessToken>();
+
+        servicos.AddScoped<IRepositorioDeUsuarios, RepositorioDeUsuarios>();
+        servicos.AddScoped<IRepositorioDeOrganizacoes, RepositorioDeOrganizacoes>();
+        servicos.AddScoped<IRepositorioDeRefreshTokens, RepositorioDeRefreshTokens>();
+        servicos.AddScoped<IRegistradorDeAuditoria, RegistradorDeAuditoria>();
+        servicos.AddScoped<IUnidadeDeTrabalho, UnidadeDeTrabalho>();
+
+        servicos.AddScoped<ServicoDeAutenticacao>();
+        servicos.AddScoped<ServicoDeUsuarios>();
     }
 }

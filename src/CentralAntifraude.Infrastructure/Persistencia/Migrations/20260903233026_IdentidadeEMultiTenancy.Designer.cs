@@ -3,6 +3,7 @@ using System;
 using CentralAntifraude.Infrastructure.Persistencia;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CentralAntifraude.Infrastructure.Persistencia.Migrations
 {
     [DbContext(typeof(CentralAntifraudeDbContext))]
-    partial class CentralAntifraudeDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260903233026_IdentidadeEMultiTenancy")]
+    partial class IdentidadeEMultiTenancy
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
