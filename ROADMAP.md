@@ -1372,17 +1372,112 @@ Testar:
 
 ## 4.10 Critérios de conclusão
 
-- [ ] Ingestão retorna decisão síncrona.
-- [ ] Avaliação faz parte do boundary transacional correto.
-- [ ] SERIALIZABLE usado somente onde justificado.
-- [ ] Retry completo testado.
-- [ ] Replay não recalcula avaliação.
-- [ ] Teste concorrente de velocidade verde.
-- [ ] Transações simultâneas não geram duplicidade.
-- [ ] Evento atrasado possui semântica documentada.
-- [ ] Baseline de performance registrado.
-- [ ] Security Gate 4 verde.
-- [ ] CI verde.
+- [x] Ingestão retorna decisão síncrona.
+- [x] Avaliação faz parte do boundary transacional correto.
+- [x] SERIALIZABLE usado somente onde justificado.
+- [x] Retry completo testado.
+- [x] Replay não recalcula avaliação.
+- [x] Teste concorrente de velocidade verde.
+- [x] Transações simultâneas não geram duplicidade.
+- [x] Evento atrasado possui semântica documentada.
+- [x] Baseline de performance registrado.
+- [x] Security Gate 4 verde.
+- [ ] CI verde — *pendente do primeiro `push`, que não foi autorizado. Cada passo do workflow foi executado localmente e está verde.*
+
+---
+
+## 4.11 Resultado da Fase 4
+
+**Concluída em 2026-09-04.**
+
+### Evidências
+
+| Critério | Como foi verificado |
+|---|---|
+| Build backend | `dotnet build -c Release --no-incremental`, **0 erros e 0 avisos** |
+| Build frontend | `npm run build`, `oxlint` e `prettier --check` limpos |
+| Boundary transacional | `SERIALIZABLE` **somente** na ingestão; demais rotas no padrão |
+| Retry deliberado | operação inteira refeita, `ChangeTracker` limpo, espera com sorteio, limite 8 |
+| **Velocidade sob concorrência** | 6 simultâneas do mesmo cliente → contagens de janela **{4,5,6}** nos sinais e 3 abaixo do limite: prova exata de ordem serial válida |
+| Duplicidade sob corrida | 20 simultâneas idênticas → **1× 201, 19× 200, 1 transação, 1 avaliação, 1 evento** |
+| Replay após regra nova | mesmo score, mesma decisão, mesmo `avaliadaEm`, ainda na **versão 1** do perfil |
+| Regra nova vale para o futuro | transação posterior à publicação usa a **versão 2** |
+| Evento atrasado | três tempos distintos; avaliações anteriores **byte a byte iguais** depois da chegada da atrasada |
+| Outbox | evento na mesma transação; replay não gera segundo evento; conteúdo sem instrumento, dispositivo ou IP |
+| Baseline | p50 **15,4 ms**, p95 **28,7 ms**, p99 **39,9 ms**, **8 comandos SQL** por ingestão — [`docs/baseline-de-performance.md`](docs/baseline-de-performance.md) |
+| Testes | 295 unitários + 15 arquitetura + 145 integração + 45 frontend = **500, todos verdes** |
+| Security Gate 4 | [`docs/security-gate-4.md`](docs/security-gate-4.md) |
+| Migration | `OutboxDeEventos` aplicada em PostgreSQL real; `has-pending-model-changes` sem alteração pendente |
+| Dependências | `dotnet list package --vulnerable`: nenhuma; `npm audit`: 0 |
+| Segredos | `gitleaks detect`: nenhum |
+
+### Decisões congeladas
+
+| Decisão | Registro |
+|---|---|
+| Boundary transacional explícito, `SERIALIZABLE` só na ingestão | `docs/adr/0009-operacao-critica-e-concorrencia.md` |
+| Retry da operação inteira, com lista fechada do que vale refazer | `docs/adr/0009` |
+| **Terceira camada de idempotência muda de forma sob isolamento forte** | `docs/adr/0009` |
+| Contenção esgotada é 503 com `Retry-After`, nunca 500 | `docs/adr/0009` |
+| `SET LOCAL cpu_tuple_cost` dentro da transação crítica | `docs/adr/0009` |
+| Semântica "equivalente a alguma ordem serial", e não "todos enxergam todos" | `docs/adr/0009` |
+| Transactional Outbox como modelo local, conteúdo mínimo e versionado | `docs/adr/0009` |
+| Evento atrasado não reescreve avaliação histórica | `docs/adr/0009` |
+
+### Defeitos reais encontrados e corrigidos
+
+**1. Conflitos falsos entre clientes que não compartilham nada.** Doze
+requisições simultâneas de **doze clientes diferentes** produziam tempestade de
+`40001`: 28 retentativas e duas respostas 503.
+
+A causa está na documentação do PostgreSQL, literalmente: *"A sequential scan
+will always necessitate a relation-level predicate lock. This can result in an
+increased rate of serialization failures."* Com a tabela pequena o planejador
+varre sequencialmente, e o bloqueio de predicado deixa de cobrir a faixa de um
+cliente para cobrir a tabela inteira.
+
+Corrigido com `SET LOCAL cpu_tuple_cost = 1.0` **dentro da transação crítica** —
+a mitigação que a própria documentação recomenda, no escopo mais estreito
+possível. Verificado com `EXPLAIN`. O orçamento de retentativas subiu de 4 para
+8 com base na medição, e não no palpite.
+
+**2. Contenção esgotada virava 500.** Um integrador com retry automático leria
+"algo quebrou, não insista" quando a resposta correta é "estava disputado,
+repita". Agora é 503 com `Retry-After` e código `contencao_de_concorrencia` —
+seguro por construção, porque repetir com a mesma chave de idempotência ou
+devolve a avaliação original ou cria a transação uma vez só.
+
+**3. SQL cru ignora o filtro global de tenant.** Um teste desta fase lia
+`eventos_de_saida` com `SqlQuery` e passava sozinho, mas falhava junto dos
+outros — enxergava os eventos dos demais tenants. Não é falha de produção hoje,
+mas é o alerta certo na hora certa: a Fase 5 vai querer `FOR UPDATE SKIP
+LOCKED`, e ali o filtro também não vale.
+
+### Fora de escopo, deliberadamente
+
+- **Sem publicação de eventos.** A Outbox grava e as linhas ficam pendentes. O
+  despachante, SQS, Inbox e DLQ são a Fase 5 — que é onde `PublicadoEm` e
+  `TentativasDePublicacao`, já criados, passam a ser usados.
+- **Sem alerta.** Score alto ainda não gera alerta nem caso. Fases 6 e 7.
+- **Sem métrica exportada.** O `Meter` e os dois contadores existem; coleta e
+  painel são a Fase 12.
+- **Sem mudança de frontend.** A fase é de backend. O 503 já cai na categoria
+  "servidor" do cliente HTTP, que oferece "Tentar de novo".
+
+### Débito técnico não bloqueante
+
+1. **CI ainda não executado.** Cada comando do workflow roda localmente e está
+   verde, mas o GitHub Actions só roda após o primeiro `push`, que continua não
+   autorizado.
+2. **Conflito falso encolhe, mas não desaparece, com tabela pequena.** Uma
+   organização recém-criada, com poucas transações, ainda pode gastar
+   retentativas em uma rajada simultânea. O comportamento é correto em qualquer
+   caso — no pior deles, 503 com `Retry-After`.
+3. **Baseline medida em uma máquina só, em Debug, sem carga sustentada.** Ver as
+   limitações listadas em `docs/baseline-de-performance.md`.
+4. **Verificação visual no navegador segue pendente** — extensão do Chrome
+   desconectada desde a Fase 2.
+5. **Rate limit continua por instância do processo.** Fase 11.
 
 ---
 
@@ -3381,7 +3476,7 @@ A autorização de uma fase não autoriza automaticamente a fase seguinte.
 | 1 — Identidade e Multi-tenancy | ✅ Concluída (2026-09-03) |
 | 2 — Integrações e Ingestão | ✅ Concluída (2026-09-04) |
 | 3 — Motor de Risco v1 | ✅ Concluída (2026-09-04) |
-| 4 — Avaliação Síncrona e Concorrência | ⬜ Não iniciada |
+| 4 — Avaliação Síncrona e Concorrência | ✅ Concluída (2026-09-04) |
 | 5 — Backbone Assíncrono | ⬜ Não iniciada |
 | 6 — Alertas | ⬜ Não iniciada |
 | 7 — Casos e Investigação | ⬜ Não iniciada |

@@ -21,8 +21,9 @@ solução certificada de compliance.
 | 0 | Fundação Técnica | ✅ concluída |
 | 1 | Identidade e Multi-tenancy | ✅ concluída |
 | 2 | Integrações e Ingestão | ✅ concluída |
-| **3** | **Motor de Risco v1** | ✅ **concluída** |
-| 4–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
+| 3 | Motor de Risco v1 | ✅ concluída |
+| **4** | **Avaliação Síncrona e Concorrência** | ✅ **concluída** |
+| 5–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
 
 Hoje a plataforma recebe transações de sistemas externos autenticados por
 credencial própria, registra cada tentativa **exatamente uma vez** mesmo sob
@@ -35,8 +36,15 @@ versão do perfil e a versão de cada regra acionada, e o banco recusa apagar o
 que sustenta uma decisão — uma avaliação de meses atrás continua explicável pela
 configuração daquele momento.
 
-**Ainda não existe** alerta, caso, investigação nem gestão de regras. Isso é
-deliberado — cada capacidade chega na fase que o `ROADMAP.md` define.
+Tudo isso acontece **em uma única transação serializável**, com retry
+deliberado: transações simultâneas do mesmo cliente produzem um resultado
+equivalente a alguma ordem serial válida, e um retry do integrador devolve a
+avaliação original em vez de recalcular. Cada avaliação grava também um evento
+na Outbox, no mesmo commit — a publicação chega na Fase 5.
+
+**Ainda não existe** publicação de eventos, alerta, caso, investigação nem
+gestão de regras. Isso é deliberado — cada capacidade chega na fase que o
+`ROADMAP.md` define.
 
 ---
 
@@ -72,6 +80,8 @@ docs/
   security-gate-1.md                 resultado do gate da Fase 1
   security-gate-2.md                 resultado do gate da Fase 2
   security-gate-3.md                 resultado do gate da Fase 3
+  security-gate-4.md                 resultado do gate da Fase 4
+  baseline-de-performance.md         números medidos do caminho crítico
 ```
 
 A dependência corre em uma direção só, e testes de arquitetura seguram isso:
@@ -135,6 +145,10 @@ consumido por orquestrador e não pela interface.
 | `GET /api/regras/perfil` | qualquer | perfil vigente, com os limiares |
 | `POST /api/ingestao/transacoes` | **`ApiKey`** | recebe uma tentativa de pagamento e devolve a decisão de risco |
 
+A ingestão pode responder **503 com `Retry-After`** quando a disputa por
+concorrência passa do orçamento de retentativas. É um convite explícito a
+repetir com a mesma chave de idempotência, e não um erro do servidor.
+
 A ingestão usa esquema de autenticação **próprio** (`Authorization: ApiKey ...`):
 integração não é usuário, e um token humano não serve ali — nem o contrário.
 
@@ -182,6 +196,39 @@ Três propriedades que o produto garante e testa:
 
 ---
 
+## Concorrência
+
+A avaliação lê um **conjunto** — quantas transações daquele cliente na janela — e
+decide a partir dele. Duas requisições simultâneas, cada uma sem enxergar a
+outra, produziriam duas avaliações que nenhuma execução sequencial produziria.
+
+A ingestão roda numa transação **`SERIALIZABLE`**, e só ela: login, consultas e
+administração não dependem de um conjunto lido para estarem corretos. Em
+conflito reconhecido, a operação **inteira** é refeita — releitura do contexto e
+nova avaliação, nunca a repetição do comando SQL que falhou.
+
+O que o sistema promete, e o que não promete:
+
+- ✅ o resultado equivale a **alguma** ordem serial válida das operações
+  simultâneas;
+- ❌ não se promete que toda requisição enxergue as simultâneas — isso seria
+  exigir que ela enxergasse o futuro.
+
+A prova é exata. Seis transações do mesmo cliente, com o mesmo horário de
+ocorrência, enviadas ao mesmo tempo: as contagens de janela registradas têm que
+ser {1..6}, sem repetido e sem buraco. Um repetido significaria duas transações
+que não enxergaram uma à outra.
+
+Quando a disputa passa do orçamento de retentativas, a resposta é **503 com
+`Retry-After`** — e não 500. Repetir com a mesma chave de idempotência é seguro
+por construção.
+
+Os números medidos estão em
+[`docs/baseline-de-performance.md`](docs/baseline-de-performance.md): p50 de
+15 ms, p99 de 40 ms e 8 comandos SQL por ingestão.
+
+---
+
 ## Testes
 
 ```bash
@@ -210,6 +257,7 @@ tem — um teste de concorrência verde no SQLite não provaria nada.
 | Tokens, hash de senha, CSRF e detecção de reuso | [ADR 0006](docs/adr/0006-sessao-humana.md) |
 | Idempotência em três camadas, fingerprint canônico, credencial de integração | [ADR 0007](docs/adr/0007-ingestao-e-idempotencia.md) |
 | Motor determinístico, catálogo fechado, explicabilidade gravada | [ADR 0008](docs/adr/0008-motor-de-risco.md) |
+| `SERIALIZABLE` na ingestão, retry da operação inteira, Outbox | [ADR 0009](docs/adr/0009-operacao-critica-e-concorrencia.md) |
 
 Três decisões são reforçadas em tempo de compilação por
 `src/BannedSymbols.txt`: `DateTime.UtcNow`, `DateTime.Now` e `Guid.NewGuid()`

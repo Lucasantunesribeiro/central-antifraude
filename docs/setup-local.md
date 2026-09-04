@@ -140,6 +140,28 @@ velocidade pode declarar. Um valor menor faria a regra perguntar por um passado
 que o contexto não carregou e ficar **calada**: sem erro, sem aviso e com score
 menor do que o perfil pede. A API recusa subir nesse caso.
 
+### Ajuste opcional — concorrência
+
+A ingestão roda em uma transação `SERIALIZABLE` e refaz a operação inteira
+quando o banco recusa a ordem das transações simultâneas.
+
+```bash
+# Padrões. Medidos, não chutados — ver docs/adr/0009.
+export Concorrencia__MaximoDeTentativas=8
+export Concorrencia__EsperaBaseEmMs=10
+export Concorrencia__EsperaMaximaEmMs=200
+export Concorrencia__CustoPorLinha=1.0
+```
+
+`CustoPorLinha` vira `SET LOCAL cpu_tuple_cost` **dentro da transação crítica**,
+e não muda o planejamento de nenhuma outra consulta. Ele existe porque a
+documentação do PostgreSQL avisa que varredura sequencial obriga um bloqueio de
+predicado da tabela inteira — e, com a tabela pequena, isso faz requisições de
+clientes sem relação nenhuma conflitarem entre si.
+
+Esgotadas as tentativas, a API responde **503 com `Retry-After`**. Não é erro:
+é um convite a repetir com a mesma chave de idempotência.
+
 ## 5. Rodar
 
 ```bash
