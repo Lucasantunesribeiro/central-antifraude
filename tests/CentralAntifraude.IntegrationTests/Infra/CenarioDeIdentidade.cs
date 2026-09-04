@@ -64,6 +64,15 @@ public static class CenarioDeIdentidade
             tenant.UsuariosPorPerfil[perfil] = usuario.Id;
         }
 
+        // Toda organizacao nasce com perfil de risco e catalogo de regras, do
+        // mesmo jeito que em producao. Um tenant de teste sem perfil provaria
+        // um comportamento que o sistema real nunca tem.
+        await ProvisionamentoDeRisco.GarantirCatalogoAsync(
+            contexto,
+            organizacao.Id,
+            agora,
+            cancellationToken);
+
         await contexto.SaveChangesAsync(cancellationToken);
 
         return tenant;
