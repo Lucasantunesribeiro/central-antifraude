@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace CentralAntifraude.IntegrationTests.Infra;
 
@@ -25,6 +26,19 @@ public sealed class FabricaDaApi : WebApplicationFactory<Program>
     private readonly string _chaveDeAssinatura =
         Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(48));
 
+    /// <summary>Chave de fingerprint de IP, tambem sorteada por instancia.</summary>
+    private readonly string _chaveDeFingerprint =
+        Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(48));
+
+    /// <summary>
+    /// Log do host de teste, em memoria.
+    ///
+    /// Sem ele, uma falha de autenticacao aparece apenas como 401 e o teste
+    /// nao diz por que - o handler de autenticacao nao escreve o motivo na
+    /// resposta, de proposito.
+    /// </summary>
+    public List<string> Registros { get; } = [];
+
     private readonly string _stringDeConexao;
 
     public FabricaDaApi(string stringDeConexao)
@@ -39,6 +53,20 @@ public sealed class FabricaDaApi : WebApplicationFactory<Program>
         builder.UseEnvironment(Environments.Production);
         builder.UseSetting("ConnectionStrings:Postgres", _stringDeConexao);
         builder.UseSetting($"{OpcoesDeAutenticacao.Secao}:ChaveDeAssinatura", _chaveDeAssinatura);
+        builder.UseSetting(
+            $"{CentralAntifraude.Application.Transacoes.OpcoesDeIngestao.Secao}:ChaveDeFingerprint",
+            _chaveDeFingerprint);
+
+        // Sem isto, a regra de Logging:LogLevel do appsettings filtra Debug e
+        // o motivo de uma recusa de autenticacao some do diagnostico.
+        builder.UseSetting("Logging:LogLevel:Default", "Debug");
+
+        builder.ConfigureLogging(log =>
+        {
+            log.ClearProviders();
+            log.AddProvider(new ProvedorDeLogEmMemoria(Registros));
+            log.SetMinimumLevel(LogLevel.Debug);
+        });
 
         builder.ConfigureTestServices(servicos =>
         {
@@ -63,4 +91,54 @@ public sealed class FabricaDaApi : WebApplicationFactory<Program>
     /// </summary>
     public HttpClient CriarClienteSemCookieAutomatico() =>
         CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+
+    private sealed class ProvedorDeLogEmMemoria : ILoggerProvider
+    {
+        private readonly List<string> _destino;
+
+        public ProvedorDeLogEmMemoria(List<string> destino) => _destino = destino;
+
+        public ILogger CreateLogger(string categoryName) => new LogEmMemoria(categoryName, _destino);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class LogEmMemoria : ILogger
+        {
+            private readonly string _categoria;
+            private readonly List<string> _destino;
+
+            public LogEmMemoria(string categoria, List<string> destino)
+            {
+                _categoria = categoria;
+                _destino = destino;
+            }
+
+            public IDisposable? BeginScope<TState>(TState state)
+                where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(
+                LogLevel logLevel,
+                EventId eventId,
+                TState state,
+                Exception? exception,
+                Func<TState, Exception?, string> formatter)
+            {
+                var mensagem = $"[{logLevel}] {_categoria}: {formatter(state, exception)}";
+
+                if (exception is not null)
+                {
+                    mensagem += $" || {exception.GetType().Name}: {exception.Message}";
+                }
+
+                lock (_destino)
+                {
+                    _destino.Add(mensagem);
+                }
+            }
+        }
+    }
 }

@@ -1,6 +1,7 @@
 using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Infrastructure;
 using CentralAntifraude.Infrastructure.Identidade;
+using CentralAntifraude.Infrastructure.Integracoes;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 
@@ -201,5 +202,172 @@ public sealed class OpcoesDeAutenticacaoTests
         opcoes.DiasDoRefreshToken = 365;
 
         Assert.Throws<InvalidOperationException>(opcoes.Validar);
+    }
+}
+
+public sealed class ProtetorDeCredencialTests
+{
+    private static readonly ProtetorDeCredencial Protetor = new();
+
+    [Fact]
+    public void Toda_chave_gerada_e_interpretavel()
+    {
+        // ESTE teste existe por causa de um defeito real: o segredo e
+        // base64url, alfabeto que inclui "_" - o mesmo caractere que separa
+        // as partes da chave. Um Split sem limite quebrava a chave em quatro
+        // pedacos e a recusava.
+        //
+        // Como so cerca de metade das chaves sorteadas contem "_", o defeito
+        // aparecia em metade das execucoes. Gerar muitas chaves e conferir
+        // TODAS transforma esse acaso em certeza.
+        for (var i = 0; i < 500; i++)
+        {
+            var (identificadorPublico, hashDoSegredo, valorBruto) = Protetor.Gerar();
+
+            Assert.True(
+                Protetor.TentarInterpretar(valorBruto, out var lidoPublico, out var lidoHash),
+                $"Chave gerada nao pode ser interpretada: {valorBruto}");
+
+            Assert.Equal(identificadorPublico, lidoPublico);
+            Assert.Equal(hashDoSegredo, lidoHash);
+        }
+    }
+
+    [Fact]
+    public void Interpreta_chave_cujo_segredo_contem_o_separador()
+    {
+        // O caso especifico, escrito na mao para nao depender de sorteio.
+        const string comSeparador = "caf_0123456789abcdef_aa_bb_cc-dd";
+
+        Assert.True(Protetor.TentarInterpretar(comSeparador, out var publico, out _));
+        Assert.Equal("0123456789abcdef", publico);
+    }
+
+    [Fact]
+    public void A_chave_tem_o_formato_documentado()
+    {
+        var (identificadorPublico, _, valorBruto) = Protetor.Gerar();
+
+        // O prefixo fixo permite que um varredor de segredos reconheca a
+        // chave se ela vazar num repositorio.
+        Assert.StartsWith("caf_", valorBruto, StringComparison.Ordinal);
+        Assert.Equal(16, identificadorPublico.Length);
+        Assert.True(identificadorPublico.All(c => char.IsAsciiDigit(c) || c is >= 'a' and <= 'f'));
+    }
+
+    [Fact]
+    public void Cada_chave_gerada_e_unica()
+    {
+        var geradas = Enumerable.Range(0, 500).Select(_ => Protetor.Gerar().ValorBruto).ToList();
+
+        Assert.Equal(geradas.Count, geradas.Distinct().Count());
+    }
+
+    [Fact]
+    public void O_hash_nao_revela_o_segredo()
+    {
+        var (_, hashDoSegredo, valorBruto) = Protetor.Gerar();
+        var segredo = valorBruto.Split('_', 3)[2];
+
+        Assert.DoesNotContain(segredo, hashDoSegredo, StringComparison.Ordinal);
+        Assert.Equal(64, hashDoSegredo.Length);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("caf_0123456789abcdef")]              // sem segredo
+    [InlineData("caf__segredo")]                       // sem identificador
+    [InlineData("xyz_0123456789abcdef_segredo")]       // prefixo errado
+    [InlineData("caf_0123456789ABCDEF_segredo")]       // hexadecimal em maiusculas
+    [InlineData("caf_curto_segredo")]                  // identificador curto
+    [InlineData("caf_zzzzzzzzzzzzzzzz_segredo")]       // fora do alfabeto hexadecimal
+    [InlineData("Bearer eyJhbGciOi")]                  // token humano
+    public void Recusa_chave_malformada(string? valor)
+    {
+        Assert.False(Protetor.TentarInterpretar(valor, out _, out _));
+    }
+
+    [Fact]
+    public void Segredos_diferentes_produzem_hashes_diferentes()
+    {
+        Protetor.TentarInterpretar("caf_0123456789abcdef_segredo-a", out _, out var hashA);
+        Protetor.TentarInterpretar("caf_0123456789abcdef_segredo-b", out _, out var hashB);
+
+        Assert.NotEqual(hashA, hashB);
+    }
+}
+
+public sealed class FingerprintDeIpTests
+{
+    private static FingerprintDeIpComHmac Criar(byte semente = 1)
+    {
+        var chave = new byte[48];
+        Array.Fill(chave, semente);
+
+        return new FingerprintDeIpComHmac(
+            new CentralAntifraude.Application.Transacoes.OpcoesDeIngestao
+            {
+                ChaveDeFingerprint = Convert.ToBase64String(chave),
+            });
+    }
+
+    [Fact]
+    public void O_mesmo_ip_produz_o_mesmo_fingerprint()
+    {
+        using var derivador = Criar();
+
+        // E o que uma regra de risco precisa saber: "vieram do mesmo lugar?".
+        Assert.Equal(derivador.Derivar("203.0.113.10"), derivador.Derivar("203.0.113.10"));
+    }
+
+    [Fact]
+    public void Espacos_e_caixa_nao_mudam_o_fingerprint()
+    {
+        using var derivador = Criar();
+
+        Assert.Equal(derivador.Derivar("2001:DB8::1"), derivador.Derivar(" 2001:db8::1 "));
+    }
+
+    [Fact]
+    public void Ips_diferentes_produzem_fingerprints_diferentes()
+    {
+        using var derivador = Criar();
+
+        Assert.NotEqual(derivador.Derivar("203.0.113.10"), derivador.Derivar("203.0.113.11"));
+    }
+
+    [Fact]
+    public void O_fingerprint_nao_contem_o_endereco()
+    {
+        using var derivador = Criar();
+
+        var fingerprint = derivador.Derivar("203.0.113.10")!;
+
+        Assert.DoesNotContain("203.0.113", fingerprint, StringComparison.Ordinal);
+        Assert.Equal(64, fingerprint.Length);
+    }
+
+    [Fact]
+    public void Chaves_diferentes_produzem_fingerprints_diferentes_para_o_mesmo_ip()
+    {
+        // E o que torna o fingerprint irreversivel: sem a chave, uma tabela
+        // com o hash dos 4 bilhoes de IPv4 nao serve para nada.
+        using var comUmaChave = Criar(semente: 1);
+        using var comOutraChave = Criar(semente: 2);
+
+        Assert.NotEqual(comUmaChave.Derivar("203.0.113.10"), comOutraChave.Derivar("203.0.113.10"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Sem_ip_nao_ha_fingerprint(string? ip)
+    {
+        using var derivador = Criar();
+
+        Assert.Null(derivador.Derivar(ip));
     }
 }
