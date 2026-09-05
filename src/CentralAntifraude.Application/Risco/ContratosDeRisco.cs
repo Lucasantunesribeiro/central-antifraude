@@ -100,6 +100,18 @@ public interface IRepositorioDeRisco
         IReadOnlyCollection<Guid> transacoesIds,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Sinais de varias avaliacoes, agrupados por avaliacao.
+    ///
+    /// Existe para a fila de alertas: ela precisa mostrar o que mais pesou em
+    /// cada linha, e buscar sinal por alerta seria N+1 na tela que o analista
+    /// mais abre. Ja vem na ordem estavel do produto — maior peso primeiro,
+    /// depois pelo tipo.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, IReadOnlyList<SinalDeRisco>>> BuscarSinaisPorAvaliacoesAsync(
+        IReadOnlyCollection<Guid> avaliacoesIds,
+        CancellationToken cancellationToken);
+
     /// <summary>Regras da organizacao com a versao vigente, para consulta.</summary>
     Task<IReadOnlyList<(Regra Regra, VersaoDeRegra Versao)>> ListarRegrasVigentesAsync(
         CancellationToken cancellationToken);
