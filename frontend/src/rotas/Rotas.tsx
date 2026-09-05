@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router';
 import { LayoutDoApp } from '../layout/LayoutDoApp';
 import { PaginaDeLogin } from '../paginas/PaginaDeLogin';
+import { PaginaDeAlertas } from '../paginas/PaginaDeAlertas';
 import { PaginaDeIntegracoes } from '../paginas/PaginaDeIntegracoes';
 import { PaginaDeRegras } from '../paginas/PaginaDeRegras';
 import { PaginaDeTransacao } from '../paginas/PaginaDeTransacao';
@@ -24,6 +25,10 @@ export function Rotas() {
               da propria organizacao. */}
           <Route path="transacoes" element={<PaginaDeTransacoes />} />
           <Route path="transacoes/:id" element={<PaginaDeTransacao />} />
+          {/* A fila operacional e leitura para todo perfil autenticado,
+              inclusive o Auditor: consultar decisoes e o trabalho dele. Agir
+              sobre um alerta e acao de caso, e casos sao a Fase 7. */}
+          <Route path="alertas" element={<PaginaDeAlertas />} />
           {/* O catalogo de regras e leitura para todos os perfis: o
               analista precisa dele para entender o proprio score. A
               gestao das regras chega na Fase 8, com o Supervisor. */}

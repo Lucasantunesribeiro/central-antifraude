@@ -10,6 +10,7 @@ const NAVEGACAO: readonly {
   perfis?: readonly PerfilDeUsuario[];
 }[] = [
   { para: '/painel', rotulo: 'Painel' },
+  { para: '/alertas', rotulo: 'Alertas' },
   { para: '/transacoes', rotulo: 'Transações' },
   { para: '/regras', rotulo: 'Regras' },
   { para: '/integracoes', rotulo: 'Integrações', perfis: ['Administrador'] },
