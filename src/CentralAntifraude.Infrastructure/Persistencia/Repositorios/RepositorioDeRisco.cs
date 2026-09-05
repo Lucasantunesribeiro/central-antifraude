@@ -60,6 +60,37 @@ public sealed class RepositorioDeRisco : IRepositorioDeRisco
         return avaliacoes.ToDictionary(a => a.TransacaoId);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<SinalDeRisco>>>
+        BuscarSinaisPorAvaliacoesAsync(
+            IReadOnlyCollection<Guid> avaliacoesIds,
+            CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(avaliacoesIds);
+
+        if (avaliacoesIds.Count == 0)
+        {
+            return new Dictionary<Guid, IReadOnlyList<SinalDeRisco>>();
+        }
+
+        // Uma consulta para a pagina inteira de alertas. O sinal tambem carrega
+        // organizacao e tambem tem filtro global, entao partir dele em vez da
+        // avaliacao continua isolado por tenant.
+        var sinais = await _contexto.Set<SinalDeRisco>()
+            .AsNoTracking()
+            .Where(s => avaliacoesIds.Contains(s.AvaliacaoId))
+            .ToListAsync(cancellationToken);
+
+        return sinais
+            .GroupBy(s => s.AvaliacaoId)
+            .ToDictionary(
+                grupo => grupo.Key,
+                // Mesma ordem estavel do resto do produto: maior peso primeiro,
+                // depois pelo tipo. Duas leituras do mesmo alerta precisam
+                // mostrar os sinais na mesma ordem.
+                IReadOnlyList<SinalDeRisco> (grupo) =>
+                    [.. grupo.OrderByDescending(s => s.Pontos).ThenBy(s => s.Tipo)]);
+    }
+
     public async Task<IReadOnlyList<(Regra Regra, VersaoDeRegra Versao)>> ListarRegrasVigentesAsync(
         CancellationToken cancellationToken)
     {

@@ -1,4 +1,5 @@
 using CentralAntifraude.Application.Identidade;
+using CentralAntifraude.Domain.Alertas;
 using CentralAntifraude.Domain.Auditoria;
 using CentralAntifraude.Domain.Eventos;
 using CentralAntifraude.Domain.Identidade;
@@ -60,6 +61,8 @@ public class CentralAntifraudeDbContext : DbContext
     public DbSet<VersaoDePerfilDeRisco> VersoesDePerfilDeRisco => Set<VersaoDePerfilDeRisco>();
 
     public DbSet<AvaliacaoDeRisco> AvaliacoesDeRisco => Set<AvaliacaoDeRisco>();
+
+    public DbSet<Alerta> Alertas => Set<Alerta>();
 
     public DbSet<EventoDeSaida> EventosDeSaida => Set<EventoDeSaida>();
 
@@ -150,6 +153,12 @@ public class CentralAntifraudeDbContext : DbContext
         // do sinal.
         modelBuilder.Entity<SinalDeRisco>()
             .HasQueryFilter(FiltroDeTenant, s => s.OrganizacaoId == OrganizacaoAtual);
+
+        // O alerta e dado operacional do tenant: quem ele investiga, com que
+        // score e por qual decisao. Uma consulta futura escrita sem o filtro
+        // colocaria a fila de trabalho de um cliente na tela de outro.
+        modelBuilder.Entity<Alerta>()
+            .HasQueryFilter(FiltroDeTenant, a => a.OrganizacaoId == OrganizacaoAtual);
 
         // A Outbox tambem e filtrada. Ela guarda decisao, score e sinais
         // de um tenant; uma consulta futura escrita sem o filtro vazaria

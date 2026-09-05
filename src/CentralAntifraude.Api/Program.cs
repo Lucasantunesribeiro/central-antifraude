@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using CentralAntifraude.Api.Alertas;
 using CentralAntifraude.Api.Correlacao;
 using CentralAntifraude.Api.Diagnostico;
 using CentralAntifraude.Api.Erros;
@@ -248,6 +249,7 @@ aplicacao.MapearEndpointsDeUsuarios();
 aplicacao.MapearEndpointsDeIntegracoes();
 aplicacao.MapearEndpointsDeTransacoes();
 aplicacao.MapearEndpointsDeRisco();
+aplicacao.MapearEndpointsDeAlertas();
 aplicacao.MapearEndpointsDeIngestao();
 
 // ---------------------------------------------------------------------------

@@ -1,3 +1,4 @@
+using CentralAntifraude.Api.Comum;
 using CentralAntifraude.Api.Identidade;
 using CentralAntifraude.Api.Risco;
 using CentralAntifraude.Application.Comum;
@@ -122,7 +123,7 @@ public static class EndpointsDeIngestao
                 ServicoDeIntegracoes servico,
                 CancellationToken cancellationToken) =>
             {
-                var (paginacao, ordenacao) = LerConsulta(
+                var (paginacao, ordenacao) = ParametrosDeConsultaHttp.Ler(
                     pagina,
                     tamanho,
                     ordenarPor,
@@ -233,7 +234,7 @@ public static class EndpointsDeIngestao
                 ServicoDeConsultaDeRisco servico,
                 CancellationToken cancellationToken) =>
             {
-                var (paginacao, ordenacao) = LerConsulta(
+                var (paginacao, ordenacao) = ParametrosDeConsultaHttp.Ler(
                     pagina,
                     tamanho,
                     ordenarPor,
@@ -258,31 +259,4 @@ public static class EndpointsDeIngestao
 
     public static readonly string[] CamposDeOrdenacaoDeTransacao =
         ["recebidaEm", "ocorridaEm", "valor"];
-
-    private static (ParametrosDePaginacao Paginacao, ParametrosDeOrdenacao Ordenacao) LerConsulta(
-        int? pagina,
-        int? tamanho,
-        string? ordenarPor,
-        string? direcao,
-        string[] camposPermitidos,
-        string campoPadrao)
-    {
-        if (!ParametrosDePaginacao.TentarCriar(pagina, tamanho, out var paginacao, out var erroPaginacao))
-        {
-            throw new ErroDeValidacao("paginacao", erroPaginacao);
-        }
-
-        if (!ParametrosDeOrdenacao.TentarCriar(
-                ordenarPor,
-                direcao,
-                camposPermitidos,
-                campoPadrao,
-                out var ordenacao,
-                out var erroOrdenacao))
-        {
-            throw new ErroDeValidacao("ordenacao", erroOrdenacao);
-        }
-
-        return (paginacao, ordenacao);
-    }
 }

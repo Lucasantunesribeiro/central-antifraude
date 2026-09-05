@@ -1,3 +1,4 @@
+using CentralAntifraude.Application.Alertas;
 using CentralAntifraude.Application.Auditoria;
 using CentralAntifraude.Application.Comum;
 using CentralAntifraude.Application.Eventos;
@@ -75,6 +76,7 @@ public static class InjecaoDeDependencia
         AdicionarIdentidade(servicos, configuracao);
         AdicionarConcorrencia(servicos, configuracao);
         AdicionarRisco(servicos, configuracao);
+        AdicionarAlertas(servicos);
         AdicionarMensageria(servicos, configuracao);
         AdicionarIngestao(servicos, configuracao);
 
@@ -194,11 +196,28 @@ public static class InjecaoDeDependencia
         servicos.AddScoped<DespachanteDeEventos>();
         servicos.AddScoped<ProcessadorDeEventos>();
 
+        // Os efeitos de uma mensagem, na ordem em que serao aplicados.
+        //
+        // A ordem e estavel de proposito: ela decide o nome do savepoint de
+        // cada um, e um teste que afirme "o alerta nao existe mas a projecao
+        // sim" precisa de um comportamento reproduzivel. Acrescentar um efeito
+        // e acrescentar uma linha aqui — e o novo consumidor comeca com a
+        // Inbox vazia, entao trata os eventos que ainda estiverem na fila e
+        // ignora os ja confirmados.
+        servicos.AddScoped<IManipuladorDeEvento, ProjecaoDeDecisoesDiarias>();
+        servicos.AddScoped<IManipuladorDeEvento, CriadorDeAlertas>();
+
         // Os lacos so fazem alguma coisa quando SegundoPlano:Habilitado esta
         // ligado. Registra-los sempre mantem uma unica composicao, em vez de
         // dois caminhos de inicializacao diferentes entre teste e producao.
         servicos.AddHostedService<LacoDoDespachante>();
         servicos.AddHostedService<LacoDoConsumidor>();
+    }
+
+    private static void AdicionarAlertas(IServiceCollection servicos)
+    {
+        servicos.AddScoped<IRepositorioDeAlertas, RepositorioDeAlertas>();
+        servicos.AddScoped<ServicoDeConsultaDeAlertas>();
     }
 
     private static void AdicionarConcorrencia(IServiceCollection servicos, IConfiguration configuracao)

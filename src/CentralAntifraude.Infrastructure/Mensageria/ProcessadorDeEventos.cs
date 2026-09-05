@@ -2,28 +2,26 @@ using System.Data;
 using CentralAntifraude.Application.Erros;
 using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Application.Mensageria;
-using CentralAntifraude.Domain;
 using CentralAntifraude.Domain.Eventos;
 using CentralAntifraude.Domain.Tempo;
 using CentralAntifraude.Infrastructure.Persistencia;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
-using Npgsql;
-using NpgsqlTypes;
 
 namespace CentralAntifraude.Infrastructure.Mensageria;
 
 /// <summary>
-/// O consumidor: le a fila, aplica o efeito uma unica vez e confirma.
+/// O consumidor: le a fila, aplica cada efeito uma unica vez e confirma.
 ///
 /// **A ordem importa e e esta:**
 ///
 /// ```text
 /// recebe (mensagem fica escondida)
 ///   BEGIN
-///     grava a Inbox        ← a restricao unica e quem decide
-///     aplica o efeito
+///     para cada manipulador:
+///       SAVEPOINT
+///       grava a Inbox      ← a restricao unica e quem decide
+///       aplica o efeito
 ///   COMMIT
 /// apaga da fila
 /// ```
@@ -36,6 +34,14 @@ namespace CentralAntifraude.Infrastructure.Mensageria;
 /// coisa e outra, a mensagem volta, a Inbox reconhece e o efeito nao acontece
 /// de novo. O contrario — apagar antes — trocaria duplicata por perda.
 ///
+/// **Por que ha savepoint desde a Fase 6.** Sao dois efeitos agora, cada um
+/// com sua marca na Inbox, e eles precisam ser independentes: e normal um ja
+/// ter acontecido e o outro nao — basta o processo ter caido no meio da
+/// primeira entrega. Sem savepoint isso seria impossivel de tratar: no
+/// PostgreSQL, **um erro aborta a transacao inteira**, e o segundo efeito
+/// nunca chegaria a ser tentado. O savepoint permite desfazer so o efeito que
+/// deu conflito e seguir para o proximo, dentro da mesma transacao.
+///
 /// **O que este worker nunca faz: confiar no que chega.** O envelope e dado,
 /// nao instrucao. O tenant declarado e conferido contra o banco, o tipo e
 /// conferido contra a lista fechada, e o que nao passa vai para o caminho de
@@ -43,12 +49,10 @@ namespace CentralAntifraude.Infrastructure.Mensageria;
 /// </summary>
 public sealed partial class ProcessadorDeEventos
 {
-    /// <summary>Nome deste consumidor na Inbox. Faz parte da chave de unicidade.</summary>
-    public const string Consumidor = "resumo-diario-de-decisoes";
-
     private readonly CentralAntifraudeDbContext _contexto;
     private readonly IUnidadeDeTrabalho _unidadeDeTrabalho;
     private readonly IFilaDeMensagens _fila;
+    private readonly IReadOnlyList<IManipuladorDeEvento> _manipuladores;
     private readonly OpcoesDaFila _opcoes;
     private readonly IRelogio _relogio;
     private readonly ILogger<ProcessadorDeEventos> _log;
@@ -57,13 +61,17 @@ public sealed partial class ProcessadorDeEventos
         CentralAntifraudeDbContext contexto,
         IUnidadeDeTrabalho unidadeDeTrabalho,
         IFilaDeMensagens fila,
+        IEnumerable<IManipuladorDeEvento> manipuladores,
         OpcoesDaFila opcoes,
         IRelogio relogio,
         ILogger<ProcessadorDeEventos> log)
     {
+        ArgumentNullException.ThrowIfNull(manipuladores);
+
         _contexto = contexto;
         _unidadeDeTrabalho = unidadeDeTrabalho;
         _fila = fila;
+        _manipuladores = [.. manipuladores];
         _opcoes = opcoes;
         _relogio = relogio;
         _log = log;
@@ -143,7 +151,7 @@ public sealed partial class ProcessadorDeEventos
 
         try
         {
-            var desfecho = await AplicarAsync(envelope, conteudo, cancellationToken);
+            var desfecho = await AplicarAsync(envelope, cancellationToken);
 
             // Confirmacao SO depois do commit.
             await _fila.ApagarAsync(mensagem.Recibo, cancellationToken);
@@ -170,103 +178,78 @@ public sealed partial class ProcessadorDeEventos
     }
 
     /// <summary>
-    /// Grava a Inbox e aplica o efeito, na mesma transacao.
+    /// Grava a Inbox e aplica os efeitos, todos na mesma transacao.
     ///
-    /// A restricao unica de (consumidor, evento) e quem decide se o efeito
+    /// A restricao unica de (consumidor, evento) e quem decide se cada efeito
     /// acontece. Nao ha consulta previa: consultar e depois inserir seria a
     /// mesma armadilha do <c>SELECT</c> seguido de <c>INSERT</c> que a
     /// ingestao ja evita — dois workers concorrentes passariam os dois pela
-    /// consulta e somariam duas vezes.
+    /// consulta e aplicariam duas vezes.
+    ///
+    /// **Um savepoint por manipulador.** Um efeito ja aplicado numa entrega
+    /// anterior derruba o <c>INSERT</c> da Inbox dele, e no PostgreSQL um erro
+    /// aborta a transacao inteira. Sem o savepoint, o primeiro conflito mataria
+    /// tambem o efeito que ainda nao tinha acontecido. Com ele, desfaz-se
+    /// apenas o trecho conflitante e o proximo manipulador segue.
+    ///
+    /// O mesmo <c>catch</c> cobre a segunda camada de idempotencia: se a
+    /// restricao propria do efeito reclamar — <c>alertas.avaliacao_id</c>, por
+    /// exemplo — a resposta e identica, porque a conclusao e a mesma: isto ja
+    /// existe, e nao pode existir duas vezes.
     /// </summary>
     private async Task<Desfecho> AplicarAsync(
         EnvelopeDeEvento envelope,
-        TransacaoAvaliadaV1 conteudo,
         CancellationToken cancellationToken)
     {
         await using var transacao = await _contexto.Database.BeginTransactionAsync(
             IsolationLevel.ReadCommitted,
             cancellationToken);
 
-        _contexto.EventosProcessados.Add(EventoProcessado.Registrar(
-            envelope.TenantId,
-            envelope.EventId,
-            Consumidor,
-            envelope.TipoComposto,
-            envelope.CorrelationId,
-            _relogio.Agora));
+        var aplicados = 0;
 
-        try
+        for (var indice = 0; indice < _manipuladores.Count; indice++)
         {
-            // Pela unidade de trabalho, e nao pelo DbContext direto: e ela que
-            // traduz a violacao de unicidade do PostgreSQL em uma excecao que
-            // este codigo consegue distinguir de qualquer outra falha de
-            // gravacao.
-            await _unidadeDeTrabalho.SalvarAsync(cancellationToken);
-        }
-        catch (ConflitoDeUnicidadeNoBanco)
-        {
-            // Ja tratado. E o caminho normal de uma reentrega, nao um erro:
-            // acontece toda vez que o processo cai entre o commit e a
-            // confirmacao na fila.
-            await transacao.RollbackAsync(cancellationToken);
-            _contexto.ChangeTracker.Clear();
+            var manipulador = _manipuladores[indice];
+            var ponto = $"efeito_{indice}";
 
-            return Desfecho.JaProcessado;
-        }
+            await transacao.CreateSavepointAsync(ponto, cancellationToken);
 
-        await SomarNoResumoAsync(envelope, conteudo, cancellationToken);
+            _contexto.EventosProcessados.Add(EventoProcessado.Registrar(
+                envelope.TenantId,
+                envelope.EventId,
+                manipulador.Consumidor,
+                envelope.TipoComposto,
+                envelope.CorrelationId,
+                _relogio.Agora));
+
+            try
+            {
+                await manipulador.AplicarAsync(envelope, cancellationToken);
+
+                // Pela unidade de trabalho, e nao pelo DbContext direto: e ela
+                // que traduz a violacao de unicidade do PostgreSQL em uma
+                // excecao que este codigo consegue distinguir de qualquer
+                // outra falha de gravacao.
+                await _unidadeDeTrabalho.SalvarAsync(cancellationToken);
+
+                aplicados++;
+            }
+            catch (ConflitoDeUnicidadeNoBanco)
+            {
+                // Ja tratado. E o caminho normal de uma reentrega, nao um
+                // erro: acontece toda vez que o processo cai entre o commit e
+                // a confirmacao na fila.
+                await transacao.RollbackToSavepointAsync(ponto, cancellationToken);
+                _contexto.ChangeTracker.Clear();
+            }
+        }
 
         await transacao.CommitAsync(cancellationToken);
 
-        return Desfecho.Aplicado;
-    }
-
-    /// <summary>
-    /// Soma um na contagem do dia.
-    ///
-    /// `ON CONFLICT ... DO UPDATE` porque a linha pode nao existir ainda e
-    /// dois workers podem cria-la ao mesmo tempo. Ler, somar e gravar em
-    /// passos separados perderia incrementos sob concorrencia — e um contador
-    /// que perde nao deixa rastro nenhum.
-    ///
-    /// O dia e o da AVALIACAO, em UTC: uma transacao atrasada de tres dias
-    /// atras foi decidida hoje, e e hoje que ela entrou na fila do analista.
-    /// </summary>
-    private async Task SomarNoResumoAsync(
-        EnvelopeDeEvento envelope,
-        TransacaoAvaliadaV1 conteudo,
-        CancellationToken cancellationToken)
-    {
-        var conexao = (NpgsqlConnection)_contexto.Database.GetDbConnection();
-
-        await using var comando = conexao.CreateCommand();
-        comando.Transaction =
-            _contexto.Database.CurrentTransaction?.GetDbTransaction() as NpgsqlTransaction;
-
-        comando.CommandText =
-            """
-            INSERT INTO resumo_diario_de_decisoes
-                (id, organizacao_id, dia, decisao, quantidade, atualizado_em)
-            VALUES (gen_random_uuid(), @organizacao, @dia, @decisao, 1, now())
-            ON CONFLICT (organizacao_id, dia, decisao)
-            DO UPDATE SET quantidade = resumo_diario_de_decisoes.quantidade + 1,
-                          atualizado_em = now()
-            """;
-
-        comando.Parameters.Add(new NpgsqlParameter("organizacao", NpgsqlDbType.Uuid)
-        {
-            Value = envelope.TenantId,
-        });
-        comando.Parameters.Add(new NpgsqlParameter("dia", NpgsqlDbType.Date)
-        {
-            Value = DateOnly.FromDateTime(conteudo.AvaliadaEm.UtcDateTime),
-        });
-        comando.Parameters.Add(new NpgsqlParameter("decisao", NpgsqlDbType.Text)
-        {
-            Value = conteudo.Decisao.ToString(),
-        });
-
-        await comando.ExecuteNonQueryAsync(cancellationToken);
+        // Um efeito novo ja torna a mensagem "processada". Zero efeitos novos
+        // significa que todos os manipuladores ja tinham tratado este evento —
+        // uma reentrega pura.
+        return aplicados > 0 ? Desfecho.Aplicado : Desfecho.JaProcessado;
     }
 
     /// <summary>
