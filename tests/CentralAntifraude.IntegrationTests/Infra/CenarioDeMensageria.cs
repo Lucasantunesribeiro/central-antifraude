@@ -65,10 +65,23 @@ internal sealed class CenarioDeMensageria : IAsyncDisposable
             relogio,
             NullLogger<DespachanteDeEventos>.Instance);
 
+        // Os efeitos, na mesma ordem em que a composicao real os registra. O
+        // teste precisa da mesma ordem porque ela decide qual savepoint cobre
+        // qual efeito.
+        IManipuladorDeEvento[] manipuladores =
+        [
+            new ProjecaoDeDecisoesDiarias(contexto),
+            new CriadorDeAlertas(
+                new RepositorioDeAlertas(contexto),
+                relogio,
+                NullLogger<CriadorDeAlertas>.Instance),
+        ];
+
         var processador = new ProcessadorDeEventos(
             contexto,
             new UnidadeDeTrabalho(contexto),
             fila,
+            manipuladores,
             opcoesDaFila,
             relogio,
             NullLogger<ProcessadorDeEventos>.Instance);

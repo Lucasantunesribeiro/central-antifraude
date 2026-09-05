@@ -141,10 +141,15 @@ public sealed class BackboneAssincronoTests : IAsyncLifetime
             _banco.StringDeConexao,
             _tenant.OrganizacaoId);
 
-        var processado = Assert.Single(await contexto.EventosProcessados.ToListAsync(Cancelamento));
+        // Cada manipulador deixa a propria marca: a chave da Inbox e
+        // (consumidor, evento), e nao so o evento.
+        var processados = await contexto.EventosProcessados.ToListAsync(Cancelamento);
 
-        Assert.Equal(correlacao, processado.IdDeCorrelacao);
-        Assert.Equal(ProcessadorDeEventos.Consumidor, processado.Consumidor);
+        Assert.Equal(
+            [CriadorDeAlertas.NomeDoConsumidor, ProjecaoDeDecisoesDiarias.NomeDoConsumidor],
+            processados.Select(p => p.Consumidor).Order(StringComparer.Ordinal));
+
+        Assert.All(processados, p => Assert.Equal(correlacao, p.IdDeCorrelacao));
     }
 
     [Fact]
@@ -418,7 +423,12 @@ public sealed class BackboneAssincronoTests : IAsyncLifetime
             _banco.StringDeConexao,
             _tenant.OrganizacaoId);
 
-        return await contexto.EventosProcessados.CountAsync(Cancelamento);
+        // So as marcas da projecao: o alerta e o outro consumidor, e contar os
+        // dois juntos faria "quantas vezes este evento foi processado" dobrar
+        // sem que nada tivesse acontecido duas vezes.
+        return await contexto.EventosProcessados.CountAsync(
+            e => e.Consumidor == ProjecaoDeDecisoesDiarias.NomeDoConsumidor,
+            Cancelamento);
     }
 
     private async Task<int> ContagemNoResumoAsync(Decisao decisao)

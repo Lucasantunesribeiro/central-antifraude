@@ -377,7 +377,12 @@ public sealed class SecurityGate5Tests : IAsyncLifetime
             _banco.StringDeConexao,
             tenant.OrganizacaoId);
 
-        return await contexto.EventosProcessados.CountAsync(Cancelamento);
+        // So as marcas da projecao. O criador de alertas e o outro consumidor:
+        // contar os dois juntos faria a Inbox parecer ter dobrado sem que
+        // nenhum evento tivesse sido processado duas vezes.
+        return await contexto.EventosProcessados.CountAsync(
+            e => e.Consumidor == ProjecaoDeDecisoesDiarias.NomeDoConsumidor,
+            Cancelamento);
     }
 
     private async Task<int> TotalNoResumoAsync(TenantDeTeste tenant)
