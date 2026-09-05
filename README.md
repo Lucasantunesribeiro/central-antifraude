@@ -23,8 +23,9 @@ solução certificada de compliance.
 | 2 | Integrações e Ingestão | ✅ concluída |
 | 3 | Motor de Risco v1 | ✅ concluída |
 | 4 | Avaliação Síncrona e Concorrência | ✅ concluída |
-| **5** | **Backbone Assíncrono** | ✅ **concluída** |
-| 6–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
+| 5 | Backbone Assíncrono | ✅ concluída |
+| **6** | **Alertas Operacionais** | ✅ **concluída** |
+| 7–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
 
 Hoje a plataforma recebe transações de sistemas externos autenticados por
 credencial própria, registra cada tentativa **exatamente uma vez** mesmo sob
@@ -44,11 +45,14 @@ avaliação original em vez de recalcular. Cada avaliação grava também um eve
 na Outbox, no mesmo commit — a publicação chega na Fase 5.
 
 Depois de responder, o evento sai pelo caminho assíncrono: a Outbox é
-publicada em uma fila, um worker consome e aplica o efeito **uma vez** — mesmo
+publicada em uma fila, um worker consome e aplica os efeitos **uma vez** — mesmo
 com entrega repetida, processo caindo no meio ou vários despachantes ao mesmo
-tempo.
+tempo. Um desses efeitos é a **fila de alertas**: uma avaliação `Revisar` ou
+`Bloquear` vira trabalho na mesa do analista, filtrável, ordenável e a um
+clique da transação que a originou.
 
-**Ainda não existe** alerta, caso, investigação nem gestão de regras. Isso é
+**Ainda não existe** caso, investigação nem gestão de regras. Nem sequer há como
+agir sobre um alerta: ele nasce aberto e nenhuma rota o altera. Isso é
 deliberado — cada capacidade chega na fase que o `ROADMAP.md` define.
 
 ---
@@ -149,6 +153,7 @@ consumido por orquestrador e não pela interface.
 | `GET /api/transacoes/{id}` | qualquer | detalhe com a avaliação e os sinais |
 | `GET /api/regras` | qualquer | catálogo de regras em vigor |
 | `GET /api/regras/perfil` | qualquer | perfil vigente, com os limiares |
+| `GET /api/alertas` | qualquer | fila operacional, com filtros, ordenação e paginação |
 | `POST /api/ingestao/transacoes` | **`ApiKey`** | recebe uma tentativa de pagamento e devolve a decisão de risco |
 
 A ingestão pode responder **503 com `Retry-After`** quando a disputa por
@@ -274,6 +279,36 @@ SDK seja um adaptador e não uma reescrita. Detalhes no
 
 ---
 
+## A fila de alertas
+
+O mesmo evento produz **dois efeitos**: o contador diário e o alerta. Não são
+duas filas — é um processo que lê uma vez e aplica os dois na mesma transação,
+cada um com sua própria marca na Inbox. A chave é `(consumidor, evento)`, e é
+ela que permitirá separá-los em processos distintos sem mudar nada da semântica.
+
+```text
+Permitir → nenhum alerta
+Revisar  → alerta, prioridade Média
+Bloquear → alerta, prioridade Alta
+```
+
+A política **não reavalia risco**. Ela lê a decisão que o motor já tomou e
+responde uma pergunta operacional: isto precisa de olho humano, e com que
+urgência? Reavaliar produziria um resultado possivelmente diferente do que o
+integrador recebeu na resposta síncrona — o painel discordaria do recibo. Os
+limiares e pesos são **configuração de demonstração**, não prática de mercado.
+
+O alerta é protegido por **duas camadas de idempotência**: a Inbox e a restrição
+única de `avaliacao_id`. Dois testes derrubam uma de cada vez, porque uma
+proteção nunca exercitada é uma proteção que ninguém sabe se existe.
+
+E a fila é **somente leitura**: nenhuma rota cria, altera, atribui ou apaga
+alerta, e o Security Gate 6 verifica a ausência com sete métodos e caminhos. A
+ação humana pertence ao caso, que é a Fase 7. Detalhes no
+[ADR 0011](docs/adr/0011-alertas-operacionais.md).
+
+---
+
 ## Testes
 
 ```bash
@@ -304,6 +339,7 @@ tem — um teste de concorrência verde no SQLite não provaria nada.
 | Motor determinístico, catálogo fechado, explicabilidade gravada | [ADR 0008](docs/adr/0008-motor-de-risco.md) |
 | `SERIALIZABLE` na ingestão, retry da operação inteira, Outbox | [ADR 0009](docs/adr/0009-operacao-critica-e-concorrencia.md) |
 | Fila, envelope versionado, Inbox e DLQ | [ADR 0010](docs/adr/0010-backbone-assincrono.md) |
+| Alertas: fan-out por manipulador, savepoint e duas camadas | [ADR 0011](docs/adr/0011-alertas-operacionais.md) |
 
 Três decisões são reforçadas em tempo de compilação por
 `src/BannedSymbols.txt`: `DateTime.UtcNow`, `DateTime.Now` e `Guid.NewGuid()`

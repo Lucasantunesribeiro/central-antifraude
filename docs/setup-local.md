@@ -198,6 +198,37 @@ SELECT count(*) FROM eventos_de_saida WHERE publicado_em IS NULL;
 Não há endpoint para nenhuma das três: a DLQ guarda corpos de mensagens de
 qualquer tenant, e a inspeção é por acesso administrativo ao banco.
 
+### Ver os alertas chegarem (Fase 6)
+
+Com os laços de fundo ligados, uma avaliação `Revisar` ou `Bloquear` vira alerta
+alguns segundos depois da resposta da ingestão — o tempo de um ciclo de despacho
+mais um de consumo.
+
+```sql
+-- A fila de trabalho do analista.
+SELECT prioridade, decisao, score, criado_em FROM alertas ORDER BY criado_em DESC;
+
+-- As duas marcas da Inbox: uma por consumidor, para o mesmo evento.
+SELECT consumidor, count(*) FROM eventos_processados GROUP BY consumidor;
+```
+
+**Se o alerta não aparecer**, a ordem de investigação é esta, e cada passo
+elimina uma causa:
+
+1. `eventos_de_saida` com `publicado_em IS NULL` → o despachante não rodou;
+   confira `SegundoPlano__Habilitado`.
+2. `fila_de_mensagens` com linhas → o worker não rodou, ou a visibilidade ainda
+   não expirou.
+3. `mensagens_mortas` com linhas → a mensagem foi recusada; a coluna `motivo`
+   diz por quê.
+4. Nada em lugar nenhum e a decisão foi `Permitir` → **está certo**. `Permitir`
+   não gera alerta, por decisão de política.
+
+Uma transação que dispara `Revisar` na demonstração: três transações do mesmo
+cliente com o mesmo dispositivo e o mesmo país, espaçadas em dias, e uma quarta
+com dispositivo e país diferentes. Dá 45 pontos — dispositivo novo mais
+divergência geográfica.
+
 ## 5. Rodar
 
 ```bash

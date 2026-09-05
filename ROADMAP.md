@@ -1866,14 +1866,98 @@ Validar:
 
 ## 6.8 Critérios de conclusão
 
-- [ ] Revisar/Bloquear geram alerta segundo política.
-- [ ] Evento duplicado não duplica alerta.
-- [ ] Lista operacional funcional.
-- [ ] Filtros server-side.
-- [ ] Navegação alerta → transação.
-- [ ] Isolamento de tenant testado.
-- [ ] Security Gate 6 verde.
-- [ ] CI verde.
+- [x] Revisar/Bloquear geram alerta segundo política.
+- [x] Evento duplicado não duplica alerta.
+- [x] Lista operacional funcional.
+- [x] Filtros server-side.
+- [x] Navegação alerta → transação.
+- [x] Isolamento de tenant testado.
+- [x] Security Gate 6 verde.
+- [ ] CI verde — *pendente do primeiro `push`, que não foi autorizado. Cada passo do workflow foi executado localmente e está verde.*
+
+---
+
+## 6.9 Resultado da Fase 6
+
+**Concluída em 2026-09-05.**
+
+### Evidências
+
+| Critério | Como foi verificado |
+|---|---|
+| Build backend | `dotnet build -c Release`, **0 erros e 0 avisos** |
+| Build frontend | `npm run build`, `oxlint` e `prettier --check` limpos |
+| Política | `Permitir` → nenhum alerta; `Revisar` → Média; `Bloquear` → Alta, com a versão da política gravada em cada alerta |
+| **Evento duplicado** | duas camadas, testadas **uma de cada vez**: com a Inbox, `0 processados / 1 repetido`; sem a marca da Inbox, a restrição `alertas.avaliacao_id` devolve o **mesmo** alerta |
+| Savepoint por efeito | marca de um consumidor apagada → o alerta volta e o contador **não** soma de novo |
+| Lista operacional | filtros de prioridade, decisão, score mínimo e período; ordenação por chegada, score e prioridade; paginação com total real |
+| Filtros no servidor | 11 formas forjadas, todas `400`; nenhuma devolve a fila sem filtro |
+| Navegação | cada linha carrega `transacaoId`; a tela da Fase 3 mostra avaliação e sinais completos |
+| Isolamento | dois tenants com alerta cada; a separação é conferida **no banco**, e não só pela resposta HTTP |
+| Verificação em app real | app no ar em `localhost:5174` contra banco próprio: ingestão → Outbox → fila → worker → **2 alertas** (`Alta 75` e `Media 45`) com os laços de fundo ligados |
+| Testes | 352 unitários + 15 arquitetura + 224 integração + 61 frontend = **652, todos verdes** |
+| Security Gate 6 | [`docs/security-gate-6.md`](docs/security-gate-6.md) |
+| Migration | `AlertasOperacionais` aplicada em PostgreSQL real; `has-pending-model-changes` sem alteração pendente |
+| Dependências | `dotnet list package --vulnerable`: nenhuma; `npm audit`: 0 |
+| Segredos | `gitleaks detect` e `detect --no-git`: nenhum |
+
+### Decisões congeladas
+
+| Decisão | Registro |
+|---|---|
+| Um consumidor a mais, e não uma fila a mais: fan-out dentro da transação | `docs/adr/0011-alertas-operacionais.md` |
+| Um savepoint por efeito, porque no PostgreSQL um erro aborta a transação inteira | `docs/adr/0011` |
+| Duas camadas de idempotência, cada uma testada com a outra derrubada | `docs/adr/0011` |
+| Política é código versionado, e não um segundo motor de risco | `docs/adr/0011` |
+| O alerta copia o que a fila filtra e referencia os sinais | `docs/adr/0011` |
+| Fila somente leitura: nenhuma rota altera alerta nesta fase | `docs/adr/0011` |
+| Filtro fora do vocabulário é recusado, nunca ignorado | `docs/adr/0011` |
+| Ordenação por prioridade não usa a coluna de texto | `docs/adr/0011` |
+
+### Defeito real encontrado e corrigido
+
+**A ordenação por prioridade estava alfabética, e o alfabeto é o inverso da
+gravidade.** A coluna guarda texto — `"Alta"`, `"Media"` — para que uma consulta
+manual durante uma investigação seja legível. Mas `"Alta"` vem antes de
+`"Media"` no alfabeto, então pedir "mais grave primeiro" trazia os **menos
+graves** no topo.
+
+O que torna o defeito perigoso é que **nada na tela o denunciaria**: a lista
+pareceria perfeitamente ordenada, e o analista trabalharia a fila na ordem
+errada sem nunca perceber. Corrigido com uma expressão explícita de gravidade
+na consulta, mantendo a coluna legível.
+
+Encontrado porque o teste afirma a ordem esperada — `[75, 45]` — em vez de
+afirmar apenas que a lista veio ordenada.
+
+### Fora de escopo, deliberadamente
+
+- **Sem ação humana sobre o alerta.** Não há rota que crie, altere, atribua,
+  feche ou apague — e o Security Gate 6 verifica a ausência com sete métodos e
+  caminhos. Assumir e resolver pertencem ao **caso**, que é a Fase 7.
+- **Sem tela de detalhe do alerta.** A navegação vai para a transação, onde a
+  explicação completa já mora desde a Fase 3.
+- **`StatusDoAlerta` com um valor só.** Estado novo só com necessidade
+  operacional clara (`CLAUDE.md` seção 12), e ela nasce com o caso.
+- **Sem métrica exportada.** O contador `alertas_criados` existe, com dimensão
+  de prioridade; coleta e painel são a Fase 12.
+
+### Débito técnico não bloqueante
+
+1. **CI ainda não executado.** Cada comando roda localmente e está verde; o
+   GitHub Actions só roda após o primeiro `push`, que continua não autorizado.
+2. **Verificação visual da tela de Alertas no navegador.** A extensão do Chrome
+   voltou a responder e a aplicação foi conferida no ar — a tela de login
+   renderiza e a API devolve os dois alertas corretos. O restante do percurso
+   exigiria digitar a senha de sessão no formulário, o que o agente não faz.
+   Débito herdado da Fase 2, agora reduzido a esse último passo.
+3. **A ordenação por prioridade depende de uma expressão mantida à mão.**
+   Acrescentar um nível novo exige alterá-la, e o compilador não avisa — só o
+   teste de integração.
+4. **Sem métrica de tamanho da fila nem de idade do alerta mais antigo.**
+   Fase 12.
+5. **Alerta não expira e não é apagado.** Política de retenção não é assunto da
+   v1, mas fica registrado que a tabela cresce sem teto.
 
 ---
 
