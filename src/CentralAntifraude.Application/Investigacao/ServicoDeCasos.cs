@@ -10,6 +10,7 @@ using CentralAntifraude.Domain.Alertas;
 using CentralAntifraude.Domain.Auditoria;
 using CentralAntifraude.Domain.Identidade;
 using CentralAntifraude.Domain.Investigacao;
+using CentralAntifraude.Domain.Primitivos;
 using CentralAntifraude.Domain.Tempo;
 using CentralAntifraude.Domain.Transacoes;
 
@@ -475,7 +476,7 @@ public sealed class ServicoDeCasos
     /// </summary>
     private static void GarantirTexto(string? valor, int minimo, int maximo, string campo)
     {
-        if (!TextoDeInvestigacao.EhValido(valor, minimo, maximo, campo, out _, out var erro))
+        if (!TextoDeUsuario.EhValido(valor, minimo, maximo, campo, out _, out var erro))
         {
             throw new ErroDeValidacao(campo, erro);
         }

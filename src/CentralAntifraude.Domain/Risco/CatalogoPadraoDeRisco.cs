@@ -113,10 +113,14 @@ public static class CatalogoPadraoDeRisco
 
         foreach (var (tipo, nome, configuracao, pontos) in Definicoes)
         {
-            var regra = Regra.Criar(organizacaoId, tipo, nome, agora);
+            // Mesmo caminho que o Supervisor usa na Fase 8: a regra nasce com
+            // rascunho e a publicacao o congela. Um segundo caminho ate uma
+            // versao publicada seria um segundo lugar onde as invariantes
+            // teriam que ser lembradas.
+            var regra = Regra.Criar(organizacaoId, tipo, nome, configuracao, pontos, agora);
 
             regras.Add(regra);
-            versoes.Add(VersaoDeRegra.Publicar(regra, numero: 1, configuracao, pontos, agora));
+            versoes.Add(regra.PublicarRascunho(ultimaPublicada: null, agora));
         }
 
         var versaoDoPerfil = VersaoDePerfilDeRisco.Publicar(

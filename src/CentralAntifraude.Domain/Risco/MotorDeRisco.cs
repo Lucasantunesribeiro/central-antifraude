@@ -73,11 +73,17 @@ public sealed class MotorDeRisco
 
         var sinais = new List<(VersaoDeRegra, SinalCalculado)>();
 
-        // Ordem estavel: as versoes de regra sao percorridas ordenadas pelo
-        // tipo. Sem isso, dois bancos com a mesma configuracao poderiam
-        // devolver os sinais em ordens diferentes - e a comparacao de duas
-        // avaliacoes deixaria de ser confiavel.
-        foreach (var versaoDeRegra in versaoDoPerfil.VersoesDeRegra.OrderBy(v => v.Tipo))
+        // Ordem estavel: tipo primeiro, regra depois. Sem isso, dois bancos
+        // com a mesma configuracao poderiam devolver os sinais em ordens
+        // diferentes - e a comparacao de duas avaliacoes deixaria de ser
+        // confiavel.
+        //
+        // O desempate pela regra nao e decorativo: desde a Fase 8 o Supervisor
+        // pode ter DUAS regras do mesmo tipo com janelas diferentes, e
+        // ordenar so por tipo deixaria a ordem entre elas a cargo do banco.
+        foreach (var versaoDeRegra in versaoDoPerfil.VersoesDeRegra
+            .OrderBy(v => v.Tipo)
+            .ThenBy(v => v.RegraId))
         {
             if (!_avaliadores.TryGetValue(versaoDeRegra.Tipo, out var avaliador))
             {

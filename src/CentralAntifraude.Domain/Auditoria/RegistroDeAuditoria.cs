@@ -36,6 +36,15 @@ public enum OperacaoAuditada
     CasoAlterado = 41,
     CasoAtribuido = 42,
     CasoResolvido = 43,
+
+    // Regras e perfil de risco (Fase 8)
+    RegraCriada = 60,
+    RascunhoDeRegraSalvo = 61,
+    RascunhoDeRegraDescartado = 62,
+    VersaoDeRegraPublicada = 63,
+    RegraDesativada = 64,
+    RegraReativada = 65,
+    VersaoDePerfilPublicada = 66,
 }
 
 /// <summary>

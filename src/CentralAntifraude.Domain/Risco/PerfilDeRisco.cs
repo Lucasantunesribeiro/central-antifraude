@@ -130,6 +130,17 @@ public sealed class VersaoDePerfilDeRisco
 
         ValidarLimiares(limiarDeRevisao, limiarDeBloqueio);
 
+        // Um perfil sem regra nenhuma pontuaria tudo com zero e recomendaria
+        // Permitir para qualquer transacao. Nao daria erro, nao apareceria em
+        // log nenhum: o motor simplesmente ficaria cego. Desativar a ultima
+        // regra ativa e recusado por causa desta invariante.
+        if (versoesDeRegra.Count == 0)
+        {
+            throw new ViolacaoDeInvariante(
+                "Um perfil publicado precisa de ao menos uma regra. Sem regra, " +
+                "toda transacao receberia score zero e o motor ficaria cego.");
+        }
+
         if (versoesDeRegra.Any(v => v.OrganizacaoId != perfil.OrganizacaoId))
         {
             throw new ViolacaoDeInvariante(

@@ -457,7 +457,7 @@ public sealed class Caso
 
     private static string ValidarTitulo(string titulo)
     {
-        if (!TextoDeInvestigacao.EhValido(
+        if (!TextoDeUsuario.EhValido(
                 titulo,
                 TamanhoMinimoDoTitulo,
                 TamanhoMaximoDoTitulo,
