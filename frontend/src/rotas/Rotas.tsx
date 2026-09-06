@@ -5,6 +5,7 @@ import { PaginaDeAlertas } from '../paginas/PaginaDeAlertas';
 import { PaginaDeCasos } from '../paginas/PaginaDeCasos';
 import { PaginaDoCaso } from '../paginas/PaginaDoCaso';
 import { PaginaDeIntegracoes } from '../paginas/PaginaDeIntegracoes';
+import { PaginaDaRegra } from '../paginas/PaginaDaRegra';
 import { PaginaDeRegras } from '../paginas/PaginaDeRegras';
 import { PaginaDeTransacao } from '../paginas/PaginaDeTransacao';
 import { PaginaDeTransacoes } from '../paginas/PaginaDeTransacoes';
@@ -36,9 +37,19 @@ export function Rotas() {
           <Route path="casos" element={<PaginaDeCasos />} />
           <Route path="casos/:id" element={<PaginaDoCaso />} />
           {/* O catalogo de regras e leitura para todos os perfis: o
-              analista precisa dele para entender o proprio score. A
-              gestao das regras chega na Fase 8, com o Supervisor. */}
+              analista precisa dele para entender o proprio score. A mesma
+              tela vira administracao para a supervisao — e quem recusa a
+              escrita e a API, nao a tela. */}
           <Route path="regras" element={<PaginaDeRegras />} />
+        </Route>
+
+        {/* O detalhe da regra so faz sentido para quem administra: ele e
+            rascunho, publicacao e historico. O backend responde 403 a
+            qualquer outro perfil. */}
+        <Route
+          element={<RotaProtegida perfis={['Administrador', 'SupervisorDeFraude']} />}
+        >
+          <Route path="regras/:id" element={<PaginaDaRegra />} />
         </Route>
 
         {/* A restricao por perfil e repetida no backend, que e quem decide. */}

@@ -342,8 +342,24 @@ code {
   padding: var(--espaco-2) var(--espaco-3);
 }
 
-.campo input:disabled {
+.campo input:disabled,
+.campo select:disabled {
   opacity: 0.6;
+}
+
+/* Formularios fora da barra de filtros: o select precisa da mesma moldura
+   do input, senao o campo de tipo de regra fica visualmente solto. */
+.campo select {
+  font: inherit;
+  color: var(--cor-texto);
+  background: var(--cor-fundo);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  padding: var(--espaco-2) var(--espaco-3);
+}
+
+.campo input[aria-invalid='true'] {
+  border-color: var(--cor-falha);
 }
 
 .botao--principal {
