@@ -19,7 +19,7 @@ public class FiltroDeAlertasTests
     [Fact]
     public void Sem_nenhum_parametro_o_filtro_fica_vazio()
     {
-        Assert.True(FiltroDeAlertas.TentarCriar(null, null, null, null, null, out var filtro, out var erro));
+        Assert.True(FiltroDeAlertas.TentarCriar(null, null, null, null, null, null, out var filtro, out var erro));
 
         Assert.True(filtro.EstaVazio);
         Assert.Empty(erro);
@@ -31,7 +31,7 @@ public class FiltroDeAlertasTests
     [InlineData("  PERMITIR  ", Decisao.Permitir)]
     public void Decisao_e_aceita_sem_depender_de_maiuscula_ou_espaco(string texto, Decisao esperada)
     {
-        Assert.True(FiltroDeAlertas.TentarCriar(texto, null, null, null, null, out var filtro, out _));
+        Assert.True(FiltroDeAlertas.TentarCriar(texto, null, null, null, null, null, out var filtro, out _));
 
         Assert.Equal(esperada, filtro.Decisao);
     }
@@ -41,7 +41,7 @@ public class FiltroDeAlertasTests
     [InlineData("alta", PrioridadeDeAlerta.Alta)]
     public void Prioridade_e_aceita_pelo_nome(string texto, PrioridadeDeAlerta esperada)
     {
-        Assert.True(FiltroDeAlertas.TentarCriar(null, texto, null, null, null, out var filtro, out _));
+        Assert.True(FiltroDeAlertas.TentarCriar(null, texto, null, null, null, null, out var filtro, out _));
 
         Assert.Equal(esperada, filtro.Prioridade);
     }
@@ -58,7 +58,7 @@ public class FiltroDeAlertasTests
         // O numero merece atencao especial: `Enum.TryParse` sozinho aceitaria
         // "2" como Revisar e deixaria "99" atravessar como um valor que nao
         // existe. Comparar com os NOMES fecha os dois buracos.
-        Assert.False(FiltroDeAlertas.TentarCriar(texto, null, null, null, null, out var filtro, out var erro));
+        Assert.False(FiltroDeAlertas.TentarCriar(texto, null, null, null, null, null, out var filtro, out var erro));
 
         Assert.True(filtro.EstaVazio);
         Assert.Contains("decisao", erro, StringComparison.Ordinal);
@@ -74,7 +74,7 @@ public class FiltroDeAlertasTests
     [InlineData("Baixa")]
     public void Prioridade_fora_do_vocabulario_e_recusada(string texto)
     {
-        Assert.False(FiltroDeAlertas.TentarCriar(null, texto, null, null, null, out _, out var erro));
+        Assert.False(FiltroDeAlertas.TentarCriar(null, texto, null, null, null, null, out _, out var erro));
 
         Assert.Contains("prioridade", erro, StringComparison.Ordinal);
     }
@@ -85,7 +85,7 @@ public class FiltroDeAlertasTests
     [InlineData(int.MaxValue)]
     public void Score_minimo_fora_da_faixa_do_produto_e_recusado(int score)
     {
-        Assert.False(FiltroDeAlertas.TentarCriar(null, null, score, null, null, out _, out var erro));
+        Assert.False(FiltroDeAlertas.TentarCriar(null, null, null, score, null, null, out _, out var erro));
 
         Assert.Contains("score", erro, StringComparison.OrdinalIgnoreCase);
     }
@@ -96,7 +96,7 @@ public class FiltroDeAlertasTests
     [InlineData(100)]
     public void Score_minimo_nas_bordas_da_faixa_e_aceito(int score)
     {
-        Assert.True(FiltroDeAlertas.TentarCriar(null, null, score, null, null, out var filtro, out _));
+        Assert.True(FiltroDeAlertas.TentarCriar(null, null, null, score, null, null, out var filtro, out _));
 
         Assert.Equal(score, filtro.ScoreMinimo);
     }
@@ -109,6 +109,7 @@ public class FiltroDeAlertasTests
         var inicio = new DateTimeOffset(2026, 9, 5, 0, 0, 0, TimeSpan.Zero);
 
         Assert.False(FiltroDeAlertas.TentarCriar(
+            null,
             null,
             null,
             null,
@@ -129,6 +130,7 @@ public class FiltroDeAlertasTests
             null,
             null,
             null,
+            null,
             instante,
             instante,
             out var filtro,
@@ -144,7 +146,7 @@ public class FiltroDeAlertasTests
         var de = new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero);
         var ate = new DateTimeOffset(2026, 9, 5, 0, 0, 0, TimeSpan.Zero);
 
-        Assert.True(FiltroDeAlertas.TentarCriar("Bloquear", "Alta", 70, de, ate, out var filtro, out _));
+        Assert.True(FiltroDeAlertas.TentarCriar("Bloquear", "Alta", null, 70, de, ate, out var filtro, out _));
 
         Assert.False(filtro.EstaVazio);
         Assert.Equal(Decisao.Bloquear, filtro.Decisao);
@@ -154,12 +156,36 @@ public class FiltroDeAlertasTests
         Assert.Equal(ate, filtro.Ate);
     }
 
+    [Theory]
+    [InlineData("Aberto", StatusDoAlerta.Aberto)]
+    [InlineData("emcaso", StatusDoAlerta.EmCaso)]
+    [InlineData("Encerrado", StatusDoAlerta.Encerrado)]
+    public void Status_do_alerta_e_aceito_pelo_nome(string texto, StatusDoAlerta esperado)
+    {
+        // O filtro de situacao e o que separa fila de trabalho de historico:
+        // sem ele, um alerta ja investigado ficaria na fila para sempre.
+        Assert.True(FiltroDeAlertas.TentarCriar(null, null, texto, null, null, null, out var filtro, out _));
+
+        Assert.Equal(esperado, filtro.Status);
+    }
+
+    [Theory]
+    [InlineData("Resolvido")]
+    [InlineData("1")]
+    [InlineData("Fechado")]
+    public void Status_fora_do_vocabulario_e_recusado(string texto)
+    {
+        Assert.False(FiltroDeAlertas.TentarCriar(null, null, texto, null, null, null, out _, out var erro));
+
+        Assert.Contains("status", erro, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Uma_recusa_nao_deixa_filtro_pela_metade()
     {
         // Se a prioridade e invalida, a decisao valida que veio junto NAO pode
         // ser aplicada sozinha: o resultado seria uma lista que ninguem pediu.
-        Assert.False(FiltroDeAlertas.TentarCriar("Bloquear", "Critica", null, null, null, out var filtro, out _));
+        Assert.False(FiltroDeAlertas.TentarCriar("Bloquear", "Critica", null, null, null, null, out var filtro, out _));
 
         Assert.True(filtro.EstaVazio);
     }

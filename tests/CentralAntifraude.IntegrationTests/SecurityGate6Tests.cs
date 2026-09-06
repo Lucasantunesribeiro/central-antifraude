@@ -320,12 +320,17 @@ public sealed class SecurityGate6Tests : IAsyncLifetime
         // nao vira filtro nem erro. O que importa e que ele NAO mude o
         // resultado — e o teste de tenant acima ja prova que ele nao troca a
         // organizacao.
+        //
+        // Os nomes aqui sao inventados de proposito. `status` era um deles ate
+        // a Fase 7, quando o alerta ganhou situacao e o filtro passou a
+        // existir de verdade — e ai um valor invalido vira 400, que e o
+        // comportamento certo.
         await GerarAlertaAsync(_integracaoA, "extra");
 
         Assert.Single(await AlertasDaFilaAsync(
             _tenantA,
             PerfilDeUsuario.AnalistaDeFraude,
-            "?campoQueNaoExiste=1&status=Resolvido"));
+            "?campoQueNaoExiste=1&inventado=Resolvido"));
     }
 
     // -----------------------------------------------------------------------
