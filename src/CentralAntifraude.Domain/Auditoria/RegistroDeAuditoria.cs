@@ -30,6 +30,12 @@ public enum OperacaoAuditada
     CredencialDeIntegracaoEmitida = 24,
     CredencialDeIntegracaoRevogada = 25,
     IngestaoRecusadaPorCredencial = 26,
+
+    // Investigacao (Fase 7)
+    CasoAberto = 40,
+    CasoAlterado = 41,
+    CasoAtribuido = 42,
+    CasoResolvido = 43,
 }
 
 /// <summary>

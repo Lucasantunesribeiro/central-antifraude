@@ -23,21 +23,27 @@ public enum PrioridadeDeAlerta
 /// <summary>
 /// Situacao do alerta na operacao.
 ///
-/// **Um valor so, hoje, e isso e deliberado.** O alerta nasce aberto e nada
-/// nesta fase o move: nao ha rota que altere alerta, e o teste do Security
-/// Gate 6 verifica essa ausencia. Os estados que faltam nascem na Fase 7,
-/// quando existir um caso para o qual o alerta possa ser levado — o
-/// `CLAUDE.md` secao 12 pede exatamente isso, estado novo so com necessidade
-/// operacional clara.
+/// Nasceu com um valor so na Fase 6 e ganhou os outros dois na Fase 7, quando
+/// passou a existir um caso para o qual o alerta pode ser levado — que e o que
+/// o `CLAUDE.md` secao 12 pede: estado novo so com necessidade operacional
+/// clara.
 ///
-/// O campo existe desde ja porque a coluna faz parte do contrato do alerta
-/// (ROADMAP 6.3) e porque acrescenta-la depois obrigaria a decidir o que
-/// gravar nas linhas antigas.
+/// Os tres respondem a mesma pergunta do ponto de vista de quem trabalha a
+/// fila: **isto ainda e trabalho meu?**
+///
+/// O alerta nunca muda de estado sozinho. Quem o move e sempre o caso, e cada
+/// movimento fica na timeline dele.
 /// </summary>
 public enum StatusDoAlerta
 {
-    /// <summary>Criado e ainda nao levado para nenhuma investigacao.</summary>
+    /// <summary>Na fila, sem ninguem investigando. E o que o analista pega.</summary>
     Aberto = 1,
+
+    /// <summary>Levado para uma investigacao que ainda esta aberta.</summary>
+    EmCaso = 2,
+
+    /// <summary>O caso que o continha foi resolvido. Saiu da fila de trabalho.</summary>
+    Encerrado = 3,
 }
 
 /// <summary>
@@ -113,6 +119,17 @@ public sealed class Alerta
     /// <summary>Para onde o analista navega a partir da fila.</summary>
     public Guid TransacaoId { get; private set; }
 
+    /// <summary>
+    /// A investigacao que levou este alerta, quando existe.
+    ///
+    /// **Um alerta pertence a no maximo um caso**, e a restricao do banco
+    /// garante isso pela unicidade de <c>avaliacao_id</c> somada a esta coluna
+    /// so ser preenchida uma vez. Dois casos sobre o mesmo alerta produziriam
+    /// duas conclusoes humanas sobre a mesma transacao — e a Fase 9 nao teria
+    /// como saber qual delas e a verdade.
+    /// </summary>
+    public Guid? CasoId { get; private set; }
+
     public Decisao Decisao { get; private set; }
 
     public int Score { get; private set; }
@@ -156,6 +173,38 @@ public sealed class Alerta
     /// Trata-los como iguais esconderia atraso de processamento.
     /// </summary>
     public DateTimeOffset CriadoEm { get; private set; }
+
+    /// <summary>
+    /// Leva o alerta para uma investigacao.
+    ///
+    /// `internal` de proposito: quem chama e o <c>Caso</c>, no mesmo agregado
+    /// e na mesma operacao que grava a timeline. Deixar isto publico abriria a
+    /// possibilidade de um alerta mudar de estado sem que nenhuma investigacao
+    /// registrasse por que.
+    /// </summary>
+    internal void LevarParaCaso(Guid casoId)
+    {
+        if (Status != StatusDoAlerta.Aberto || CasoId is not null)
+        {
+            throw new ViolacaoDeInvariante(
+                "So um alerta aberto e sem caso pode ser levado para uma investigacao.");
+        }
+
+        CasoId = casoId;
+        Status = StatusDoAlerta.EmCaso;
+    }
+
+    /// <summary>Tira o alerta da fila de trabalho quando o caso e resolvido.</summary>
+    internal void Encerrar()
+    {
+        if (Status != StatusDoAlerta.EmCaso)
+        {
+            throw new ViolacaoDeInvariante(
+                "So um alerta em investigacao pode ser encerrado.");
+        }
+
+        Status = StatusDoAlerta.Encerrado;
+    }
 
     internal static Alerta Registrar(
         Guid organizacaoId,
