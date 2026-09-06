@@ -105,5 +105,15 @@ public interface IRepositorioDeTransacoes
 
     Task<Transacao?> BuscarPorIdAsync(Guid transacaoId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Varias transacoes do tenant atual, para o workspace do caso.
+    ///
+    /// Um caso pode reunir varios alertas, cada um sobre uma transacao. Buscar
+    /// uma por vez seria N+1 na tela mais pesada do produto.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, Transacao>> BuscarPorIdsAsync(
+        IReadOnlyCollection<Guid> transacoesIds,
+        CancellationToken cancellationToken);
+
     void Adicionar(Transacao transacao);
 }

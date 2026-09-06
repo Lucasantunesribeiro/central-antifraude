@@ -24,23 +24,35 @@ public sealed record FiltroDeAlertas
     private FiltroDeAlertas(
         Decisao? decisao,
         PrioridadeDeAlerta? prioridade,
+        StatusDoAlerta? status,
         int? scoreMinimo,
         DateTimeOffset? de,
         DateTimeOffset? ate)
     {
         Decisao = decisao;
         Prioridade = prioridade;
+        Status = status;
         ScoreMinimo = scoreMinimo;
         De = de;
         Ate = ate;
     }
 
     /// <summary>Nenhum filtro: a fila inteira do tenant.</summary>
-    public static FiltroDeAlertas Nenhum { get; } = new(null, null, null, null, null);
+    public static FiltroDeAlertas Nenhum { get; } = new(null, null, null, null, null, null);
 
     public Decisao? Decisao { get; }
 
     public PrioridadeDeAlerta? Prioridade { get; }
+
+    /// <summary>
+    /// Situacao do alerta na operacao.
+    ///
+    /// Existe desde a Fase 7, quando o alerta passou a ter mais de um estado. E
+    /// o filtro que separa **fila de trabalho** de **historico**: sem ele, um
+    /// alerta ja investigado ficaria na fila para sempre e a tela deixaria de
+    /// dizer o que ainda precisa de gente.
+    /// </summary>
+    public StatusDoAlerta? Status { get; }
 
     /// <summary>Score da avaliacao, inclusive.</summary>
     public int? ScoreMinimo { get; }
@@ -52,11 +64,13 @@ public sealed record FiltroDeAlertas
     public DateTimeOffset? Ate { get; }
 
     public bool EstaVazio =>
-        Decisao is null && Prioridade is null && ScoreMinimo is null && De is null && Ate is null;
+        Decisao is null && Prioridade is null && Status is null &&
+        ScoreMinimo is null && De is null && Ate is null;
 
     public static bool TentarCriar(
         string? decisao,
         string? prioridade,
+        string? status,
         int? scoreMinimo,
         DateTimeOffset? de,
         DateTimeOffset? ate,
@@ -65,15 +79,24 @@ public sealed record FiltroDeAlertas
     {
         filtro = Nenhum;
 
-        if (!TentarResolver<Decisao>(decisao, "decisao", out var decisaoResolvida, out erro))
+        if (!VocabularioFechado.TentarResolver<Decisao>(decisao, "decisao", out var decisaoResolvida, out erro))
         {
             return false;
         }
 
-        if (!TentarResolver<PrioridadeDeAlerta>(
+        if (!VocabularioFechado.TentarResolver<PrioridadeDeAlerta>(
                 prioridade,
                 "prioridade",
                 out var prioridadeResolvida,
+                out erro))
+        {
+            return false;
+        }
+
+        if (!VocabularioFechado.TentarResolver<StatusDoAlerta>(
+                status,
+                "status",
+                out var statusResolvido,
                 out erro))
         {
             return false;
@@ -94,48 +117,16 @@ public sealed record FiltroDeAlertas
             return false;
         }
 
-        filtro = new FiltroDeAlertas(decisaoResolvida, prioridadeResolvida, scoreMinimo, de, ate);
+        filtro = new FiltroDeAlertas(
+            decisaoResolvida,
+            prioridadeResolvida,
+            statusResolvido,
+            scoreMinimo,
+            de,
+            ate);
         erro = string.Empty;
 
         return true;
-    }
-
-    /// <summary>
-    /// Resolve um texto contra um enum fechado, comparando com os NOMES.
-    ///
-    /// <c>Enum.TryParse</c> sozinho nao serve como porta de entrada: ele
-    /// tambem aceita o numero subjacente, entao <c>?decisao=2</c> viraria
-    /// <c>Revisar</c> e <c>?prioridade=99</c> atravessaria como um valor que
-    /// nao existe no enum. Comparar com a lista de nomes antes de converter
-    /// fecha os dois buracos e deixa o vocabulario aceito explicito.
-    /// </summary>
-    private static bool TentarResolver<T>(string? texto, string nome, out T? valor, out string erro)
-        where T : struct, Enum
-    {
-        valor = null;
-        erro = string.Empty;
-
-        if (string.IsNullOrWhiteSpace(texto))
-        {
-            return true;
-        }
-
-        var informado = texto.Trim();
-
-        var canonico = Enum.GetNames<T>().FirstOrDefault(
-            aceito => string.Equals(aceito, informado, StringComparison.OrdinalIgnoreCase));
-
-        if (canonico is not null)
-        {
-            valor = Enum.Parse<T>(canonico);
-            return true;
-        }
-
-        // Os nomes aceitos vao na mensagem de proposito: sao contrato publico,
-        // e nao ha o que vazar em dizer que existem tres decisoes.
-        erro = $"Valor invalido para '{nome}'. Aceitos: {string.Join(", ", Enum.GetNames<T>())}.";
-
-        return false;
     }
 }
 
@@ -155,6 +146,20 @@ public interface IRepositorioDeAlertas
         FiltroDeAlertas filtro,
         ParametrosDePaginacao paginacao,
         ParametrosDeOrdenacao ordenacao,
+        CancellationToken cancellationToken);
+
+    /// <summary>Um alerta do tenant atual. Nulo para id de outro tenant.</summary>
+    Task<Alerta?> BuscarPorIdAsync(Guid alertaId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Varios alertas do tenant atual, para abrir um caso de uma vez so.
+    ///
+    /// Devolve somente os que existem no tenant. Quem chamou compara a
+    /// quantidade: um identificador que nao volta pode ser inexistente ou de
+    /// outra organizacao, e os dois casos precisam ser indistinguiveis.
+    /// </summary>
+    Task<IReadOnlyList<Alerta>> BuscarPorIdsAsync(
+        IReadOnlyCollection<Guid> alertasIds,
         CancellationToken cancellationToken);
 
     void Adicionar(Alerta alerta);

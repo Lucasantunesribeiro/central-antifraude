@@ -40,6 +40,7 @@ public sealed record AlertaResumido(
     int Score,
     string Prioridade,
     string Status,
+    Guid? CasoId,
     DateTimeOffset AvaliadaEm,
     DateTimeOffset CriadoEm,
     int VersaoDaPolitica,
@@ -63,6 +64,9 @@ public sealed record AlertaResumido(
             alerta.Score,
             alerta.Prioridade.ToString(),
             alerta.Status.ToString(),
+            // A investigacao que levou este alerta, quando existe. E o caminho
+            // de volta: da fila para o caso, e nao so do caso para a fila.
+            alerta.CasoId,
             alerta.AvaliadaEm,
             alerta.CriadoEm,
             alerta.VersaoDaPolitica,

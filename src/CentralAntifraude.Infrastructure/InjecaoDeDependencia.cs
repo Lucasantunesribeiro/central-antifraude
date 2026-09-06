@@ -4,6 +4,7 @@ using CentralAntifraude.Application.Comum;
 using CentralAntifraude.Application.Eventos;
 using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Application.Integracoes;
+using CentralAntifraude.Application.Investigacao;
 using CentralAntifraude.Application.Mensageria;
 using CentralAntifraude.Application.Risco;
 using CentralAntifraude.Application.Transacoes;
@@ -218,6 +219,9 @@ public static class InjecaoDeDependencia
     {
         servicos.AddScoped<IRepositorioDeAlertas, RepositorioDeAlertas>();
         servicos.AddScoped<ServicoDeConsultaDeAlertas>();
+
+        servicos.AddScoped<IRepositorioDeCasos, RepositorioDeCasos>();
+        servicos.AddScoped<ServicoDeCasos>();
     }
 
     private static void AdicionarConcorrencia(IServiceCollection servicos, IConfiguration configuracao)

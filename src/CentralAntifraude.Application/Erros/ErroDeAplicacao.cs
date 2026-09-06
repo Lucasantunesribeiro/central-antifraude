@@ -124,6 +124,13 @@ public sealed class ConflitoDeEstado : ErroDeAplicacao
         Codigo = codigo;
     }
 
+    public ConflitoDeEstado(string codigo, string mensagem, Exception causa)
+        : base(mensagem, causa)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(codigo);
+        Codigo = codigo;
+    }
+
     public override TipoDeErro Tipo => TipoDeErro.Conflito;
 
     public override string Codigo { get; }

@@ -139,6 +139,25 @@ public sealed class RepositorioDeTransacoes : IRepositorioDeTransacoes
     public Task<Transacao?> BuscarPorIdAsync(Guid transacaoId, CancellationToken cancellationToken) =>
         _contexto.Transacoes.FirstOrDefaultAsync(t => t.Id == transacaoId, cancellationToken);
 
+    public async Task<IReadOnlyDictionary<Guid, Transacao>> BuscarPorIdsAsync(
+        IReadOnlyCollection<Guid> transacoesIds,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(transacoesIds);
+
+        if (transacoesIds.Count == 0)
+        {
+            return new Dictionary<Guid, Transacao>();
+        }
+
+        var transacoes = await _contexto.Transacoes
+            .AsNoTracking()
+            .Where(t => transacoesIds.Contains(t.Id))
+            .ToListAsync(cancellationToken);
+
+        return transacoes.ToDictionary(t => t.Id);
+    }
+
     public async Task<Pagina<Transacao>> ListarAsync(
         ParametrosDePaginacao paginacao,
         ParametrosDeOrdenacao ordenacao,

@@ -4,6 +4,7 @@ using CentralAntifraude.Domain.Auditoria;
 using CentralAntifraude.Domain.Eventos;
 using CentralAntifraude.Domain.Identidade;
 using CentralAntifraude.Domain.Integracoes;
+using CentralAntifraude.Domain.Investigacao;
 using CentralAntifraude.Domain.Operacao;
 using CentralAntifraude.Domain.Risco;
 using CentralAntifraude.Domain.Transacoes;
@@ -63,6 +64,15 @@ public class CentralAntifraudeDbContext : DbContext
     public DbSet<AvaliacaoDeRisco> AvaliacoesDeRisco => Set<AvaliacaoDeRisco>();
 
     public DbSet<Alerta> Alertas => Set<Alerta>();
+
+    public DbSet<Caso> Casos => Set<Caso>();
+
+    public DbSet<EventoDoCaso> EventosDoCaso => Set<EventoDoCaso>();
+
+    public DbSet<NotaDoCaso> NotasDoCaso => Set<NotaDoCaso>();
+
+    public DbSet<ResultadoDeInvestigacaoDaTransacao> ResultadosDeInvestigacao =>
+        Set<ResultadoDeInvestigacaoDaTransacao>();
 
     public DbSet<EventoDeSaida> EventosDeSaida => Set<EventoDeSaida>();
 
@@ -159,6 +169,21 @@ public class CentralAntifraudeDbContext : DbContext
         // colocaria a fila de trabalho de um cliente na tela de outro.
         modelBuilder.Entity<Alerta>()
             .HasQueryFilter(FiltroDeTenant, a => a.OrganizacaoId == OrganizacaoAtual);
+
+        // A investigacao inteira e filtrada. Caso, timeline, notas e vereditos
+        // carregam a organizacao cada um: a defesa dupla custa nada e sobrevive
+        // a uma consulta futura que parta da nota em vez do caso.
+        modelBuilder.Entity<Caso>()
+            .HasQueryFilter(FiltroDeTenant, c => c.OrganizacaoId == OrganizacaoAtual);
+
+        modelBuilder.Entity<EventoDoCaso>()
+            .HasQueryFilter(FiltroDeTenant, e => e.OrganizacaoId == OrganizacaoAtual);
+
+        modelBuilder.Entity<NotaDoCaso>()
+            .HasQueryFilter(FiltroDeTenant, n => n.OrganizacaoId == OrganizacaoAtual);
+
+        modelBuilder.Entity<ResultadoDeInvestigacaoDaTransacao>()
+            .HasQueryFilter(FiltroDeTenant, r => r.OrganizacaoId == OrganizacaoAtual);
 
         // A Outbox tambem e filtrada. Ela guarda decisao, score e sinais
         // de um tenant; uma consulta futura escrita sem o filtro vazaria

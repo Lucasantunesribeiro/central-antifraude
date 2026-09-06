@@ -45,6 +45,7 @@ public static class EndpointsDeAlertas
                 [FromQuery] string? direcao,
                 [FromQuery] string? decisao,
                 [FromQuery] string? prioridade,
+                [FromQuery] string? status,
                 [FromQuery] int? scoreMinimo,
                 [FromQuery] DateTimeOffset? de,
                 [FromQuery] DateTimeOffset? ate,
@@ -65,6 +66,7 @@ public static class EndpointsDeAlertas
                 if (!FiltroDeAlertas.TentarCriar(
                         decisao,
                         prioridade,
+                        status,
                         scoreMinimo,
                         de,
                         ate,

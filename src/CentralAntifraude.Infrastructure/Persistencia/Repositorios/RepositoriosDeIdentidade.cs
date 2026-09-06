@@ -56,6 +56,29 @@ public sealed class RepositorioDeUsuarios : IRepositorioDeUsuarios
     public Task<Usuario?> BuscarPorIdAsync(Guid usuarioId, CancellationToken cancellationToken) =>
         _contexto.Usuarios.FirstOrDefaultAsync(u => u.Id == usuarioId, cancellationToken);
 
+    public async Task<IReadOnlyDictionary<Guid, string>> BuscarNomesPorIdsAsync(
+        IReadOnlyCollection<Guid> usuariosIds,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(usuariosIds);
+
+        if (usuariosIds.Count == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        // So id e nome. O resto do usuario — e-mail, hash de senha, perfil —
+        // nao interessa a quem so vai escrever o nome numa coluna, e nao
+        // carrega-lo e uma forma barata de nao expor o que nao foi pedido.
+        var nomes = await _contexto.Usuarios
+            .AsNoTracking()
+            .Where(u => usuariosIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.NomeCompleto })
+            .ToListAsync(cancellationToken);
+
+        return nomes.ToDictionary(u => u.Id, u => u.NomeCompleto);
+    }
+
     public async Task<Pagina<Usuario>> ListarAsync(
         ParametrosDePaginacao paginacao,
         ParametrosDeOrdenacao ordenacao,
@@ -210,6 +233,22 @@ public sealed class UnidadeDeTrabalho : IUnidadeDeTrabalho
         try
         {
             return await _contexto.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException excecao)
+        {
+            // O token de concorrencia recusou: alguem gravou entre a leitura e
+            // esta escrita. O `UPDATE` saiu com `WHERE versao = @lida` e
+            // atingiu zero linhas.
+            //
+            // **Isto nao e um erro do servidor.** E o banco impedindo um lost
+            // update — e a diferenca importa para quem chamou: recarregar e
+            // repetir resolve, insistir com o mesmo corpo nao.
+            _contexto.ChangeTracker.Clear();
+
+            throw new ConflitoDeEstado(
+                "versao_desatualizada",
+                "O recurso mudou depois que voce o abriu. Recarregue para ver o que aconteceu antes de agir.",
+                excecao);
         }
         catch (DbUpdateException excecao)
             when (excecao.InnerException is PostgresException { SqlState: ViolacaoDeUnicidade } postgres)

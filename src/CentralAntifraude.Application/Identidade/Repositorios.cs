@@ -36,6 +36,17 @@ public interface IRepositorioDeUsuarios
     /// <summary>Busca dentro do tenant atual. Devolve nulo para id de outro tenant.</summary>
     Task<Usuario?> BuscarPorIdAsync(Guid usuarioId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Nomes de varios usuarios do tenant atual, em uma consulta so.
+    ///
+    /// A lista de casos mostra o responsavel de cada linha; buscar usuario por
+    /// linha seria um N+1 numa tela de uso diario. So o nome vem — o resto do
+    /// usuario nao interessa a quem so vai escrever "Fulano" na coluna.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, string>> BuscarNomesPorIdsAsync(
+        IReadOnlyCollection<Guid> usuariosIds,
+        CancellationToken cancellationToken);
+
     /// <summary>Lista os usuarios do tenant atual.</summary>
     Task<Pagina<Usuario>> ListarAsync(
         ParametrosDePaginacao paginacao,

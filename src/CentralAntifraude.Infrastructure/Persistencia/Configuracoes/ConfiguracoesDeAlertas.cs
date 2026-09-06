@@ -1,6 +1,7 @@
 using CentralAntifraude.Domain.Alertas;
 using CentralAntifraude.Domain.Eventos;
 using CentralAntifraude.Domain.Identidade;
+using CentralAntifraude.Domain.Investigacao;
 using CentralAntifraude.Domain.Risco;
 using CentralAntifraude.Domain.Transacoes;
 using Microsoft.EntityFrameworkCore;
@@ -87,5 +88,16 @@ public sealed class ConfiguracaoDeAlerta : IEntityTypeConfiguration<Alerta>
             .WithMany()
             .HasForeignKey(a => a.TransacaoId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // O caso que levou o alerta (Fase 7). Nulo enquanto o alerta esta na
+        // fila. `Restrict` porque apagar um caso deixaria alertas apontando
+        // para uma investigacao que nao existe mais.
+        builder.HasOne<Caso>()
+            .WithMany()
+            .HasForeignKey(a => a.CasoId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // A consulta "alertas deste caso", usada no workspace.
+        builder.HasIndex(a => a.CasoId).HasDatabaseName("ix_alertas_caso");
     }
 }
