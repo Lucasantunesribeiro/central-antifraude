@@ -24,8 +24,9 @@ solução certificada de compliance.
 | 3 | Motor de Risco v1 | ✅ concluída |
 | 4 | Avaliação Síncrona e Concorrência | ✅ concluída |
 | 5 | Backbone Assíncrono | ✅ concluída |
-| **6** | **Alertas Operacionais** | ✅ **concluída** |
-| 7–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
+| 6 | Alertas Operacionais | ✅ concluída |
+| **7** | **Casos e Investigação** | ✅ **concluída** |
+| 8–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
 
 Hoje a plataforma recebe transações de sistemas externos autenticados por
 credencial própria, registra cada tentativa **exatamente uma vez** mesmo sob
@@ -51,8 +52,13 @@ tempo. Um desses efeitos é a **fila de alertas**: uma avaliação `Revisar` ou
 `Bloquear` vira trabalho na mesa do analista, filtrável, ordenável e a um
 clique da transação que a originou.
 
-**Ainda não existe** caso, investigação nem gestão de regras. Nem sequer há como
-agir sobre um alerta: ele nasce aberto e nenhuma rota o altera. Isso é
+Da fila, um analista abre um **caso**: assume, anota e conclui como fraude
+confirmada, legítima ou inconclusiva. A conclusão humana não reescreve a decisão
+do motor — uma transação pode ter recebido `Revisar` e terminar como legítima, e
+isso é um falso positivo legítimo, não um defeito. Cada ação fica numa timeline
+que não se edita, e o veredito vira dado por transação.
+
+**Ainda não existe** gestão de regras, backtest nem painel operacional. Isso é
 deliberado — cada capacidade chega na fase que o `ROADMAP.md` define.
 
 ---
@@ -154,6 +160,14 @@ consumido por orquestrador e não pela interface.
 | `GET /api/regras` | qualquer | catálogo de regras em vigor |
 | `GET /api/regras/perfil` | qualquer | perfil vigente, com os limiares |
 | `GET /api/alertas` | qualquer | fila operacional, com filtros, ordenação e paginação |
+| `GET /api/casos` | qualquer | investigações da organização, com filtros |
+| `GET /api/casos/{id}` | qualquer | workspace: alertas, sinais, timeline, notas e ações permitidas |
+| `POST /api/casos` | Operação | abre um caso a partir de alertas |
+| `POST /api/casos/{id}/assumir` | Operação | assume o caso para si |
+| `POST /api/casos/{id}/transferir` | Supervisor | passa o caso para outra pessoa |
+| `POST /api/casos/{id}/alertas` | Operação | traz mais um alerta para o caso |
+| `POST /api/casos/{id}/notas` | Operação | acrescenta uma nota de investigação |
+| `POST /api/casos/{id}/resolucao` | Operação | conclui a investigação |
 | `POST /api/ingestao/transacoes` | **`ApiKey`** | recebe uma tentativa de pagamento e devolve a decisão de risco |
 
 A ingestão pode responder **503 com `Retry-After`** quando a disputa por
@@ -304,8 +318,45 @@ proteção nunca exercitada é uma proteção que ninguém sabe se existe.
 
 E a fila é **somente leitura**: nenhuma rota cria, altera, atribui ou apaga
 alerta, e o Security Gate 6 verifica a ausência com sete métodos e caminhos. A
-ação humana pertence ao caso, que é a Fase 7. Detalhes no
+ação humana pertence ao caso. Detalhes no
 [ADR 0011](docs/adr/0011-alertas-operacionais.md).
+
+---
+
+## A investigação humana
+
+Um caso nasce **de alertas** — nunca vazio. Sem alerta não há transação para
+investigar nem resultado para registrar, e o produto recusa virar um sistema de
+tickets.
+
+```text
+Novo  →  EmAnalise  →  Resolvido
+```
+
+`Novo → EmAnalise` acontece por consequência de assumir, e não por um botão
+separado. **Resolvido é imutável**: não há reabertura, nota depois da conclusão
+nem troca de responsável. A razão é a Fase 9 — ela usa o resultado humano como
+verdade para comparar regras candidatas, e um veredito que muda depois faria
+backtests antigos passarem a mentir.
+
+**Cada ação muda o estado e deixa uma entrada na timeline, na mesma operação.**
+Um caminho que mudasse o estado sem registrar produziria um caso cuja história
+não explica o próprio estado. A trilha é ordenada por sequência, e não por
+horário: abrir um caso grava dois eventos no mesmo instante.
+
+**Duas pessoas ao mesmo tempo não se sobrescrevem.** Toda ação envia a versão
+que a tela leu; a aplicação recusa a versão velha, e o banco arbitra a corrida
+real com um token de concorrência. Duas resoluções simultâneas produzem
+exatamente um `200` e um `409`.
+
+**Notas são texto, e o sistema não as altera.** Marcação é recusada com
+explicação, nunca limpa em silêncio — uma nota alterada pelo sistema deixa de
+ser o que o analista escreveu. A defesa contra XSS é a saída: a tela renderiza
+texto.
+
+Ao resolver, o veredito vira uma linha **por transação**, com restrição única.
+É essa base que a Fase 9 vai comparar contra regras candidatas. Detalhes no
+[ADR 0012](docs/adr/0012-casos-e-investigacao.md).
 
 ---
 
@@ -340,6 +391,7 @@ tem — um teste de concorrência verde no SQLite não provaria nada.
 | `SERIALIZABLE` na ingestão, retry da operação inteira, Outbox | [ADR 0009](docs/adr/0009-operacao-critica-e-concorrencia.md) |
 | Fila, envelope versionado, Inbox e DLQ | [ADR 0010](docs/adr/0010-backbone-assincrono.md) |
 | Alertas: fan-out por manipulador, savepoint e duas camadas | [ADR 0011](docs/adr/0011-alertas-operacionais.md) |
+| Casos: timeline append-only, resolvido imutável e lost update | [ADR 0012](docs/adr/0012-casos-e-investigacao.md) |
 
 Três decisões são reforçadas em tempo de compilação por
 `src/BannedSymbols.txt`: `DateTime.UtcNow`, `DateTime.Now` e `Guid.NewGuid()`

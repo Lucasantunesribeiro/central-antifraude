@@ -229,6 +229,33 @@ cliente com o mesmo dispositivo e o mesmo país, espaçadas em dias, e uma quart
 com dispositivo e país diferentes. Dá 45 pontos — dispositivo novo mais
 divergência geográfica.
 
+### Investigar um caso (Fase 7)
+
+Na tela **Alertas**, marque um ou mais alertas da fila, dê um título e abra o
+caso. No workspace: assuma, anote e resolva.
+
+```sql
+-- Os casos e onde eles estão.
+SELECT titulo, status, resultado, versao FROM casos ORDER BY atualizado_em DESC;
+
+-- A história de um caso, na ordem em que aconteceu.
+SELECT sequencia, tipo, descricao, autor_descricao
+FROM eventos_do_caso WHERE caso_id = '<id>' ORDER BY sequencia;
+
+-- O veredito humano por transação. É o que a Fase 9 vai ler como verdade.
+SELECT transacao_id, resultado, registrado_em FROM resultados_de_investigacao;
+```
+
+**Se uma ação devolver `409`**, a leitura é literal e vale a pena distinguir:
+
+| `codigo` | O que aconteceu |
+|---|---|
+| `versao_desatualizada` | A tela está vendo um estado antigo. Recarregue. |
+| `estado_do_caso` | O caso não aceita essa ação agora — resolvido, ou sem responsável. |
+| `conflito_de_concorrencia` | Outra pessoa concluiu a mesma coisa primeiro. |
+
+Nenhum dos três é defeito: são o estado do recurso recusando a operação.
+
 ## 5. Rodar
 
 ```bash

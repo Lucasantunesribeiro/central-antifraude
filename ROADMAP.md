@@ -2117,16 +2117,119 @@ Testar:
 
 ## 7.11 Critérios de conclusão
 
-- [ ] Caso criado a partir de alerta(s).
-- [ ] Status validado.
-- [ ] Ownership funcionando.
-- [ ] Timeline append-only.
-- [ ] Resultado obrigatório na resolução.
-- [ ] Fraude/Legítima/Inconclusiva persistidos.
-- [ ] Workspace de investigação utilizável.
-- [ ] Falso positivo suportado corretamente.
-- [ ] Security Gate 7 verde.
-- [ ] CI verde.
+- [x] Caso criado a partir de alerta(s).
+- [x] Status validado.
+- [x] Ownership funcionando.
+- [x] Timeline append-only.
+- [x] Resultado obrigatório na resolução.
+- [x] Fraude/Legítima/Inconclusiva persistidos.
+- [x] Workspace de investigação utilizável.
+- [x] Falso positivo suportado corretamente.
+- [x] Security Gate 7 verde.
+- [ ] CI verde — *pendente do primeiro `push`, que não foi autorizado. Cada passo do workflow foi executado localmente e está verde.*
+
+---
+
+## 7.12 Resultado da Fase 7
+
+**Concluída em 2026-09-05.**
+
+### Evidências
+
+| Critério | Como foi verificado |
+|---|---|
+| Build backend | `dotnet build -c Release --no-incremental`, **0 erros e 0 avisos** |
+| Build frontend | `npm run build`, `oxlint` e `prettier --check` limpos |
+| Caso a partir de alertas | domínio recusa lista vazia; abertura leva os alertas para o caso na mesma operação |
+| Transições validadas | `Novo → EmAnalise` por consequência de assumir; resolver exige `EmAnalise` **com** responsável |
+| Ownership | assumir é para si; transferir é ato de supervisão, com destino conferido (mesmo tenant, ativo, não Auditor) |
+| Timeline append-only | sem método de alteração, sem rota, e com **sequência** por caso — horário não ordena porque abrir grava dois eventos no mesmo instante |
+| Resultado obrigatório | vocabulário fechado; 5 valores inválidos, todos `400`; nunca cai num padrão |
+| **Falso positivo** | ponta a ponta: motor decide `Revisar`, pessoa conclui `Legitima`, e a decisão automática **não** é reescrita |
+| Feedback operacional | um veredito por **transação**, com restrição única — é o que a Fase 9 vai ler como verdade apurada |
+| **Lost update** | sequencial (`409`) e **simultâneo**: duas resoluções em paralelo → exatamente 1× `200`, 1× `409`, 1 resultado, 1 veredito |
+| Workspace | risco, transações, sinais, timeline, notas e ações numa tela só; ações vêm do servidor |
+| Isolamento | caso e alerta de outro tenant respondem `404`; o alerta do outro tenant fica intacto, conferido no banco |
+| Testes | 386 unitários + 15 arquitetura + 260 integração + 73 frontend = **734, todos verdes** |
+| Security Gate 7 | [`docs/security-gate-7.md`](docs/security-gate-7.md) |
+| Migration | `CasosEInvestigacao` aplicada em PostgreSQL real; `has-pending-model-changes` sem alteração pendente |
+| Dependências | `dotnet list package --vulnerable`: nenhuma; `npm audit`: 0 |
+| Segredos | `gitleaks detect` e `detect --no-git`: nenhum |
+
+### Decisões congeladas
+
+| Decisão | Registro |
+|---|---|
+| Um caso nasce de alertas, e um alerta pertence a no máximo um caso | `docs/adr/0012-casos-e-investigacao.md` |
+| Estado e timeline mudam na mesma operação de domínio | `docs/adr/0012` |
+| Resolvido é imutável — corrigir exige caso novo | `docs/adr/0012` |
+| Duas camadas contra lost update: versão do cliente e token no banco | `docs/adr/0012` |
+| Recusar texto com marcação, nunca limpar em silêncio | `docs/adr/0012` |
+| Assumir é para si; transferir é supervisão | `docs/adr/0012` |
+| `acoesPermitidas` vêm do servidor, e o servidor recusa de novo | `docs/adr/0012` |
+| Rotas de ação em vez de `PUT` no recurso inteiro | `docs/adr/0012` |
+| Timeline e notas não são navegação do agregado | `docs/adr/0012` |
+| Timeline ordenada por sequência, e não por horário | `docs/adr/0012` |
+| Veredito por transação, com restrição única | `docs/adr/0012` |
+
+### Defeitos reais encontrados e corrigidos
+
+**1. O EF Core trata filho novo com chave preenchida como `UPDATE`.** Os
+identificadores da timeline são gerados pelo domínio (UUIDv7). Quando o EF
+encontrava uma entrada nova dentro de uma coleção de navegação, concluía que a
+linha já existia e emitia `UPDATE` — que atingia zero linhas e virava um
+**falso conflito de concorrência**. Toda nota falhava com `409`.
+
+O sintoma enganava: a mensagem dizia "o recurso mudou depois que você o abriu",
+exatamente o que se esperaria de um lost update legítimo. Corrigido tirando
+timeline e notas da navegação — o repositório grava as entradas novas
+explicitamente, e o agregado só acumula o que a operação produziu.
+
+**2. Horário não ordena uma trilha.** Abrir um caso grava dois eventos no mesmo
+instante, e o UUIDv7 não desempata porque sorteia os bits finais. A timeline
+mostrava "alerta associado" antes de "caso aberto" de vez em quando. Corrigido
+com uma sequência por caso, com índice único — uma história que muda de ordem
+entre duas leituras deixa de ser prova.
+
+**3. A corrida perdida virava `500`.** Na resolução simultânea, quem perde pode
+esbarrar no token de versão **ou** na restrição única do veredito, dependendo
+de quem chegou onde primeiro. O segundo caminho não era traduzido, e o cliente
+recebia "algo quebrou" quando a resposta certa é "outra pessoa concluiu antes;
+recarregue". **Só a suíte completa pegou** — isolado, o teste passava.
+
+**4. `Max` sobre enum gravado como texto ordena pelo alfabeto.** O resumo de
+alertas por caso usaria `Max(prioridade)`, e `"Media"` venceria `"Alta"` — a
+lista mostraria "Média" num caso que contém um bloqueio. É a mesma armadilha
+que a Fase 6 encontrou na ordenação da fila, e aqui foi evitada antes de virar
+defeito, com uma expressão explícita de gravidade.
+
+### Fora de escopo, deliberadamente
+
+- **Sem reabertura de caso.** Corrigir uma conclusão exige um caso novo, que a
+  timeline registra. O motivo é a Fase 9: um veredito que muda depois faria
+  backtests antigos passarem a mentir.
+- **Sem auto-agrupamento de alertas.** O ROADMAP 7.3 é explícito: nada de
+  entity resolution nem grafo nesta fase.
+- **Sem transferência pela tela.** A rota existe e é testada; o workspace ainda
+  só oferece assumir e resolver.
+- **Sem busca por texto** em casos e notas. Fase 10.
+- **Sem consulta de auditoria.** A trilha das ações de caso é gravada e
+  testada; a tela é a Fase 10.
+
+### Débito técnico não bloqueante
+
+1. **CI ainda não executado.** Cada comando roda localmente e está verde; o
+   GitHub Actions só roda após o primeiro `push`, que continua não autorizado.
+2. **A validação de marcação é uma heurística.** Uma nota legítima que contenha
+   `<b` será recusada. A alternativa — limpar em silêncio — foi julgada pior
+   numa investigação, mas o atrito existe.
+3. **A tela de casos não pagina.** A API pagina e devolve o total; a interface
+   ainda mostra só a primeira página.
+4. **Sem transferência no workspace**, como registrado acima.
+5. **Verificação visual no navegador segue pendente.** O último passo exige
+   digitar a senha de sessão no formulário, o que o agente não faz. Débito
+   herdado da Fase 2 e reduzido a esse passo na Fase 6.
+6. **Casos, notas e vereditos não expiram.** As tabelas crescem sem teto.
 
 ---
 
@@ -3664,8 +3767,8 @@ A autorização de uma fase não autoriza automaticamente a fase seguinte.
 | 3 — Motor de Risco v1 | ✅ Concluída (2026-09-04) |
 | 4 — Avaliação Síncrona e Concorrência | ✅ Concluída (2026-09-04) |
 | 5 — Backbone Assíncrono | ✅ Concluída (2026-09-04) |
-| 6 — Alertas | ⬜ Não iniciada |
-| 7 — Casos e Investigação | ⬜ Não iniciada |
+| 6 — Alertas | ✅ Concluída (2026-09-05) |
+| 7 — Casos e Investigação | ✅ Concluída (2026-09-05) |
 | 8 — Gestão e Versionamento de Regras | ⬜ Não iniciada |
 | 9 — Backtests | ⬜ Não iniciada |
 | 10 — Operação, Busca e Auditoria | ⬜ Não iniciada |
