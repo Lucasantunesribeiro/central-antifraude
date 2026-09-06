@@ -140,10 +140,15 @@ public sealed class SecurityGate3Tests : IAsyncLifetime
     [Fact]
     public async Task Nao_ha_rota_que_altere_avaliacao_regra_ou_perfil()
     {
-        // O catalogo de regras e somente leitura ate a Fase 8, que traz
-        // rascunho, backtest e publicacao. Uma rota de escrita agora seria um
-        // caminho para mudar o comportamento do motor sem nenhuma dessas
-        // protecoes (CLAUDE.md secao 23).
+        // **O que este teste afirma mudou na Fase 8, e o que sobrou e o
+        // essencial.** Ate a Fase 7 nao havia escrita nenhuma no catalogo. A
+        // Fase 8 trouxe a criacao de regra e a publicacao de versao — e
+        // `POST /api/regras` saiu desta lista por isso.
+        //
+        // O que continua valendo, e e a promessa que importa: **nao ha rota
+        // que altere uma avaliacao, uma versao de regra publicada ou uma
+        // versao de perfil publicada** (CLAUDE.md secoes 17, 23 e 24). Mudar
+        // uma regra cria uma versao nova; nunca sobrescreve a anterior.
         var token = await CenarioDeIngestao.TokenDeAsync(
             _cliente,
             _tenantA,
@@ -152,7 +157,6 @@ public sealed class SecurityGate3Tests : IAsyncLifetime
 
         var tentativas = new (HttpMethod Metodo, string Caminho)[]
         {
-            (HttpMethod.Post, "/api/regras"),
             (HttpMethod.Put, $"/api/regras/{Guid.NewGuid()}"),
             (HttpMethod.Delete, $"/api/regras/{Guid.NewGuid()}"),
             (HttpMethod.Post, "/api/regras/perfil"),

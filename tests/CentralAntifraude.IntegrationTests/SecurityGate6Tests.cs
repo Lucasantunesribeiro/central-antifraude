@@ -243,18 +243,32 @@ public sealed class SecurityGate6Tests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task O_catalogo_de_regras_continua_sem_rota_de_escrita()
+    public async Task O_analista_continua_sem_alterar_regra()
     {
-        // ROADMAP 6.7: "Analista nao altera regra". Continua valendo, e o
-        // motivo e o mesmo da Fase 3 — rascunho, backtest e publicacao sao a
-        // Fase 8, e ate la nao existe caminho para mudar o motor.
+        // ROADMAP 6.7: "Analista nao altera regra". Continua valendo — o que
+        // mudou na Fase 8 e o motivo da recusa.
+        //
+        // Ate a Fase 7 a resposta era 404, porque a rota nao existia. Agora
+        // ela existe e responde **403**: gerir regras e supervisao
+        // (`CLAUDE.md` secao 8.2). Para o analista, o efeito e o mesmo; para
+        // este teste, a diferenca importa, porque um 404 aqui passaria a
+        // significar "digitei o caminho errado" em vez de "voce nao pode".
         var token = await CenarioDeIngestao.TokenDeAsync(
             _cliente,
             _tenantA,
             PerfilDeUsuario.AnalistaDeFraude,
             Cancelamento);
 
-        foreach (var metodo in new[] { HttpMethod.Post, HttpMethod.Put, HttpMethod.Delete })
+        using var criacao = CenarioDeIdentidade.Autenticada(HttpMethod.Post, "/api/regras", token);
+        criacao.Content = JsonContent.Create(new { pontos = 100 });
+
+        using var respostaDaCriacao = await _cliente.SendAsync(criacao, Cancelamento);
+
+        Assert.Equal(HttpStatusCode.Forbidden, respostaDaCriacao.StatusCode);
+
+        // E os metodos que nao existem continuam nao existindo: nao ha
+        // `PUT /api/regras` nem `DELETE /api/regras` para ninguem.
+        foreach (var metodo in new[] { HttpMethod.Put, HttpMethod.Delete })
         {
             using var requisicao = CenarioDeIdentidade.Autenticada(metodo, "/api/regras", token);
             requisicao.Content = JsonContent.Create(new { pontos = 100 });

@@ -75,12 +75,9 @@ internal static class CenarioDeRisco
         var perfil = PerfilDeRisco.Criar(organizacao, "Perfil de teste", Referencia);
 
         var versoes = regras
-            .Select(r => VersaoDeRegra.Publicar(
-                Regra.Criar(organizacao, r.Tipo, r.Tipo.ToString(), Referencia),
-                numero: 1,
-                r.Config,
-                r.Pontos,
-                Referencia))
+            .Select(r => Regra
+                .Criar(organizacao, r.Tipo, r.Tipo.ToString(), r.Config, r.Pontos, Referencia)
+                .PublicarRascunho(ultimaPublicada: null, Referencia))
             .ToList();
 
         return VersaoDePerfilDeRisco.Publicar(
