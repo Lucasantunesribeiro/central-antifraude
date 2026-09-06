@@ -25,8 +25,9 @@ solução certificada de compliance.
 | 4 | Avaliação Síncrona e Concorrência | ✅ concluída |
 | 5 | Backbone Assíncrono | ✅ concluída |
 | 6 | Alertas Operacionais | ✅ concluída |
-| **7** | **Casos e Investigação** | ✅ **concluída** |
-| 8–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
+| 7 | Casos e Investigação | ✅ concluída |
+| **8** | **Gestão e Versionamento de Regras** | ✅ **concluída** |
+| 9–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
 
 Hoje a plataforma recebe transações de sistemas externos autenticados por
 credencial própria, registra cada tentativa **exatamente uma vez** mesmo sob
@@ -58,8 +59,13 @@ do motor — uma transação pode ter recebido `Revisar` e terminar como legíti
 isso é um falso positivo legítimo, não um defeito. Cada ação fica numa timeline
 que não se edita, e o veredito vira dado por transação.
 
-**Ainda não existe** gestão de regras, backtest nem painel operacional. Isso é
-deliberado — cada capacidade chega na fase que o `ROADMAP.md` define.
+O Supervisor administra as regras que produzem tudo isso: escreve um rascunho,
+publica uma versão imutável e ajusta os limiares. Nada disso reescreve o
+passado — uma transação avaliada em março continua explicada pela regra que
+valia em março.
+
+**Ainda não existe** backtest nem painel operacional. Isso é deliberado — cada
+capacidade chega na fase que o `ROADMAP.md` define.
 
 ---
 
@@ -168,6 +174,15 @@ consumido por orquestrador e não pela interface.
 | `POST /api/casos/{id}/alertas` | Operação | traz mais um alerta para o caso |
 | `POST /api/casos/{id}/notas` | Operação | acrescenta uma nota de investigação |
 | `POST /api/casos/{id}/resolucao` | Operação | conclui a investigação |
+| `GET /api/regras/tipos` | Supervisão | catálogo fechado, com os campos de cada tipo |
+| `GET /api/regras/gestao` | Supervisão | todas as regras, com rascunho e situação |
+| `GET /api/regras/{id}` | Supervisão | uma regra, com o histórico de versões |
+| `POST /api/regras` | Supervisão | cria uma regra como rascunho |
+| `PUT /api/regras/{id}/rascunho` | Supervisão | grava o rascunho |
+| `DELETE /api/regras/{id}/rascunho` | Supervisão | descarta o rascunho |
+| `POST /api/regras/{id}/publicacao` | Supervisão | congela o rascunho em versão |
+| `POST /api/regras/{id}/ativacao` | Supervisão | liga ou desliga a regra |
+| `POST /api/regras/perfil/limiares` | Supervisão | publica limiares novos |
 | `POST /api/ingestao/transacoes` | **`ApiKey`** | recebe uma tentativa de pagamento e devolve a decisão de risco |
 
 A ingestão pode responder **503 com `Retry-After`** quando a disputa por
@@ -360,6 +375,46 @@ Ao resolver, o veredito vira uma linha **por transação**, com restrição úni
 
 ---
 
+## As regras, e o que impede o passado de mudar
+
+Uma regra tem duas partes, e a diferença entre elas é a promessa central do
+produto:
+
+| | Muda? | O que é |
+|---|---|---|
+| A **regra** | sim | a identidade: nome, ativação e o **rascunho** em preparo |
+| A **versão publicada** | **nunca** | a configuração e o peso congelados |
+
+```text
+Rascunho  →  Publicada (v1)  →  novo rascunho  →  Publicada (v2)
+```
+
+A versão publicada não tem método de alteração, não tem propriedade gravável e
+não tem rota — e um teste de arquitetura verifica que continua assim. É ela que
+responde "por que esta decisão foi tomada naquele momento" para cada avaliação
+que a usou.
+
+**Uma única coisa muda o que o motor executa: publicar uma versão de perfil.**
+Publicar uma regra, ligá-la, desligá-la ou mexer nos limiares terminam todas
+publicando um perfil novo, na mesma transação. Assim a tela de regras é uma
+descrição fiel do que está rodando — não existe "publicado mas sem efeito".
+
+**Configurar não é programar.** O catálogo de tipos é fechado: a API recebe um
+tipo conhecido e um punhado de números nomeados, e um `switch` em C# constrói o
+contrato tipado. Campo desconhecido, campo faltando e valor fora da faixa são
+recusados com `400`. Não há expressão, SQL nem script em ponto nenhum.
+
+O formulário da tela é montado a partir de `/api/regras/tipos` — rótulo, faixa e
+valor padrão vêm do servidor, e não de uma segunda lista no frontend que sairia
+de sincronia.
+
+**Dois supervisores não se sobrescrevem.** Toda ação envia a versão que a tela
+leu; a numeração de versões é única no banco, e é ela que arbitra duas
+publicações simultâneas. Detalhes no
+[ADR 0013](docs/adr/0013-gestao-e-versionamento-de-regras.md).
+
+---
+
 ## Testes
 
 ```bash
@@ -392,6 +447,7 @@ tem — um teste de concorrência verde no SQLite não provaria nada.
 | Fila, envelope versionado, Inbox e DLQ | [ADR 0010](docs/adr/0010-backbone-assincrono.md) |
 | Alertas: fan-out por manipulador, savepoint e duas camadas | [ADR 0011](docs/adr/0011-alertas-operacionais.md) |
 | Casos: timeline append-only, resolvido imutável e lost update | [ADR 0012](docs/adr/0012-casos-e-investigacao.md) |
+| Regras: rascunho, versão imutável e sucessão do perfil | [ADR 0013](docs/adr/0013-gestao-e-versionamento-de-regras.md) |
 
 Três decisões são reforçadas em tempo de compilação por
 `src/BannedSymbols.txt`: `DateTime.UtcNow`, `DateTime.Now` e `Guid.NewGuid()`

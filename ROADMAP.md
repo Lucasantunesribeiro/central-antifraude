@@ -2356,16 +2356,123 @@ Resultado:
 
 ## 8.10 Critérios de conclusão
 
-- [ ] Draft editável.
-- [ ] Publicação imutável.
-- [ ] Rule versions navegáveis.
-- [ ] Risk profile versionado.
-- [ ] Concurrency control administrativo.
-- [ ] Auditoria de publicação.
-- [ ] Histórico antigo preservado.
-- [ ] UI de regras utilizável.
-- [ ] Security Gate 8 verde.
-- [ ] CI verde.
+- [x] Draft editável.
+- [x] Publicação imutável.
+- [x] Rule versions navegáveis.
+- [x] Risk profile versionado.
+- [x] Concurrency control administrativo.
+- [x] Auditoria de publicação.
+- [x] Histórico antigo preservado.
+- [x] UI de regras utilizável.
+- [x] Security Gate 8 verde.
+- [ ] CI verde — *pendente do primeiro `push`, que não foi autorizado. Cada passo do workflow foi executado localmente e está verde.*
+
+---
+
+## 8.11 Resultado da Fase 8
+
+**Concluída em 2026-09-06.**
+
+### Evidências
+
+| Critério | Como foi verificado |
+|---|---|
+| Build backend | `dotnet build -c Release`, **0 erros e 0 avisos** |
+| Build frontend | `tsc --noEmit`, `oxlint` e `prettier --check` limpos |
+| Draft editável | regra nasce como rascunho; salvar, descartar e publicar são operações próprias, e o rascunho não alcança o motor |
+| Publicação imutável | `VersaoDeRegra` e `VersaoDePerfilDeRisco` sem método de alteração, sem setter público e sem rota — verificado por teste de arquitetura |
+| Versões navegáveis | histórico completo por regra, da mais recente para a mais antiga, na tela e na API |
+| Perfil versionado | toda mudança que alcança o motor publica uma versão nova de perfil, na mesma transação |
+| Concorrência administrativa | token de versão na regra, token de versão do perfil e índices únicos `(regra, número)` e `(perfil, número)` |
+| Auditoria | rascunho salvo, rascunho descartado, versão publicada, ativação e **toda sucessão de perfil**, com autor |
+| **Histórico preservado** | v1 avalia → v2 é publicada → a avaliação antiga continua com score, pontos, explicação e versão de perfil originais |
+| Catálogo fechado | configuração entra como números nomeados; campo desconhecido, campo faltando e valor fora da faixa são `400` |
+| UI | catálogo em leitura para todos; rascunho, publicação, ativação e histórico para a supervisão |
+| Testes | 432 unitários + 22 arquitetura + 305 integração + 91 frontend = **850, todos verdes** |
+| Security Gate 8 | [`docs/security-gate-8.md`](docs/security-gate-8.md) |
+| Migration | `GestaoDeRegras` aplicada em PostgreSQL real; `has-pending-model-changes` sem alteração pendente |
+| Dependências | `dotnet list package --vulnerable`: nenhuma; `npm audit`: 0 |
+| Segredos | `gitleaks detect` e `detect --no-git`: nenhum |
+
+### Decisões congeladas
+
+| Decisão | Registro |
+|---|---|
+| A regra é mutável; a versão publicada, nunca | `docs/adr/0013-gestao-e-versionamento-de-regras.md` |
+| Nada muda o motor a não ser publicar uma versão de perfil | `docs/adr/0013` |
+| Um perfil publicado precisa de ao menos uma regra | `docs/adr/0013` |
+| Duas regras do mesmo tipo são permitidas; o nome é único por organização | `docs/adr/0013` |
+| Configurar é escolher números nomeados, nunca escrever lógica | `docs/adr/0013` |
+| O nome é rótulo da identidade e não entra na versão | `docs/adr/0013` |
+| Publicar rascunho igual à versão em vigor é recusado | `docs/adr/0013` |
+| Concorrência administrativa em duas camadas, mais os índices de numeração | `docs/adr/0013` |
+| Rotas de ação em vez de `PUT` no recurso | `docs/adr/0013` |
+| O rascunho mora na regra, sem tabela própria | `docs/adr/0013` |
+
+### Defeitos reais encontrados e corrigidos
+
+**1. A sucessão do perfil não deixava rastro próprio.** A trilha registrava a
+publicação na regra, mas a versão nova de perfil só era auditada quando alguém
+mexia nos limiares. Quem perguntasse "quando o perfil em vigor mudou?" não veria
+as trocas causadas por publicação ou desativação de regra — que são a maioria
+delas. Corrigido movendo a auditoria para dentro da própria sucessão, com o
+motivo em cada registro.
+
+**2. `OrderBy(Tipo)` deixou de ser uma ordem total.** Permitir duas regras do
+mesmo tipo tornou instável a ordem de execução do motor e a ordem dos sinais
+exibidos. O score não mudaria — soma não depende de ordem —, mas a promessa de
+determinismo do ADR 0008 sim: duas leituras da mesma avaliação poderiam trazer
+os sinais em ordens diferentes. Corrigido com `ThenBy(RegraId)` nos quatro
+pontos que ordenam sinais ou regras.
+
+**3. Salvar o rascunho sem tocar em nada enviava configuração vazia.** No editor
+da tela da regra, o estado local dos campos nascia vazio e só era preenchido
+depois que o contrato do tipo chegava do servidor. Quem abrisse a regra e
+clicasse em "Salvar rascunho" mandaria `{}` e receberia `400` por campo
+faltando, sem entender por quê.
+
+**4. A migration gerada pelo scaffold desativaria todas as regras
+existentes.** O EF sugeriu `ativa` com `DEFAULT FALSE`. Aplicada assim, toda
+organização já provisionada ficaria com quatro regras desligadas, e a primeira
+publicação de perfil seria recusada por não haver regra nenhuma. Reescrita com
+colunas anuláveis, `UPDATE` de preenchimento e só então `NOT NULL`.
+
+**5. O primeiro teste de concorrência não testava concorrência.** Duas
+publicações de regras diferentes disparadas com `Task.WhenAll` sobre o mesmo
+`HttpClient` executavam em sequência: as duas passavam, e a asserção "1 criado,
+1 conflito" falhava por um motivo que não era defeito do produto. Reescrito em
+dois testes — um determinístico, sobre a mesma regra, e um em paralelo real,
+afirmando o invariante em vez da divisão de respostas.
+
+### Fora de escopo, deliberadamente
+
+- **Sem backtest antes de publicar.** O `CLAUDE.md` seção 23 coloca o backtest
+  entre rascunho e publicação, e ele é a Fase 9. Até lá, o rascunho é a única
+  etapa de revisão.
+- **Sem exclusão de regra.** Desativar é o caminho: excluir apagaria a
+  referência das versões que explicam avaliações antigas.
+- **Sem aprovação de dois supervisores.** Publicar é ato de uma pessoa só; um
+  segundo par de olhos seria decisão de produto, e não está no ROADMAP.
+- **Sem comparação lado a lado entre duas versões** na tela. O histórico mostra
+  cada uma; a diferença fica por conta de quem lê.
+- **Sem tipo de regra novo.** O catálogo continua com os quatro da Fase 3 — o
+  que mudou é quem pode configurá-los.
+
+### Débito técnico não bloqueante
+
+1. **CI não executado.** Continua dependendo do primeiro `push`, que não foi
+   autorizado. Cada comando do workflow foi rodado localmente e está verde.
+2. **Uma regra desativada e reativada gera duas versões de perfil.** É ruído no
+   histórico do perfil, e é o preço de ter uma única forma de mudar o motor.
+3. **A tela de regras não pagina.** O catálogo tem quatro regras hoje; a API
+   também não pagina esta lista, e o teto natural é o número de tipos vezes o
+   número de configurações que a operação queira manter.
+4. **Versões nunca expiram.** Nem devem, porque explicam avaliações antigas —
+   mas fica registrado que `versoes_de_regra` e `versoes_de_perfil_de_risco`
+   crescem sem teto.
+5. **`Down` da migration não é reversível** depois que existir uma segunda regra
+   de um mesmo tipo na mesma organização: o índice único antigo recusaria. Está
+   documentado no próprio arquivo da migration.
 
 ---
 
@@ -3769,7 +3876,7 @@ A autorização de uma fase não autoriza automaticamente a fase seguinte.
 | 5 — Backbone Assíncrono | ✅ Concluída (2026-09-04) |
 | 6 — Alertas | ✅ Concluída (2026-09-05) |
 | 7 — Casos e Investigação | ✅ Concluída (2026-09-05) |
-| 8 — Gestão e Versionamento de Regras | ⬜ Não iniciada |
+| 8 — Gestão e Versionamento de Regras | ✅ Concluída (2026-09-06) |
 | 9 — Backtests | ⬜ Não iniciada |
 | 10 — Operação, Busca e Auditoria | ⬜ Não iniciada |
 | 11 — Segurança Aplicacional | ⬜ Não iniciada |

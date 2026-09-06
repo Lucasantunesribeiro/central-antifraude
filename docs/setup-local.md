@@ -256,6 +256,50 @@ SELECT transacao_id, resultado, registrado_em FROM resultados_de_investigacao;
 
 Nenhum dos três é defeito: são o estado do recurso recusando a operação.
 
+### Administrar uma regra (Fase 8)
+
+Entre como **Supervisor** e abra **Regras**. A lista ganha situação por regra;
+clicar no nome abre rascunho, publicação e histórico.
+
+```sql
+-- O que o motor executa AGORA: a última versão de perfil publicada.
+SELECT v.numero, v.limiar_de_revisao, v.limiar_de_bloqueio, v.publicada_em
+FROM versoes_de_perfil_de_risco v ORDER BY v.numero DESC LIMIT 1;
+
+-- As regras dessa versão, com a versão exata de cada uma.
+SELECT r.nome, vr.numero, vr.pontos, vr.configuracao
+FROM versoes_de_perfil_regras j
+JOIN versoes_de_regra vr ON vr.id = j.versoes_de_regra_id
+JOIN regras r ON r.id = vr.regra_id
+WHERE j.versao_de_perfil_de_risco_id = '<id da versao>';
+
+-- O que está escrito e ainda não vale para ninguém.
+SELECT nome, ativa, numero_da_ultima_versao, pontos_em_rascunho, configuracao_em_rascunho
+FROM regras WHERE configuracao_em_rascunho IS NOT NULL;
+
+-- Quem mudou o motor, e quando.
+SELECT ocorrido_em, operacao, detalhe FROM registros_de_auditoria
+WHERE operacao LIKE '%Regra%' OR operacao = 'VersaoDePerfilPublicada'
+ORDER BY ocorrido_em DESC;
+```
+
+**Para ver a explicabilidade histórica funcionando**, na prática:
+
+1. envie uma transação e abra o detalhe dela — anote a versão da regra em cada
+   sinal;
+2. em **Regras**, edite o rascunho de uma dessas regras e publique;
+3. reabra a mesma transação. O score, os pontos e a explicação continuam os
+   mesmos, apontando para a versão antiga.
+
+**Se uma ação devolver `409`**, os códigos desta fase são:
+
+| `codigo` | O que aconteceu |
+|---|---|
+| `versao_desatualizada` | A tela está vendo um estado antigo. Recarregue. |
+| `estado_da_regra` | A operação não faz sentido agora — sem rascunho, rascunho igual ao publicado, ou seria a última regra do perfil. |
+| `conflito_de_publicacao` | Outra pessoa publicou primeiro. |
+| `nome_em_uso` | Já existe uma regra com esse nome na organização. |
+
 ## 5. Rodar
 
 ```bash
