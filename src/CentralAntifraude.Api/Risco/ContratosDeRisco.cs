@@ -84,6 +84,7 @@ public sealed record AvaliacaoResposta(
             [.. avaliacao.Sinais
                 .OrderByDescending(s => s.Pontos)
                 .ThenBy(s => s.Tipo)
+                .ThenBy(s => s.RegraId)
                 .Select(SinalResposta.De)]);
     }
 

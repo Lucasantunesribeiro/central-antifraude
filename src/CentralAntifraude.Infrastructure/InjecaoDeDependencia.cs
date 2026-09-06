@@ -252,6 +252,7 @@ public static class InjecaoDeDependencia
 
         servicos.AddScoped<ServicoDeAvaliacaoDeRisco>();
         servicos.AddScoped<ServicoDeConsultaDeRisco>();
+        servicos.AddScoped<ServicoDeGestaoDeRegras>();
     }
 
     private static void AdicionarIngestao(IServiceCollection servicos, IConfiguration configuracao)

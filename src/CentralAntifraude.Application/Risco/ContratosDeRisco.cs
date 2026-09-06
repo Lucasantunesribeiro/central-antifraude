@@ -119,4 +119,50 @@ public interface IRepositorioDeRisco
     void Adicionar(CatalogoProvisionado catalogo);
 
     void AdicionarAvaliacao(AvaliacaoDeRisco avaliacao);
+
+    // -----------------------------------------------------------------------
+    // Administracao de regras (Fase 8)
+    //
+    // Separado da leitura operacional acima de proposito: o que a fila e o
+    // detalhe da transacao precisam e a regra VIGENTE. O que o Supervisor
+    // precisa e a regra INTEIRA — inclusive rascunho, versoes antigas e
+    // regras desativadas, que nao aparecem em lugar nenhum da operacao.
+    // -----------------------------------------------------------------------
+
+    /// <summary>Todas as regras do tenant, ativas ou nao, com rascunho.</summary>
+    Task<IReadOnlyList<Regra>> ListarTodasAsRegrasAsync(CancellationToken cancellationToken);
+
+    /// <summary>Uma regra do tenant. Nulo quando nao existe daqui.</summary>
+    Task<Regra?> BuscarRegraPorIdAsync(Guid regraId, CancellationToken cancellationToken);
+
+    /// <summary>Existe outra regra com este nome no tenant?</summary>
+    Task<bool> ExisteRegraComNomeAsync(
+        string nome,
+        Guid exceto,
+        CancellationToken cancellationToken);
+
+    /// <summary>Historico completo de versoes de uma regra, da mais recente para a mais antiga.</summary>
+    Task<IReadOnlyList<VersaoDeRegra>> ListarVersoesDaRegraAsync(
+        Guid regraId,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Ultima versao publicada de cada regra informada.
+    ///
+    /// Uma consulta para o conjunto inteiro: compor a proxima versao do perfil
+    /// buscando versao por regra seria N+1 numa operacao que ja e rara mas que
+    /// nao tem motivo para ser lenta.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, VersaoDeRegra>> BuscarUltimasVersoesAsync(
+        IReadOnlyCollection<Guid> regrasIds,
+        CancellationToken cancellationToken);
+
+    /// <summary>Perfil de risco do tenant. Nulo se a organizacao nunca foi provisionada.</summary>
+    Task<PerfilDeRisco?> BuscarPerfilAsync(CancellationToken cancellationToken);
+
+    void AdicionarRegra(Regra regra);
+
+    void AdicionarVersaoDeRegra(VersaoDeRegra versao);
+
+    void AdicionarVersaoDePerfil(VersaoDePerfilDeRisco versao);
 }

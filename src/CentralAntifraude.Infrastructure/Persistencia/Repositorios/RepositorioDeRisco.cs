@@ -88,7 +88,10 @@ public sealed class RepositorioDeRisco : IRepositorioDeRisco
                 // depois pelo tipo. Duas leituras do mesmo alerta precisam
                 // mostrar os sinais na mesma ordem.
                 IReadOnlyList<SinalDeRisco> (grupo) =>
-                    [.. grupo.OrderByDescending(s => s.Pontos).ThenBy(s => s.Tipo)]);
+                    [.. grupo
+                        .OrderByDescending(s => s.Pontos)
+                        .ThenBy(s => s.Tipo)
+                        .ThenBy(s => s.RegraId)]);
     }
 
     public async Task<IReadOnlyList<(Regra Regra, VersaoDeRegra Versao)>> ListarRegrasVigentesAsync(
@@ -108,9 +111,11 @@ public sealed class RepositorioDeRisco : IRepositorioDeRisco
             .Where(r => regrasIds.Contains(r.Id))
             .ToListAsync(cancellationToken);
 
-        // Ordem estavel por tipo, igual a que o motor usa para executar.
+        // Ordem estavel por tipo e regra, igual a que o motor usa para
+        // executar.
         return perfil.VersoesDeRegra
             .OrderBy(v => v.Tipo)
+            .ThenBy(v => v.RegraId)
             .Join(regras, versao => versao.RegraId, regra => regra.Id, (versao, regra) => (regra, versao))
             .ToList();
     }
@@ -127,6 +132,80 @@ public sealed class RepositorioDeRisco : IRepositorioDeRisco
 
     public void AdicionarAvaliacao(AvaliacaoDeRisco avaliacao) =>
         _contexto.AvaliacoesDeRisco.Add(avaliacao);
+
+    // -----------------------------------------------------------------------
+    // Administracao de regras (Fase 8)
+    //
+    // Tudo aqui e RASTREADO de proposito, ao contrario das leituras
+    // operacionais acima. Duas razoes:
+    //
+    // 1. a regra e alterada em seguida — rascunho, publicacao, ativacao;
+    // 2. as versoes de regra entram na proxima versao de perfil. Traze-las
+    //    com `AsNoTracking` faria o EF encontrar entidades com chave
+    //    preenchida fora do change tracker e emitir `UPDATE` numa tabela que
+    //    o produto declara imutavel.
+    // -----------------------------------------------------------------------
+
+    public async Task<IReadOnlyList<Regra>> ListarTodasAsRegrasAsync(
+        CancellationToken cancellationToken) =>
+        await _contexto.Regras.ToListAsync(cancellationToken);
+
+    public Task<Regra?> BuscarRegraPorIdAsync(Guid regraId, CancellationToken cancellationToken) =>
+        _contexto.Regras.FirstOrDefaultAsync(r => r.Id == regraId, cancellationToken);
+
+    public Task<bool> ExisteRegraComNomeAsync(
+        string nome,
+        Guid exceto,
+        CancellationToken cancellationToken) =>
+        _contexto.Regras
+            .AsNoTracking()
+            .AnyAsync(r => r.Nome == nome && r.Id != exceto, cancellationToken);
+
+    public async Task<IReadOnlyList<VersaoDeRegra>> ListarVersoesDaRegraAsync(
+        Guid regraId,
+        CancellationToken cancellationToken) =>
+        await _contexto.VersoesDeRegra
+            .Where(v => v.RegraId == regraId)
+            // Da mais recente para a mais antiga: quem abre o historico quer
+            // ver primeiro o que esta valendo.
+            .OrderByDescending(v => v.Numero)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyDictionary<Guid, VersaoDeRegra>> BuscarUltimasVersoesAsync(
+        IReadOnlyCollection<Guid> regrasIds,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(regrasIds);
+
+        if (regrasIds.Count == 0)
+        {
+            return new Dictionary<Guid, VersaoDeRegra>();
+        }
+
+        // Subconsulta correlacionada em vez de carregar o historico inteiro:
+        // uma regra reconfigurada dezenas de vezes nao pode fazer a
+        // publicacao de um perfil crescer com o passado.
+        var versoes = await _contexto.VersoesDeRegra
+            .Where(v => regrasIds.Contains(v.RegraId))
+            .Where(v => v.Numero == _contexto.VersoesDeRegra
+                .Where(outra => outra.RegraId == v.RegraId)
+                .Max(outra => outra.Numero))
+            .ToListAsync(cancellationToken);
+
+        return versoes.ToDictionary(v => v.RegraId);
+    }
+
+    public Task<PerfilDeRisco?> BuscarPerfilAsync(CancellationToken cancellationToken) =>
+        _contexto.PerfisDeRisco
+            .OrderBy(p => p.CriadoEm)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public void AdicionarRegra(Regra regra) => _contexto.Regras.Add(regra);
+
+    public void AdicionarVersaoDeRegra(VersaoDeRegra versao) => _contexto.VersoesDeRegra.Add(versao);
+
+    public void AdicionarVersaoDePerfil(VersaoDePerfilDeRisco versao) =>
+        _contexto.VersoesDePerfilDeRisco.Add(versao);
 }
 
 /// <summary>

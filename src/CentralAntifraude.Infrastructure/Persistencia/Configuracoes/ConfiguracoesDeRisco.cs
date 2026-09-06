@@ -80,6 +80,9 @@ public static class SerializadorDeConfiguracaoDeRegra
 
 public sealed class ConfiguracaoDeRegraEntidade : IEntityTypeConfiguration<Regra>
 {
+    /// <summary>Nome unico por organizacao — citado no diagnostico de conflito.</summary>
+    public const string RestricaoDeNomeUnico = "ix_regras_organizacao_nome";
+
     public void Configure(EntityTypeBuilder<Regra> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -90,16 +93,39 @@ public sealed class ConfiguracaoDeRegraEntidade : IEntityTypeConfiguration<Regra
         builder.Property(r => r.OrganizacaoId).IsRequired();
         builder.Property(r => r.Nome).HasMaxLength(Regra.TamanhoMaximoDoNome).IsRequired();
         builder.Property(r => r.CriadaEm).IsRequired();
+        builder.Property(r => r.AtualizadaEm).IsRequired();
+        builder.Property(r => r.Ativa).IsRequired();
+        builder.Property(r => r.NumeroDaUltimaVersao).IsRequired();
 
         builder.Property(r => r.Tipo)
             .HasConversion<string>()
             .HasMaxLength(60)
             .IsRequired();
 
-        // Uma regra por tipo, por organizacao. Duas regras do mesmo tipo no
-        // mesmo tenant somariam pontos pelo mesmo motivo - e a Fase 8 teria
-        // que explicar ao Supervisor qual das duas vale.
-        builder.HasIndex(r => new { r.OrganizacaoId, r.Tipo }).IsUnique();
+        // O rascunho mora na regra, e nao numa tabela propria: ele e um
+        // estado da regra — no maximo um por vez — e nao uma entidade com
+        // vida propria. Uma tabela separada exigiria join em toda leitura
+        // administrativa para responder "tem rascunho?".
+        builder.Property(r => r.ConfiguracaoEmRascunho)
+            .HasConversion(
+                configuracao => SerializadorDeConfiguracaoDeRegra.Serializar(configuracao!),
+                json => SerializadorDeConfiguracaoDeRegra.Desserializar(json))
+            .HasColumnType("jsonb");
+
+        builder.Property(r => r.PontosEmRascunho);
+
+        // Token de concorrencia administrativa (ROADMAP 8.6). O UPDATE sai
+        // com `WHERE versao = @lida`: dois supervisores editando a mesma
+        // regra ao mesmo tempo nao se sobrescrevem em silencio.
+        builder.Property(r => r.Versao).IsRequired().IsConcurrencyToken();
+
+        // Nome unico por organizacao. Desde a Fase 8 o tipo ja nao distingue
+        // duas regras — o Supervisor pode ter duas velocidades com janelas
+        // diferentes — entao o nome e o que resta para a lista, a auditoria e
+        // a explicacao de um sinal nao ficarem ambiguas.
+        builder.HasIndex(r => new { r.OrganizacaoId, r.Nome })
+            .IsUnique()
+            .HasDatabaseName(RestricaoDeNomeUnico);
 
         builder.HasOne<Organizacao>()
             .WithMany()
@@ -110,6 +136,9 @@ public sealed class ConfiguracaoDeRegraEntidade : IEntityTypeConfiguration<Regra
 
 public sealed class ConfiguracaoDeVersaoDeRegra : IEntityTypeConfiguration<VersaoDeRegra>
 {
+    /// <summary>Um numero de versao por regra — citado no diagnostico de conflito.</summary>
+    public const string RestricaoDeNumeroUnico = "ix_versoes_de_regra_regra_numero";
+
     public void Configure(EntityTypeBuilder<VersaoDeRegra> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -138,7 +167,13 @@ public sealed class ConfiguracaoDeVersaoDeRegra : IEntityTypeConfiguration<Versa
         // Uma versao publicada nao muda (CLAUDE.md secao 23). O numero e
         // unico dentro da regra: publicar duas vezes a "versao 2" tornaria a
         // referencia historica ambigua.
-        builder.HasIndex(v => new { v.RegraId, v.Numero }).IsUnique();
+        //
+        // Desde a Fase 8 este indice tambem arbitra concorrencia: duas
+        // publicacoes simultaneas da mesma regra calculam o mesmo numero, e
+        // quem perde esbarra aqui.
+        builder.HasIndex(v => new { v.RegraId, v.Numero })
+            .IsUnique()
+            .HasDatabaseName(RestricaoDeNumeroUnico);
 
         builder.HasOne<Regra>()
             .WithMany()
@@ -171,6 +206,9 @@ public sealed class ConfiguracaoDePerfilDeRisco : IEntityTypeConfiguration<Perfi
 
 public sealed class ConfiguracaoDeVersaoDePerfil : IEntityTypeConfiguration<VersaoDePerfilDeRisco>
 {
+    /// <summary>Um numero de versao por perfil — citado no diagnostico de conflito.</summary>
+    public const string RestricaoDeVersaoDePerfilUnica = "ix_versoes_de_perfil_perfil_numero";
+
     public void Configure(EntityTypeBuilder<VersaoDePerfilDeRisco> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -192,7 +230,11 @@ public sealed class ConfiguracaoDeVersaoDePerfil : IEntityTypeConfiguration<Vers
             .WithMany()
             .UsingEntity(juncao => juncao.ToTable("versoes_de_perfil_regras"));
 
-        builder.HasIndex(v => new { v.PerfilId, v.Numero }).IsUnique();
+        // Mesma funcao dupla do indice de versao de regra: garante a
+        // referencia historica e arbitra duas publicacoes simultaneas.
+        builder.HasIndex(v => new { v.PerfilId, v.Numero })
+            .IsUnique()
+            .HasDatabaseName(RestricaoDeVersaoDePerfilUnica);
 
         // Busca da versao vigente: a mais recente do tenant.
         builder.HasIndex(v => new { v.OrganizacaoId, v.PublicadaEm });
