@@ -27,6 +27,7 @@ const ALERTA_ALTO: Alerta = {
   score: 75,
   prioridade: 'Alta',
   status: 'Aberto',
+  casoId: null,
   avaliadaEm: '2026-09-05T10:00:00Z',
   criadoEm: '2026-09-05T10:00:02Z',
   versaoDaPolitica: 1,

@@ -2,6 +2,8 @@ import { Route, Routes } from 'react-router';
 import { LayoutDoApp } from '../layout/LayoutDoApp';
 import { PaginaDeLogin } from '../paginas/PaginaDeLogin';
 import { PaginaDeAlertas } from '../paginas/PaginaDeAlertas';
+import { PaginaDeCasos } from '../paginas/PaginaDeCasos';
+import { PaginaDoCaso } from '../paginas/PaginaDoCaso';
 import { PaginaDeIntegracoes } from '../paginas/PaginaDeIntegracoes';
 import { PaginaDeRegras } from '../paginas/PaginaDeRegras';
 import { PaginaDeTransacao } from '../paginas/PaginaDeTransacao';
@@ -29,6 +31,10 @@ export function Rotas() {
               inclusive o Auditor: consultar decisoes e o trabalho dele. Agir
               sobre um alerta e acao de caso, e casos sao a Fase 7. */}
           <Route path="alertas" element={<PaginaDeAlertas />} />
+          {/* Casos sao leitura para todo perfil, inclusive o Auditor. Agir
+              sobre um caso e outra coisa, e quem recusa e a API. */}
+          <Route path="casos" element={<PaginaDeCasos />} />
+          <Route path="casos/:id" element={<PaginaDoCaso />} />
           {/* O catalogo de regras e leitura para todos os perfis: o
               analista precisa dele para entender o proprio score. A
               gestao das regras chega na Fase 8, com o Supervisor. */}

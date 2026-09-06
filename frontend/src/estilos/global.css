@@ -724,3 +724,208 @@ a.botao {
   color: var(--cor-texto-suave);
   font-variant-numeric: tabular-nums;
 }
+
+/* ------------------------------------------------------- investigacao -- */
+
+/*
+  O workspace do caso: duas colunas em tela larga, uma so quando nao cabe.
+  Notas e historico lado a lado porque o analista le um enquanto escreve o
+  outro.
+*/
+
+.colunas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--espaco-8);
+  align-items: start;
+}
+
+@media (max-width: 1000px) {
+  .colunas {
+    grid-template-columns: 1fr;
+  }
+}
+
+.campo--caixa {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--espaco-2);
+}
+
+.campo__ajuda {
+  margin: var(--espaco-2) 0 0;
+  font-size: 0.8rem;
+  color: var(--cor-texto-suave);
+}
+
+.vazio {
+  color: var(--cor-texto-suave);
+  font-style: italic;
+}
+
+/* Fora da tela, mas lido por leitor de tela: a coluna de selecao precisa de
+   um nome mesmo sem mostrar um. */
+.visualmente-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* A cor nunca carrega sozinha: todo selo traz o texto junto. */
+
+.selo--caso-novo {
+  color: var(--cor-acento);
+}
+
+.selo--caso-emanalise {
+  color: #e0b45a;
+}
+
+.selo--caso-resolvido {
+  color: var(--cor-texto-suave);
+}
+
+.selo--resultado-fraudeconfirmada {
+  color: var(--cor-falha);
+}
+
+.selo--resultado-legitima {
+  color: var(--cor-ok);
+}
+
+.selo--resultado-inconclusiva {
+  color: var(--cor-texto-suave);
+}
+
+.selo--alerta-aberto {
+  color: var(--cor-texto-suave);
+}
+
+.barra-de-selecao {
+  align-items: flex-end;
+  padding: var(--espaco-3) var(--espaco-4);
+  margin-bottom: var(--espaco-4);
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-acento);
+  border-radius: var(--raio);
+}
+
+.barra-de-selecao__contagem {
+  font-weight: 600;
+}
+
+.barra-de-selecao .campo {
+  flex: 1;
+  min-width: 16rem;
+}
+
+.barra-de-selecao input[type='text'] {
+  width: 100%;
+  padding: var(--espaco-2);
+  background: var(--cor-fundo);
+  color: var(--cor-texto);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  font: inherit;
+}
+
+.acoes--caso {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--espaco-4);
+  margin: var(--espaco-4) 0 var(--espaco-6);
+}
+
+.nota__formulario {
+  margin-bottom: var(--espaco-6);
+}
+
+.nota__formulario textarea {
+  width: 100%;
+  padding: var(--espaco-2);
+  background: var(--cor-superficie);
+  color: var(--cor-texto);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  font: inherit;
+  resize: vertical;
+}
+
+.notas {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+}
+
+.nota {
+  padding: var(--espaco-3);
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+}
+
+.nota__cabecalho {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--espaco-4);
+  font-size: 0.8rem;
+  color: var(--cor-texto-suave);
+}
+
+.nota__autor {
+  font-weight: 600;
+  color: var(--cor-texto);
+}
+
+/* `pre-wrap` porque a nota tem paragrafos e eles importam. O conteudo e
+   texto: o React escapa por padrao, e e essa a defesa contra XSS. */
+.nota__conteudo {
+  margin: var(--espaco-2) 0 0;
+  white-space: pre-wrap;
+}
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 var(--espaco-4);
+  border-left: 2px solid var(--cor-borda);
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+}
+
+.timeline__item {
+  position: relative;
+}
+
+.timeline__item::before {
+  content: '';
+  position: absolute;
+  left: calc(-1 * var(--espaco-4) - 5px);
+  top: 0.4rem;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cor-borda);
+}
+
+.timeline__item--Resolvido::before {
+  background: var(--cor-ok);
+}
+
+.timeline__descricao {
+  margin: 0;
+}
+
+.timeline__origem {
+  margin: var(--espaco-1) 0 0;
+  font-size: 0.8rem;
+  color: var(--cor-texto-suave);
+}

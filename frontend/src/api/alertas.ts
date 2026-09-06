@@ -13,8 +13,13 @@ import type { Decisao } from './risco';
 /** Os dois níveis da política. Espelha o enum fechado do backend. */
 export type PrioridadeDeAlerta = 'Media' | 'Alta';
 
-/** Situação do alerta. Um valor só hoje; a Fase 7 acrescenta os outros. */
-export type StatusDoAlerta = 'Aberto';
+/**
+ * Situação do alerta.
+ *
+ * Os três respondem a mesma pergunta do ponto de vista de quem trabalha a
+ * fila: **isto ainda é trabalho meu?** Quem move o alerta é sempre o caso.
+ */
+export type StatusDoAlerta = 'Aberto' | 'EmCaso' | 'Encerrado';
 
 export const ROTULO_DA_PRIORIDADE: Record<PrioridadeDeAlerta, string> = {
   Alta: 'Alta',
@@ -22,8 +27,12 @@ export const ROTULO_DA_PRIORIDADE: Record<PrioridadeDeAlerta, string> = {
 };
 
 export const ROTULO_DO_STATUS: Record<StatusDoAlerta, string> = {
-  Aberto: 'Aberto',
+  Aberto: 'Na fila',
+  EmCaso: 'Em investigação',
+  Encerrado: 'Encerrado',
 };
+
+export const SITUACOES: readonly StatusDoAlerta[] = ['Aberto', 'EmCaso', 'Encerrado'];
 
 /** Ordem de gravidade, para a leitura da tela. Não é regra de negócio. */
 export const PRIORIDADES: readonly PrioridadeDeAlerta[] = ['Alta', 'Media'];
@@ -43,6 +52,8 @@ export interface Alerta {
   score: number;
   prioridade: PrioridadeDeAlerta;
   status: StatusDoAlerta;
+  /** A investigação que levou este alerta, quando existe. */
+  casoId: string | null;
   /** Quando o motor decidiu. */
   avaliadaEm: string;
   /** Quando o alerta entrou na fila. A diferença é a latência do backbone. */
@@ -68,6 +79,7 @@ export type CampoDeOrdenacao = 'criadoEm' | 'score' | 'prioridade';
 export interface FiltrosDaFila {
   decisao: Decisao | '';
   prioridade: PrioridadeDeAlerta | '';
+  status: StatusDoAlerta | '';
   scoreMinimo: string;
   ordenarPor: CampoDeOrdenacao;
   direcao: 'asc' | 'desc';
@@ -77,6 +89,13 @@ export interface FiltrosDaFila {
 export const FILTROS_INICIAIS: FiltrosDaFila = {
   decisao: '',
   prioridade: '',
+  /**
+   * A fila abre no que ainda é trabalho.
+   *
+   * Sem isto, alertas já investigados ficariam na tela para sempre e ela
+   * deixaria de dizer o que precisa de gente — viraria histórico.
+   */
+  status: 'Aberto',
   scoreMinimo: '',
   ordenarPor: 'criadoEm',
   direcao: 'desc',
@@ -105,6 +124,10 @@ export function consultaDaFila(filtros: FiltrosDaFila): string {
 
   if (filtros.prioridade) {
     parametros.set('prioridade', filtros.prioridade);
+  }
+
+  if (filtros.status) {
+    parametros.set('status', filtros.status);
   }
 
   if (filtros.scoreMinimo.trim() !== '') {
