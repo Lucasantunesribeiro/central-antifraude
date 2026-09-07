@@ -19,6 +19,7 @@ const NAVEGACAO: readonly {
     rotulo: 'Backtests',
     perfis: ['Administrador', 'SupervisorDeFraude'],
   },
+  { para: '/auditoria', rotulo: 'Auditoria', perfis: ['Administrador', 'Auditor'] },
   { para: '/integracoes', rotulo: 'Integrações', perfis: ['Administrador'] },
   { para: '/usuarios', rotulo: 'Usuários', perfis: ['Administrador'] },
 ];

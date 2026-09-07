@@ -76,6 +76,26 @@ export interface TransacaoDaLista {
   decisao: Decisao | null;
 }
 
+/** Um alerta gerado pela transação, com o caso que o recolheu. */
+export interface AlertaDaTransacao {
+  alertaId: string;
+  prioridade: string;
+  status: string;
+  criadoEm: string;
+  casoId: string | null;
+  tituloDoCaso: string | null;
+  statusDoCaso: string | null;
+}
+
+/** A conclusão humana sobre a transação. Pode contradizer a decisão do motor. */
+export type Veredito = 'FraudeConfirmada' | 'Legitima' | 'Inconclusiva';
+
+export const ROTULO_DO_VEREDITO: Record<string, string> = {
+  FraudeConfirmada: 'Fraude confirmada',
+  Legitima: 'Legítima',
+  Inconclusiva: 'Inconclusiva',
+};
+
 export interface TransacaoDetalhada {
   id: string;
   identificadorExterno: string;
@@ -87,7 +107,60 @@ export interface TransacaoDetalhada {
   referenciaDoInstrumento: string;
   fingerprintDoDispositivo: string | null;
   paisDeOrigem: string | null;
+  /**
+   * Número de protocolo da requisição que registrou a transação.
+   *
+   * É o que o suporte usa para achar a linha exata no log do servidor. Nulo
+   * nas transações gravadas antes da Fase 10 — inventar um valor para elas
+   * seria pior do que admitir a ausência.
+   */
+  idDeCorrelacao: string | null;
   avaliacao: Avaliacao | null;
+  alertas: AlertaDaTransacao[];
+  veredito: Veredito | null;
+  casoDoVeredito: string | null;
+  vereditoRegistradoEm: string | null;
+}
+
+/**
+ * O que o console de transações aceita filtrar.
+ *
+ * Espelha o contrato do backend, e nada mais: a tela não inventa filtro que o
+ * servidor não conhece, porque um filtro desconhecido é recusado com `400` em
+ * vez de ignorado (CLAUDE.md seção 81).
+ */
+export interface FiltroDeTransacoes {
+  busca?: string;
+  decisao?: string;
+  tipoDeRegra?: string;
+  scoreMinimo?: string;
+  scoreMaximo?: string;
+  de?: string;
+  ate?: string;
+}
+
+/** Monta a query string do console, omitindo o que está em branco. */
+export function consultaDeTransacoes(
+  filtro: FiltroDeTransacoes,
+  pagina: number,
+  tamanho: number,
+  ordenarPor: string,
+  direcao: 'asc' | 'desc',
+): string {
+  const parametros = new URLSearchParams();
+
+  for (const [chave, valor] of Object.entries(filtro)) {
+    if (valor !== undefined && valor !== '') {
+      parametros.set(chave, valor);
+    }
+  }
+
+  parametros.set('pagina', String(pagina));
+  parametros.set('tamanho', String(tamanho));
+  parametros.set('ordenarPor', ordenarPor);
+  parametros.set('direcao', direcao);
+
+  return parametros.toString();
 }
 
 export interface Regra {

@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router';
 import { LayoutDoApp } from '../layout/LayoutDoApp';
 import { PaginaDeLogin } from '../paginas/PaginaDeLogin';
 import { PaginaDeAlertas } from '../paginas/PaginaDeAlertas';
+import { PaginaDeAuditoria } from '../paginas/PaginaDeAuditoria';
 import { PaginaDeBacktests } from '../paginas/PaginaDeBacktests';
 import { PaginaDoBacktest } from '../paginas/PaginaDoBacktest';
 import { PaginaDeCasos } from '../paginas/PaginaDeCasos';
@@ -57,6 +58,14 @@ export function Rotas() {
               material do Auditor sao as decisoes reais e a trilha. */}
           <Route path="backtests" element={<PaginaDeBacktests />} />
           <Route path="backtests/:id" element={<PaginaDoBacktest />} />
+        </Route>
+
+        {/* A trilha e um controle SOBRE quem opera: dar a quem e auditado o
+            poder de varrer o proprio rastro enfraquece o unico registro que
+            responde "quem fez o que e quando". O backend recusa os outros
+            perfis com 403. */}
+        <Route element={<RotaProtegida perfis={['Administrador', 'Auditor']} />}>
+          <Route path="auditoria" element={<PaginaDeAuditoria />} />
         </Route>
 
         {/* A restricao por perfil e repetida no backend, que e quem decide. */}
