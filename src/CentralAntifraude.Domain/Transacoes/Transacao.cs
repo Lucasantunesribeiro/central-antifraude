@@ -29,6 +29,9 @@ public sealed class Transacao
     public const int TamanhoMaximoDeIdentificadorExterno = 100;
     public const int TamanhoMaximoDeFingerprint = 128;
 
+    /// <summary>Mesmo teto do identificador de correlacao da Outbox.</summary>
+    public const int TamanhoMaximoDeCorrelacao = 64;
+
     private Transacao(
         Guid id,
         Guid organizacaoId,
@@ -43,7 +46,8 @@ public sealed class Transacao
         string? fingerprintDoIp,
         string? paisDeOrigem,
         string chaveDeIdempotencia,
-        string fingerprintDoPayload)
+        string fingerprintDoPayload,
+        string? idDeCorrelacao)
     {
         Id = id;
         OrganizacaoId = organizacaoId;
@@ -59,6 +63,7 @@ public sealed class Transacao
         PaisDeOrigem = paisDeOrigem;
         ChaveDeIdempotencia = chaveDeIdempotencia;
         FingerprintDoPayload = fingerprintDoPayload;
+        IdDeCorrelacao = idDeCorrelacao;
     }
 
     // Construtor usado pelo EF Core na materializacao.
@@ -137,6 +142,26 @@ public sealed class Transacao
     /// </summary>
     public string FingerprintDoPayload { get; private set; }
 
+    /// <summary>
+    /// Identificador da requisicao que registrou esta transacao.
+    ///
+    /// **Fecha o fio da correlacao pela ponta que faltava** (CLAUDE.md secao
+    /// 69). O identificador ja atravessava HTTP, Outbox, mensagem, worker e
+    /// efeito; o que nao havia era como partir de uma transacao na tela e
+    /// chegar a linha de log da requisicao que a criou. Numa investigacao de
+    /// suporte, o caminho util e exatamente esse.
+    ///
+    /// Anulavel: as transacoes gravadas antes da Fase 10 nao o tem, e inventar
+    /// um valor para elas seria pior do que admitir a ausencia.
+    ///
+    /// **Nao entra no fingerprint do payload.** Ele identifica a requisicao,
+    /// e nao o conteudo; incluir faria dois envios identicos parecerem
+    /// diferentes e quebraria a idempotencia. Num replay, a transacao original
+    /// e devolvida com a correlacao original — que e o correto: e ela que
+    /// aponta para a requisicao que de fato criou o registro.
+    /// </summary>
+    public string? IdDeCorrelacao { get; private set; }
+
     public static Transacao Registrar(
         Guid organizacaoId,
         Guid integracaoId,
@@ -150,7 +175,8 @@ public sealed class Transacao
         string? fingerprintDoIp,
         string? paisDeOrigem,
         string chaveDeIdempotencia,
-        string fingerprintDoPayload)
+        string fingerprintDoPayload,
+        string? idDeCorrelacao)
     {
         if (organizacaoId == Guid.Empty || integracaoId == Guid.Empty)
         {
@@ -191,7 +217,20 @@ public sealed class Transacao
             fingerprintDoIp,
             paisDeOrigem?.Trim().ToUpperInvariant(),
             chaveDeIdempotencia.Trim(),
-            fingerprintDoPayload);
+            fingerprintDoPayload,
+            Encurtar(idDeCorrelacao, TamanhoMaximoDeCorrelacao));
+    }
+
+    private static string? Encurtar(string? valor, int tamanhoMaximo)
+    {
+        if (string.IsNullOrWhiteSpace(valor))
+        {
+            return null;
+        }
+
+        var limpo = valor.Trim();
+
+        return limpo.Length <= tamanhoMaximo ? limpo : limpo[..tamanhoMaximo];
     }
 
     private static void ExigirTexto(string valor, string campo, int tamanhoMaximo)

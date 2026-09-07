@@ -98,7 +98,24 @@ public interface IRepositorioDeTransacoes
         string identificadorExterno,
         CancellationToken cancellationToken);
 
-    Task<Pagina<Transacao>> ListarAsync(
+    /// <summary>
+    /// Pagina do console de transacoes, ja com a avaliacao de cada linha.
+    ///
+    /// **Uma consulta, e nao duas.** Ate a Fase 9 a listagem trazia as
+    /// transacoes e depois buscava as avaliacoes em lote — o que bastava
+    /// enquanto nao havia filtro. Filtrar por score, decisao ou tipo de sinal
+    /// exige a juncao, e mante-la separada obrigaria a paginar sobre um
+    /// conjunto que ainda seria filtrado depois: o total ficaria errado e
+    /// paginas viriam pela metade.
+    ///
+    /// A juncao e **a esquerda** quando o filtro nao depende da avaliacao:
+    /// transacoes registradas na Fase 2 existem sem ela, e some-las da lista
+    /// esconderia dado real. Quando o filtro fala de score, decisao ou sinal,
+    /// a juncao passa a ser interna — filtrar por score exclui, por definicao,
+    /// o que nao tem score.
+    /// </summary>
+    Task<Pagina<Risco.TransacaoAvaliada>> ListarComAvaliacaoAsync(
+        Transacoes.FiltroDeTransacoes filtro,
         ParametrosDePaginacao paginacao,
         ParametrosDeOrdenacao ordenacao,
         CancellationToken cancellationToken);

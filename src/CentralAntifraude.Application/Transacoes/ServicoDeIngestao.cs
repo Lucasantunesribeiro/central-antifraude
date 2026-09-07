@@ -254,5 +254,10 @@ public sealed class ServicoDeIngestao
             _fingerprintDeIp.Derivar(conteudo.EnderecoIp),
             conteudo.PaisDeOrigem,
             chave,
-            fingerprint);
+            fingerprint,
+            // A correlacao da requisicao fica na transacao (CLAUDE.md secao
+            // 69). Ela nao entra no fingerprint do payload: identifica a
+            // requisicao, e nao o conteudo — incluir faria dois envios
+            // identicos parecerem diferentes.
+            _correlacao.IdDeCorrelacao);
 }

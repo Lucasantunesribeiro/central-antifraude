@@ -1,6 +1,8 @@
 using CentralAntifraude.Application.Comum;
 using CentralAntifraude.Application.Erros;
 using CentralAntifraude.Application.Integracoes;
+using CentralAntifraude.Application.Operacao;
+using CentralAntifraude.Application.Transacoes;
 using CentralAntifraude.Domain.Risco;
 using CentralAntifraude.Domain.Transacoes;
 
@@ -8,6 +10,17 @@ namespace CentralAntifraude.Application.Risco;
 
 /// <summary>Uma transacao com a avaliacao que ela recebeu.</summary>
 public sealed record TransacaoAvaliada(Transacao Transacao, AvaliacaoDeRisco? Avaliacao);
+
+/// <summary>
+/// A transacao com tudo o que a tela de detalhe precisa: a avaliacao que
+/// explica a decisao e o que a operacao fez depois.
+///
+/// As duas metades respondem perguntas diferentes — "por que esta decisao" e
+/// "alguem ja olhou isto" — e o ROADMAP 10.3 pede as duas na mesma tela.
+/// </summary>
+public sealed record TransacaoCompleta(
+    TransacaoAvaliada Avaliada,
+    ContextoOperacionalDaTransacao Contexto);
 
 /// <summary>
 /// Leitura das telas operacionais.
@@ -26,32 +39,24 @@ public sealed class ServicoDeConsultaDeRisco
 {
     private readonly IRepositorioDeTransacoes _transacoes;
     private readonly IRepositorioDeRisco _risco;
+    private readonly IRepositorioDeOperacao _operacao;
 
-    public ServicoDeConsultaDeRisco(IRepositorioDeTransacoes transacoes, IRepositorioDeRisco risco)
+    public ServicoDeConsultaDeRisco(
+        IRepositorioDeTransacoes transacoes,
+        IRepositorioDeRisco risco,
+        IRepositorioDeOperacao operacao)
     {
         _transacoes = transacoes;
         _risco = risco;
+        _operacao = operacao;
     }
 
-    public async Task<Pagina<TransacaoAvaliada>> ListarTransacoesAsync(
+    public Task<Pagina<TransacaoAvaliada>> ListarTransacoesAsync(
+        FiltroDeTransacoes filtro,
         ParametrosDePaginacao paginacao,
         ParametrosDeOrdenacao ordenacao,
-        CancellationToken cancellationToken)
-    {
-        var pagina = await _transacoes.ListarAsync(paginacao, ordenacao, cancellationToken);
-
-        var avaliacoes = await _risco.BuscarAvaliacoesPorTransacoesAsync(
-            pagina.Itens.Select(t => t.Id).ToList(),
-            cancellationToken);
-
-        var itens = pagina.Itens
-            .Select(t => new TransacaoAvaliada(
-                t,
-                avaliacoes.TryGetValue(t.Id, out var avaliacao) ? avaliacao : null))
-            .ToList();
-
-        return new Pagina<TransacaoAvaliada>(itens, paginacao, pagina.TotalDeItens);
-    }
+        CancellationToken cancellationToken) =>
+        _transacoes.ListarComAvaliacaoAsync(filtro, paginacao, ordenacao, cancellationToken);
 
     /// <summary>
     /// Detalhe de uma transacao.
@@ -60,7 +65,7 @@ public sealed class ServicoDeConsultaDeRisco
     /// devolve e a resposta e 404, sem revelar que o identificador e valido em
     /// outro lugar (CLAUDE.md secao 52).
     /// </summary>
-    public async Task<TransacaoAvaliada> ObterTransacaoAsync(
+    public async Task<TransacaoCompleta> ObterTransacaoAsync(
         Guid transacaoId,
         CancellationToken cancellationToken)
     {
@@ -69,7 +74,14 @@ public sealed class ServicoDeConsultaDeRisco
 
         var avaliacao = await _risco.BuscarAvaliacaoPorTransacaoAsync(transacaoId, cancellationToken);
 
-        return new TransacaoAvaliada(transacao, avaliacao);
+        // O contexto operacional so e carregado depois de a transacao existir
+        // no tenant. Carrega-lo antes daria a um identificador de outra
+        // organizacao uma consulta a mais para produzir o mesmo 404.
+        var contexto = await _operacao.CarregarContextoDaTransacaoAsync(
+            transacaoId,
+            cancellationToken);
+
+        return new TransacaoCompleta(new TransacaoAvaliada(transacao, avaliacao), contexto);
     }
 
     /// <summary>
