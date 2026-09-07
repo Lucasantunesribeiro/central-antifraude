@@ -2610,16 +2610,111 @@ Testar:
 
 ## 9.10 Critérios de conclusão
 
-- [ ] Backtest assíncrono.
-- [ ] Fila separada.
-- [ ] Mesmo RiskEngine.
-- [ ] Produção não alterada.
-- [ ] Resultados explicáveis.
-- [ ] Limites de abuso.
-- [ ] UI funcional.
-- [ ] Execução duplicada tratada conforme contrato.
-- [ ] Security Gate 9 verde.
-- [ ] CI verde.
+- [x] Backtest assíncrono.
+- [x] Fila separada.
+- [x] Mesmo RiskEngine.
+- [x] Produção não alterada.
+- [x] Resultados explicáveis.
+- [x] Limites de abuso.
+- [x] UI funcional.
+- [x] Execução duplicada tratada conforme contrato.
+- [x] Security Gate 9 verde.
+- [ ] CI verde — *pendente do primeiro `push`, que não foi autorizado. Cada passo do workflow foi executado localmente e está verde.*
+
+---
+
+## 9.11 Resultado da Fase 9
+
+**Concluída em 2026-09-07.**
+
+### Evidências
+
+| Critério | Como foi verificado |
+|---|---|
+| Build backend | `dotnet build -c Release`, **0 erros e 0 avisos** |
+| Build frontend | `npm run build`, `tsc --noEmit`, `oxlint` e `prettier --check` limpos |
+| Backtest assíncrono | `POST` responde `202` e congela; o trabalho acontece no worker, disparado pela Outbox na mesma transação do pedido |
+| Fila separada | o despachante roteia por tipo de evento; o consumidor operacional roda e **não** encosta na mensagem de backtest |
+| **Mesmo motor** | candidato igual ao perfil vigente reproduz, decisão a decisão, as avaliações gravadas na ingestão — e um teste de arquitetura recusa um segundo motor |
+| **Produção não alterada** | 8 contagens conferidas no banco antes e depois; a Outbox ganha exatamente `+1` evento de gatilho e **zero** eventos operacionais |
+| Resultados explicáveis | decisões lado a lado, transições com direção, cruzamento com o veredito humano **com denominador**, faixas de score |
+| Limites de abuso | janela, volume analisado, volume de contexto, execuções simultâneas por organização e tempo máximo |
+| UI | lista que repergunta só enquanto há execução em andamento, formulário que só oferece rascunhos, detalhe com o candidato congelado |
+| Execução duplicada | duas mensagens e dois workers em paralelo → **uma** conclusão; reentrega encontra `Concluida` e não reescreve |
+| Testes | 490 unitários + 25 arquitetura + 349 integração + 109 frontend = **973, todos verdes** |
+| Security Gate 9 | [`docs/security-gate-9.md`](docs/security-gate-9.md) |
+| Migration | `Backtests` aplicada em PostgreSQL real; `has-pending-model-changes` sem alteração pendente |
+| Dependências | `dotnet list package --vulnerable`: nenhuma; `npm audit`: 0 |
+| Segredos | `gitleaks detect` e `detect --no-git`: nenhum |
+
+### Decisões congeladas
+
+| Decisão | Registro |
+|---|---|
+| O candidato é um **perfil**, e não uma regra solta | `docs/adr/0014-backtests.md` |
+| Não existe um segundo motor: fábricas `ParaSimulacao` em memória | `docs/adr/0014` |
+| Comparar candidato contra vigente, e não contra o passado gravado | `docs/adr/0014` |
+| Tudo o que decide o resultado é congelado no pedido | `docs/adr/0014` |
+| Contagens com denominador, nunca precisão nem recall | `docs/adr/0014` |
+| Assíncrono, em fila separada, pela Outbox | `docs/adr/0014` |
+| O status da execução faz o papel da Inbox | `docs/adr/0014` |
+| Cancelar é subir o token de versão, e não mandar um sinal | `docs/adr/0014` |
+| Recusar, nunca truncar | `docs/adr/0014` |
+| O contexto histórico é lido uma vez, com recuo antes da janela | `docs/adr/0014` |
+
+### Defeitos reais encontrados e corrigidos
+
+**1. O teste de isolamento acusava a própria Outbox.** A primeira versão de
+`O_backtest_nao_escreve_nada_em_producao` afirmava "nenhuma contagem muda", e a
+Outbox mudava — o pedido grava o evento que dispara o próprio trabalho.
+
+O teste estava errado, mas a pergunta que ele fez estava certa e a resposta
+ficou melhor: em vez de tolerar `+1` em silêncio, o teste passou a contar
+**por tipo** e a exigir `+1` de `BacktestSolicitado.v1` e **zero** de
+`TransacaoAvaliada.v1`. A afirmação deixou de ser "quase nada muda" e virou
+"nenhum evento operacional é criado" — que é a invariante que importa, porque
+um evento operacional a mais viraria alerta no ciclo seguinte.
+
+**2. Um `Dictionary` com chave de enum anulável não compila.** A apuração
+cruza o veredito humano com as decisões, e "sem investigação" é uma das quatro
+linhas — o que faz a chave ser `ResultadoDaInvestigacao?`, que não satisfaz a
+restrição `notnull`.
+
+Trocado por um vetor de quatro posições em ordem fixa. Ficou melhor do que o
+dicionário original: a ordem de leitura deixou de depender de uma ordenação
+posterior, e "sem investigação" — que costuma ser a maioria e não deve
+encabeçar a leitura — passou a ser sempre a última linha por construção.
+
+### Fora de escopo, deliberadamente
+
+- **Sem comparação entre duas execuções** na tela. Cada uma é lida por si; a
+  diferença fica por conta de quem lê.
+- **Sem perfil candidato escrito à mão.** O candidato sempre nasce do rascunho
+  de uma regra ou de um ajuste de limiares — nunca de configuração enviada pelo
+  cliente, que seria uma segunda porta para o motor.
+- **Sem auditoria de conclusão e falha.** A trilha registra as ações humanas —
+  solicitar e cancelar. Conclusão e falha acontecem num worker, sem autor, e um
+  registro de auditoria sem autor responde "o quê" sem responder "quem".
+- **Sem métrica exportada.** Duração de backtest e profundidade da fila
+  dedicada são Fase 12.
+
+### Débito técnico não bloqueante
+
+1. **CI ainda não executado.** Cada comando roda localmente e está verde; o
+   GitHub Actions só roda após o primeiro `push`, que continua não autorizado.
+2. **A fidelidade do contexto histórico depende de um teste, e não do
+   compilador.** O recorte em memória repete a lógica do provedor de produção;
+   se um dos dois mudar sozinho, quem acusa é
+   `Candidato_igual_ao_vigente_reproduz_as_decisoes_ja_gravadas`.
+3. **O backtest carrega o período inteiro na memória.** Acima de 50.000
+   transações de contexto ele falha em vez de degradar — correto, mas é um teto
+   e não uma paginação.
+4. **A lista de backtests não pagina na tela.** A API pagina e devolve o total;
+   a interface mostra a primeira página. Mesma dívida das telas de casos.
+5. **Execuções não expiram e não são apagadas.** A tabela cresce sem teto.
+6. **Verificação visual no navegador segue pendente.** O último passo exige
+   digitar a senha de sessão no formulário, o que o agente não faz. Débito
+   herdado da Fase 2.
 
 ---
 
@@ -3877,7 +3972,7 @@ A autorização de uma fase não autoriza automaticamente a fase seguinte.
 | 6 — Alertas | ✅ Concluída (2026-09-05) |
 | 7 — Casos e Investigação | ✅ Concluída (2026-09-05) |
 | 8 — Gestão e Versionamento de Regras | ✅ Concluída (2026-09-06) |
-| 9 — Backtests | ⬜ Não iniciada |
+| 9 — Backtests | ✅ Concluída (2026-09-07) |
 | 10 — Operação, Busca e Auditoria | ⬜ Não iniciada |
 | 11 — Segurança Aplicacional | ⬜ Não iniciada |
 | 12 — Observabilidade, Resiliência e Performance | ⬜ Não iniciada |

@@ -26,8 +26,9 @@ solução certificada de compliance.
 | 5 | Backbone Assíncrono | ✅ concluída |
 | 6 | Alertas Operacionais | ✅ concluída |
 | 7 | Casos e Investigação | ✅ concluída |
-| **8** | **Gestão e Versionamento de Regras** | ✅ **concluída** |
-| 9–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
+| 8 | Gestão e Versionamento de Regras | ✅ concluída |
+| **9** | **Backtests** | ✅ **concluída** |
+| 10–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
 
 Hoje a plataforma recebe transações de sistemas externos autenticados por
 credencial própria, registra cada tentativa **exatamente uma vez** mesmo sob
@@ -103,6 +104,10 @@ docs/
   security-gate-3.md                 resultado do gate da Fase 3
   security-gate-4.md                 resultado do gate da Fase 4
   security-gate-5.md                 resultado do gate da Fase 5
+  security-gate-6.md                 resultado do gate da Fase 6
+  security-gate-7.md                 resultado do gate da Fase 7
+  security-gate-8.md                 resultado do gate da Fase 8
+  security-gate-9.md                 resultado do gate da Fase 9
   baseline-de-performance.md         números medidos do caminho crítico
 ```
 
@@ -415,6 +420,44 @@ publicações simultâneas. Detalhes no
 
 ---
 
+## Backtest: medir antes de publicar
+
+Publicar uma regra alcança **toda transação que entrar depois**. O backtest
+responde, antes disso, quantas decisões mudariam — e como o candidato trataria
+os casos que a equipe já investigou.
+
+```text
+POST  →  candidato congelado + evento, na mesma transação
+      →  fila dedicada de backtests
+      →  worker
+      →  o MESMO motor, duas vezes por transação: vigente e candidato
+      →  documento de apuração
+```
+
+**Não existe um segundo motor.** O que muda é de onde vem o perfil — um
+candidato montado em memória, nunca gravado — e de onde vem o contexto
+histórico, lido de uma vez em vez de uma consulta por avaliação. Que o recorte é
+fiel não é promessa: uma execução cujo candidato é igual ao perfil vigente
+precisa reproduzir, decisão a decisão, as avaliações que ficaram gravadas na
+ingestão. Um teste de arquitetura recusa um `BacktestRiskEngine`.
+
+**Simulação não vira dado operacional.** Um backtest não altera avaliação, não
+cria alerta, não cria caso e não publica evento operacional. As contagens são
+conferidas no banco antes e depois de cada execução do teste.
+
+**Contagens, e nunca precisão nem recall.** O resultado cruza o veredito humano
+com o que cada perfil decidiria, com o denominador de cada linha à vista — e
+"sem investigação" é uma linha distinta de "inconclusiva". A maioria das
+transações nunca foi investigada, e as que foram não são amostra aleatória:
+chamar isso de taxa de detecção seria afirmar o que os dados não sustentam.
+
+Cinco limites impedem que um clique custe caro: janela, volume analisado, volume
+de contexto, execuções simultâneas por organização e tempo máximo. Todos
+recusam em vez de truncar. Detalhes no
+[ADR 0014](docs/adr/0014-backtests.md).
+
+---
+
 ## Testes
 
 ```bash
@@ -448,6 +491,7 @@ tem — um teste de concorrência verde no SQLite não provaria nada.
 | Alertas: fan-out por manipulador, savepoint e duas camadas | [ADR 0011](docs/adr/0011-alertas-operacionais.md) |
 | Casos: timeline append-only, resolvido imutável e lost update | [ADR 0012](docs/adr/0012-casos-e-investigacao.md) |
 | Regras: rascunho, versão imutável e sucessão do perfil | [ADR 0013](docs/adr/0013-gestao-e-versionamento-de-regras.md) |
+| Backtests: mesmo motor, candidato congelado e isolamento de produção | [ADR 0014](docs/adr/0014-backtests.md) |
 
 Três decisões são reforçadas em tempo de compilação por
 `src/BannedSymbols.txt`: `DateTime.UtcNow`, `DateTime.Now` e `Guid.NewGuid()`

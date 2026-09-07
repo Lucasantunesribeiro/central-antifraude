@@ -300,6 +300,56 @@ ORDER BY ocorrido_em DESC;
 | `conflito_de_publicacao` | Outra pessoa publicou primeiro. |
 | `nome_em_uso` | Já existe uma regra com esse nome na organização. |
 
+### Simular antes de publicar (Fase 9)
+
+Ainda como **Supervisor**, escreva um rascunho numa regra e abra **Backtests**.
+A execução é assíncrona: o laço de fundo precisa estar ligado
+(`SegundoPlano__Habilitado=true`), senão a execução fica em `Pendente` para
+sempre.
+
+```sql
+-- As execucoes, com o candidato congelado e o resultado apurado.
+SELECT descricao, status, inicio, fim, solicitada_em, concluida_em
+FROM execucoes_de_backtest ORDER BY solicitada_em DESC;
+
+-- O que exatamente foi simulado. O snapshot nao muda se o rascunho mudar.
+SELECT descricao, candidato FROM execucoes_de_backtest ORDER BY solicitada_em DESC LIMIT 1;
+
+-- O documento de apuracao.
+SELECT descricao, resultado FROM execucoes_de_backtest
+WHERE status = 'Concluida' ORDER BY concluida_em DESC LIMIT 1;
+
+-- A fila dedicada. Backtest nunca aparece na fila operacional.
+SELECT fila, count(*) FROM fila_de_mensagens GROUP BY fila;
+```
+
+**Para ver que a simulação não toca em produção**, na prática:
+
+1. anote `SELECT count(*) FROM avaliacoes_de_risco` e
+   `SELECT count(*) FROM alertas`;
+2. escreva um rascunho severo — velocidade de 1 transação em 1440 minutos, 100
+   pontos — e simule os últimos 30 dias;
+3. o resultado vai mostrar bloqueios; as duas contagens continuam iguais.
+
+**Para ver o snapshot funcionando:** peça a simulação, edite o rascunho da
+mesma regra e só então deixe o worker rodar. O card "Perfil candidato" continua
+mostrando a configuração de quando você pediu.
+
+**Se uma ação devolver `409`**, os códigos desta fase são:
+
+| `codigo` | O que aconteceu |
+|---|---|
+| `limite_de_execucoes` | Já há execuções em andamento demais nesta organização. |
+| `sem_rascunho` | A regra não tem alteração pendente — não há o que simular. |
+| `regra_desativada` | Regra desativada não entra no perfil. Reative antes. |
+| `versao_desatualizada` | A tela está vendo um estado antigo. Recarregue. |
+| `estado_do_backtest` | A operação não faz sentido agora — cancelar o que já terminou, por exemplo. |
+
+Os limites são configuráveis: `Backtest__JanelaMaximaEmDias`,
+`Backtest__MaximoDeTransacoesAnalisadas`,
+`Backtest__MaximoDeExecucoesEmAndamento` e
+`Backtest__TempoMaximoDeExecucaoEmSegundos`.
+
 ## 5. Rodar
 
 ```bash
