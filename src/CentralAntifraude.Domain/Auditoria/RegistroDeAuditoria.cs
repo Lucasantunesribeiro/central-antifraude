@@ -45,6 +45,15 @@ public enum OperacaoAuditada
     RegraDesativada = 64,
     RegraReativada = 65,
     VersaoDePerfilPublicada = 66,
+
+    // Backtests (Fase 9)
+    //
+    // So as acoes HUMANAS entram na trilha. Conclusao e falha acontecem num
+    // worker, sem autor — e um registro de auditoria sem autor responderia
+    // "o que" sem responder "quem", que e metade do que a trilha existe para
+    // provar. O ciclo de vida da execucao fica no proprio registro dela.
+    BacktestSolicitado = 80,
+    BacktestCancelado = 81,
 }
 
 /// <summary>

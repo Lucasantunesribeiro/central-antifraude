@@ -169,6 +169,54 @@ public sealed class VersaoDePerfilDeRisco
         return versao;
     }
 
+    /// <summary>
+    /// Monta uma versao de perfil que existe SOMENTE em memoria, para o
+    /// backtest simular sem publicar nada.
+    ///
+    /// Mesma razao da versao de regra simulada: o motor recebe uma versao de
+    /// perfil, e a Fase 9 precisa executar o mesmo motor sobre uma composicao
+    /// candidata. <see cref="Numero"/> zero marca o que nunca foi publicado.
+    ///
+    /// As invariantes continuam valendo — limiares e conjunto de regras sao
+    /// validados igual. Simular um perfil que nao poderia existir produziria
+    /// um resultado sobre um estado inalcancavel.
+    /// </summary>
+    internal static VersaoDePerfilDeRisco ParaSimulacao(
+        Guid organizacaoId,
+        int limiarDeRevisao,
+        int limiarDeBloqueio,
+        IReadOnlyList<VersaoDeRegra> versoesDeRegra,
+        DateTimeOffset agora)
+    {
+        ArgumentNullException.ThrowIfNull(versoesDeRegra);
+
+        ValidarLimiares(limiarDeRevisao, limiarDeBloqueio);
+
+        if (versoesDeRegra.Count == 0)
+        {
+            throw new ViolacaoDeInvariante("Um perfil simulado precisa de ao menos uma regra.");
+        }
+
+        if (versoesDeRegra.Any(v => v.OrganizacaoId != organizacaoId))
+        {
+            throw new ViolacaoDeInvariante(
+                "Um perfil nao pode incluir versao de regra de outra organizacao.");
+        }
+
+        var versao = new VersaoDePerfilDeRisco(
+            Identificador.Novo(),
+            organizacaoId,
+            Guid.Empty,
+            0,
+            limiarDeRevisao,
+            limiarDeBloqueio,
+            agora);
+
+        versao._versoesDeRegra.AddRange(versoesDeRegra);
+
+        return versao;
+    }
+
     private static void ValidarLimiares(int limiarDeRevisao, int limiarDeBloqueio)
     {
         if (limiarDeRevisao is < ScoreMinimo or > ScoreMaximo ||

@@ -88,3 +88,24 @@ public sealed record TransacaoAvaliadaV1(
                 .Select(s => new SinalDoEvento(s.Tipo.ToString(), s.Pontos))]);
     }
 }
+
+/// <summary>
+/// Um backtest foi solicitado e precisa ser executado.
+///
+/// **O conteudo e so o identificador, e isso e deliberado.** O perfil
+/// candidato, a janela e a versao de comparacao ja estao congelados na linha
+/// da execucao; carrega-los tambem na mensagem criaria duas fontes para o
+/// mesmo fato, e a mensagem — que pode ser reentregue horas depois — seria a
+/// menos confiavel das duas.
+///
+/// **Este nao e um evento operacional** (ROADMAP 9.5). Ele nao descreve nada
+/// que aconteceu com uma transacao: e o gatilho de um trabalho em lote, e vai
+/// para a fila dedicada de backtests justamente para nao disputar espaco com
+/// alertas (CLAUDE.md secao 30).
+/// </summary>
+public sealed record BacktestSolicitadoV1(Guid ExecucaoId) : ConteudoDeEvento
+{
+    public const string NomeDoTipo = "BacktestSolicitado.v1";
+
+    public override string Tipo => NomeDoTipo;
+}

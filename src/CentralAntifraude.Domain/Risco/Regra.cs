@@ -398,4 +398,49 @@ public sealed class VersaoDeRegra
             pontos,
             agora);
     }
+
+    /// <summary>
+    /// Constroi uma versao que existe SOMENTE em memoria, para o backtest.
+    ///
+    /// **Por que isto existe.** O motor recebe uma versao de perfil, e o
+    /// backtest precisa executar o MESMO motor sobre uma configuracao que
+    /// ainda nao foi publicada (ROADMAP 9.4). A alternativa seria um segundo
+    /// motor que aceita configuracao solta — exatamente o
+    /// <c>BacktestRiskEngine</c> que o ROADMAP proibe.
+    ///
+    /// **Por que nao usar <see cref="Publicar"/>.** Publicar exige a regra
+    /// para tirar dela o identificador, e o backtest so tem o snapshot. Montar
+    /// uma regra descartavel daria um <see cref="RegraId"/> sorteado, e a
+    /// ordem de execucao do motor — tipo, depois regra — deixaria de bater com
+    /// a do perfil vigente que esta sendo comparado.
+    ///
+    /// **Numero zero** marca o que nunca foi publicado. Nenhuma versao real
+    /// pode ter numero zero, entao uma destas encontrada no banco seria
+    /// evidencia de defeito, e nao ambiguidade.
+    ///
+    /// Nada aqui e adicionado ao contexto de persistencia. O teste de
+    /// isolamento da Fase 9 confere as contagens das tabelas antes e depois.
+    /// </summary>
+    internal static VersaoDeRegra ParaSimulacao(
+        Guid organizacaoId,
+        Guid regraId,
+        TipoDeRegra tipo,
+        ConfiguracaoDeRegra configuracao,
+        int pontos,
+        DateTimeOffset agora)
+    {
+        ArgumentNullException.ThrowIfNull(configuracao);
+
+        configuracao.Validar();
+
+        return new VersaoDeRegra(
+            Identificador.Novo(),
+            organizacaoId,
+            regraId,
+            0,
+            tipo,
+            configuracao,
+            pontos,
+            agora);
+    }
 }
