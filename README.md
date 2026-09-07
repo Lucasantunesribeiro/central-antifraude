@@ -28,8 +28,9 @@ solução certificada de compliance.
 | 7 | Casos e Investigação | ✅ concluída |
 | 8 | Gestão e Versionamento de Regras | ✅ concluída |
 | 9 | Backtests | ✅ concluída |
-| **10** | **Operação, Busca, Painel e Auditoria** | ✅ **concluída** |
-| 11–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
+| 10 | Operação, Busca, Painel e Auditoria | ✅ concluída |
+| **11** | **Hardening de Segurança Aplicacional** | ✅ **concluída** |
+| 12–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
 
 Hoje a plataforma recebe transações de sistemas externos autenticados por
 credencial própria, registra cada tentativa **exatamente uma vez** mesmo sob
@@ -110,6 +111,9 @@ docs/
   security-gate-8.md                 resultado do gate da Fase 8
   security-gate-9.md                 resultado do gate da Fase 9
   security-gate-10.md                resultado do gate da Fase 10
+  security-gate-11.md                resultado do gate da Fase 11
+  threat-model.md                    fluxos, ameaças e mitigações
+  matriz-de-autorizacao.md           quem alcança o quê
   baseline-de-performance.md         números medidos do caminho crítico
 ```
 
@@ -492,6 +496,34 @@ A **trilha de auditoria**, gravada desde a Fase 1, virou consultável — por
 Administrador e Auditor, e por mais ninguém. Ela é um controle sobre quem opera,
 e não há rota que a altere. Detalhes no
 [ADR 0015](docs/adr/0015-console-operacional.md).
+
+---
+
+## Segurança: o que está escrito e o que é verificado
+
+Segurança apareceu em todas as fases — cada uma tem o seu Security Gate em
+`docs/`. O que a Fase 11 consolidou foram as duas coisas que só aparecem
+olhando o conjunto.
+
+**O [modelo de ameaças](docs/threat-model.md)** cobre sete fluxos — navegador,
+integração, banco, Outbox, fila, supervisão de regras e auditoria — e cada
+linha tem ameaça, mitigação e o teste que a prova. As ameaças fora de escopo
+estão nomeadas, para não serem confundidas com cobertura.
+
+**A [matriz de autorização](docs/matriz-de-autorizacao.md) é um teste, e não um
+documento.** A tabela declarada é comparada com as rotas que a aplicação
+realmente expõe, lidas do roteamento: uma rota nova sem entrada quebra a build,
+e uma entrada sem rota também. O risco que isso fecha não é uma rota mal
+protegida — é a próxima rota.
+
+A invariante menos óbvia da matriz é a mais útil: **nenhuma rota de escrita pode
+carregar `perfil:qualquer`**, porque essa política inclui o Auditor, cujo perfil
+é de leitura. Lendo a rota isoladamente, ninguém perceberia.
+
+O isolamento entre organizações tem varredura própria: um recurso de cada
+família nasce no tenant B pelo caminho real do produto, cada identificador passa
+pela API do tenant A, e o estado de B é conferido **no banco** depois — um `404`
+devolvido *depois* de gravar seria pior do que um `200`.
 
 ---
 

@@ -3113,16 +3113,109 @@ Se houver decisão futura explícita:
 
 ## 11.11 Critérios de conclusão
 
-- [ ] Threat model documentado.
-- [ ] Authorization matrix completa.
-- [ ] Rotas protegidas e testadas.
-- [ ] Cross-tenant suite abrangente.
-- [ ] CSRF/CORS/session testados de acordo com deploy.
-- [ ] Rate limits configurados.
-- [ ] Secrets auditados.
-- [ ] Dependency audit sem risco crítico não tratado.
-- [ ] Security Gate 11 verde.
-- [ ] CI verde.
+- [x] Threat model documentado.
+- [x] Authorization matrix completa.
+- [x] Rotas protegidas e testadas.
+- [x] Cross-tenant suite abrangente.
+- [x] CSRF/CORS/session testados de acordo com deploy.
+- [x] Rate limits configurados.
+- [x] Secrets auditados.
+- [x] Dependency audit sem risco crítico não tratado.
+- [x] Security Gate 11 verde.
+- [ ] CI verde — *pendente do primeiro `push`, que não foi autorizado. Cada passo do workflow foi executado localmente e está verde.*
+
+---
+
+## 11.12 Resultado da Fase 11
+
+**Concluída em 2026-09-07.**
+
+### Evidências
+
+| Critério | Como foi verificado |
+|---|---|
+| Build backend | `dotnet build -c Release`, **0 erros e 0 avisos** |
+| Build frontend | `npm run build`, `tsc`, `oxlint` e `prettier --check` limpos |
+| Threat model | 7 fluxos, com ameaça, mitigação e teste em cada linha — [`docs/threat-model.md`](docs/threat-model.md) |
+| **Matriz de autorização** | tabela declarada **comparada com as rotas que a aplicação expõe**, lidas do roteamento; 5 invariantes |
+| Rotas protegidas | 52 rotas na matriz; 5 anônimas, todas justificadas |
+| **Cross-tenant** | 8 famílias, identificadores **reais**, e o estado do outro tenant conferido no banco depois das tentativas |
+| CORS e sessão | origem declarada autorizada, origem estranha sem cabeçalho, curinga ausente, `Origin` recusado no refresh |
+| Rate limits | login, ingestão e — novos — refresh e emissão de credencial, este por organização |
+| Entrada | campo desconhecido, mass assignment, byte nulo, corpo acima de 64 KB (`413`) e corpo legítimo de 4 KB |
+| Secrets | `gitleaks detect` e `detect --no-git`: nenhum |
+| Dependências | `dotnet list package --vulnerable`: nenhuma; `npm audit`: 0 |
+| Testes | 519 unitários + 25 arquitetura + 440 integração + 134 frontend = **1.118, todos verdes** |
+| Security Gate 11 | [`docs/security-gate-11.md`](docs/security-gate-11.md) |
+| Migration | nenhuma nesta fase; `has-pending-model-changes` sem alteração pendente |
+
+### Decisões congeladas
+
+| Decisão | Registro |
+|---|---|
+| CORS com lista explícita, sem curinga, compartilhando a lista da verificação de `Origin` | `src/CentralAntifraude.Api/Seguranca/PoliticaDeCors.cs` |
+| Lista de origens vazia **desliga** o CORS — o estado de desenvolvimento | idem |
+| Três cabeçalhos de segurança; CSP e HSTS pertencem a quem serve HTML | `CabecalhosDeSeguranca.cs` |
+| Teto de corpo em três camadas, com `413` e não `400` | `MiddlewareDeLimiteDeCorpo` |
+| Limitador **depois** da autenticação, para particionar por organização | `Program.cs` |
+| A matriz de autorização é um teste que lê o roteamento, não um documento | `MatrizDeAutorizacaoTests.cs` |
+| Nenhuma rota de escrita pode carregar `perfil:qualquer` | idem |
+| Sem IA, e portanto sem ação — o ROADMAP 11.10 proíbe adicionar para marcar item | — |
+
+### Quatro lacunas concretas, e não revisão genérica
+
+1. **Não havia CORS.** Até aqui o proxy do Vite fazia tudo parecer mesma
+   origem; a Fase 14 quebra isso. Entrou agora, com a **mesma lista** que já
+   defendia contra CSRF — duas listas sairiam de sincronia no primeiro ajuste,
+   e o sintoma seria o navegador aceitando a resposta enquanto o servidor
+   recusa a operação.
+2. **`refresh` e emissão de credencial não tinham limite**, apesar de nomeados
+   no `CLAUDE.md` seção 55.
+3. **Nenhuma rota humana tinha teto de corpo.** Só a ingestão declarava 8 KB;
+   o resto herdava os 30 MB do Kestrel.
+4. **A matriz de autorização não existia como verificação** — era conhecimento
+   espalhado por dez gates.
+
+### Defeito real encontrado e corrigido
+
+**O limitador rodava antes da autenticação, e a partição por organização não
+funcionava.** A emissão de credencial é particionada pela organização da
+identidade; antes de `UseAuthentication`, `HttpContext.User` está vazio e a
+partição caía no IP — a cota virava **global**, e a conta comprometida de um
+cliente travaria a operação de todos os outros.
+
+O teste que pegou isso é o que afirma o oposto do óbvio: depois de A esgotar a
+própria cota, B continua sendo atendido. Um teste que só verificasse "o limite
+funciona" teria passado com o defeito no lugar.
+
+### Fora de escopo, deliberadamente
+
+- **Sem IA.** O ROADMAP 11.10 é explícito: não adicionar IA nesta fase para
+  marcar item. Não há IA no produto, e a seção 61 do `CLAUDE.md` já define as
+  regras para o dia em que houver.
+- **Sem CSP nem HSTS.** Pertencem a quem serve HTML, que a partir da Fase 14 é
+  a Vercel. Uma política de conteúdo para respostas JSON que nunca são
+  renderizadas seria configuração sem problema para resolver.
+- **Sem pentest.** É a Fase 15.
+- **Sem HMAC de request.** Para cliente-servidor sobre TLS com credencial
+  própria e idempotência, assinar o payload não resolve problema que já não
+  esteja resolvido (`CLAUDE.md` seção 51).
+
+### Débito técnico não bloqueante
+
+1. **CI ainda não executado.** Cada comando roda localmente e está verde; o
+   GitHub Actions só roda após o primeiro `push`, que continua não autorizado.
+2. **Rate limiting é por instância do processo.** Com várias instâncias em
+   Lambda o limite efetivo se multiplica. Tratamento distribuído exige estado
+   compartilhado, que a arquitetura não tem — fica como limitação conhecida, e
+   não como pendência.
+3. **CORS e cookie cross-site testados contra a configuração, e não contra o
+   deploy.** O deploy é a Fase 14, e a ordem foi deliberada: chegar lá com o
+   comportamento já verificado.
+4. **A equalização de tempo no login continua sendo por construção**, e não
+   medida. Débito herdado da Fase 1.
+5. **Verificação visual no navegador segue pendente.** Débito herdado da
+   Fase 2.
 
 ---
 
@@ -4082,7 +4175,7 @@ A autorização de uma fase não autoriza automaticamente a fase seguinte.
 | 8 — Gestão e Versionamento de Regras | ✅ Concluída (2026-09-06) |
 | 9 — Backtests | ✅ Concluída (2026-09-07) |
 | 10 — Operação, Busca e Auditoria | ✅ Concluída (2026-09-07) |
-| 11 — Segurança Aplicacional | ⬜ Não iniciada |
+| 11 — Segurança Aplicacional | ✅ Concluída (2026-09-07) |
 | 12 — Observabilidade, Resiliência e Performance | ⬜ Não iniciada |
 | 13 — Demo e UX Final | ⬜ Não iniciada |
 | 14 — Infraestrutura e Deploy | ⬜ Não iniciada |

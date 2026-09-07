@@ -400,6 +400,67 @@ encontra no período de três dias atrás.
 Nenhum deles é corrigido em silêncio: reduzir o tamanho para o teto faria você
 acreditar que recebeu a lista inteira.
 
+### Hardening: CORS, limites e cabeçalhos (Fase 11)
+
+Em desenvolvimento o `vite dev` faz proxy e tudo parece mesma origem, então o
+CORS fica **desligado** — a lista de origens vazia é o gatilho. Para exercitar o
+comportamento do deploy cross-site antes da Fase 14:
+
+```bash
+export Autenticacao__OrigensPermitidas__0=https://central-antifraude.vercel.app
+```
+
+```bash
+# Origem declarada: recebe autorizacao e credencial.
+curl -i -X OPTIONS http://localhost:5175/api/transacoes \
+  -H "Origin: https://central-antifraude.vercel.app" \
+  -H "Access-Control-Request-Method: GET"
+
+# Origem estranha: nenhum cabecalho de autorizacao volta, e o navegador
+# descarta a resposta.
+curl -i -X OPTIONS http://localhost:5175/api/transacoes \
+  -H "Origin: https://sitemalicioso.example" \
+  -H "Access-Control-Request-Method: GET"
+
+# Os tres cabecalhos de seguranca valem ate na resposta de erro.
+curl -i http://localhost:5175/api/rota-que-nao-existe | head -12
+
+# Corpo grande demais: 413, e nao 400. A diferenca importa para quem integra.
+python -c "print('{\"titulo\":\"' + 'a'*70000 + '\"}')" > /tmp/gigante.json
+curl -i -X POST http://localhost:5175/api/casos \
+  -H "Content-Type: application/json" --data-binary @/tmp/gigante.json
+```
+
+**A mesma lista serve a duas defesas.** `Autenticacao:OrigensPermitidas`
+alimenta o CORS *e* a verificação de `Origin` que recusa CSRF nas rotas de
+sessão. Duas listas sairiam de sincronia no primeiro ajuste, e o sintoma seria o
+navegador aceitando a resposta enquanto o servidor recusa a operação.
+
+**Os limites de tentativa** (`CLAUDE.md` seção 55):
+
+| Rota | Limite | Partição |
+|---|---|---|
+| `POST /api/auth/login` | 10/min | IP |
+| `POST /api/auth/refresh` | 60/min | IP |
+| `POST /api/ingestao/transacoes` | 600/min | credencial |
+| `POST · DELETE /api/integracoes/{id}/credenciais` | 20/min | organização |
+
+A partição da última é a organização, e não o IP: a conta comprometida de um
+cliente não pode travar a operação dos outros. Isso exige que o limitador rode
+**depois** da autenticação — antes dela `HttpContext.User` está vazio.
+
+**Para ver a matriz de autorização se defender**, crie uma rota nova sem
+declarar política e rode:
+
+```bash
+dotnet test tests/CentralAntifraude.IntegrationTests \
+  --filter "FullyQualifiedName~MatrizDeAutorizacaoTests"
+```
+
+O teste lê as rotas do roteamento da aplicação real e compara com a tabela
+declarada. Uma rota sem entrada quebra a build — que é o ponto: quem cria a
+rota precisa declarar quem a alcança.
+
 ## 5. Rodar
 
 ```bash
