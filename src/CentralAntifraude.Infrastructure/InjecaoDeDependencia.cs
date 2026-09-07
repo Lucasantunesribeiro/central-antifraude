@@ -1,6 +1,7 @@
 using CentralAntifraude.Application.Alertas;
 using CentralAntifraude.Application.Backtests;
 using CentralAntifraude.Application.Auditoria;
+using CentralAntifraude.Application.Operacao;
 using CentralAntifraude.Application.Comum;
 using CentralAntifraude.Application.Eventos;
 using CentralAntifraude.Application.Identidade;
@@ -80,6 +81,7 @@ public static class InjecaoDeDependencia
         AdicionarRisco(servicos, configuracao);
         AdicionarBacktests(servicos, configuracao);
         AdicionarAlertas(servicos);
+        AdicionarOperacao(servicos);
         AdicionarMensageria(servicos, configuracao);
         AdicionarIngestao(servicos, configuracao);
 
@@ -247,6 +249,22 @@ public static class InjecaoDeDependencia
         // sido violado nesta linha — e ha um teste de arquitetura que verifica
         // que o motor continua unico.
         servicos.AddScoped<ExecutorDeBacktest>();
+    }
+
+    /// <summary>
+    /// Painel operacional, metricas de regra e leitura da trilha (Fase 10).
+    ///
+    /// A leitura da auditoria e registrada como interface PROPRIA, separada do
+    /// registrador que so escreve. Uma interface unica convidaria, no futuro, a
+    /// um metodo que altera — e uma trilha alteravel nao prova nada.
+    /// </summary>
+    private static void AdicionarOperacao(IServiceCollection servicos)
+    {
+        servicos.AddScoped<IRepositorioDeOperacao, RepositorioDeOperacao>();
+        servicos.AddScoped<ServicoDoPainel>();
+
+        servicos.AddScoped<IConsultaDeAuditoria, ConsultaDeAuditoriaEmPostgres>();
+        servicos.AddScoped<ServicoDeAuditoria>();
     }
 
     private static void AdicionarAlertas(IServiceCollection servicos)

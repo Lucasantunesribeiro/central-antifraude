@@ -1,3 +1,4 @@
+using CentralAntifraude.Application.Operacao;
 using CentralAntifraude.Application.Risco;
 using CentralAntifraude.Domain.Risco;
 using CentralAntifraude.Domain.Transacoes;
@@ -151,13 +152,19 @@ public sealed record TransacaoDetalhada(
     string ReferenciaDoInstrumento,
     string? FingerprintDoDispositivo,
     string? PaisDeOrigem,
-    AvaliacaoResposta? Avaliacao)
+    string? IdDeCorrelacao,
+    AvaliacaoResposta? Avaliacao,
+    IReadOnlyList<AlertaDaTransacaoResposta> Alertas,
+    string? Veredito,
+    Guid? CasoDoVeredito,
+    DateTimeOffset? VereditoRegistradoEm)
 {
-    public static TransacaoDetalhada De(TransacaoAvaliada item)
+    public static TransacaoDetalhada De(TransacaoCompleta completa)
     {
-        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(completa);
 
-        var transacao = item.Transacao;
+        var transacao = completa.Avaliada.Transacao;
+        var contexto = completa.Contexto;
 
         return new TransacaoDetalhada(
             transacao.Id,
@@ -170,7 +177,47 @@ public sealed record TransacaoDetalhada(
             transacao.ReferenciaDoInstrumento,
             transacao.FingerprintDoDispositivo,
             transacao.PaisDeOrigem,
-            AvaliacaoResposta.DeOpcional(item.Avaliacao));
+            // O identificador de correlacao existe para o suporte: e com ele
+            // que alguem encontra, no log do servidor, a requisicao exata que
+            // registrou esta transacao (CLAUDE.md secao 69). Nao e dado do
+            // cliente e nao revela nada sobre ele — e um numero de protocolo.
+            transacao.IdDeCorrelacao,
+            AvaliacaoResposta.DeOpcional(completa.Avaliada.Avaliacao),
+            [.. contexto.Alertas.Select(AlertaDaTransacaoResposta.De)],
+            contexto.Veredito?.ToString(),
+            contexto.CasoDoVeredito,
+            contexto.VereditoRegistradoEm);
+    }
+}
+
+/// <summary>
+/// Um alerta gerado por esta transacao, com o caso que o recolheu.
+///
+/// O caso vem junto porque a pergunta de quem abre uma transacao nunca para no
+/// alerta: e "alguem ja olhou isto?". Mostrar o alerta sem dizer se ele virou
+/// caso obrigaria o analista a procurar na outra aba.
+/// </summary>
+public sealed record AlertaDaTransacaoResposta(
+    Guid AlertaId,
+    string Prioridade,
+    string Status,
+    DateTimeOffset CriadoEm,
+    Guid? CasoId,
+    string? TituloDoCaso,
+    string? StatusDoCaso)
+{
+    public static AlertaDaTransacaoResposta De(AlertaDaTransacao alerta)
+    {
+        ArgumentNullException.ThrowIfNull(alerta);
+
+        return new AlertaDaTransacaoResposta(
+            alerta.AlertaId,
+            alerta.Prioridade.ToString(),
+            alerta.Status.ToString(),
+            alerta.CriadoEm,
+            alerta.CasoId,
+            alerta.TituloDoCaso,
+            alerta.StatusDoCaso?.ToString());
     }
 }
 

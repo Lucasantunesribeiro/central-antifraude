@@ -25,6 +25,17 @@ public static class PoliticasDeAutorizacao
     /// <summary>Operacao sobre alertas e casos (Fases 6 e 7).</summary>
     public const string OperacaoDeFraude = "perfil:operacao";
 
+    /// <summary>
+    /// Leitura da trilha de auditoria (Fase 10).
+    ///
+    /// Administrador e Auditor, e ninguem mais. A trilha e um controle **sobre**
+    /// o que Supervisor e Analista fazem — publicar regra, resolver caso —, e
+    /// dar a quem e auditado o poder de varrer o proprio rastro enfraquece o
+    /// unico registro que responde "quem fez o que e quando"
+    /// (CLAUDE.md secoes 8.3 e 67).
+    /// </summary>
+    public const string LeituraDeAuditoria = "perfil:auditoria";
+
     /// <summary>Qualquer perfil autenticado. Leitura de dados da organizacao.</summary>
     public const string QualquerPerfil = "perfil:qualquer";
 
@@ -55,6 +66,12 @@ public static class PoliticasDeAutorizacao
             PerfilDeUsuario.Administrador,
             PerfilDeUsuario.SupervisorDeFraude,
             PerfilDeUsuario.AnalistaDeFraude);
+
+        Adicionar(
+            opcoes,
+            LeituraDeAuditoria,
+            PerfilDeUsuario.Administrador,
+            PerfilDeUsuario.Auditor);
 
         Adicionar(
             opcoes,

@@ -227,6 +227,13 @@ public static class EndpointsDeIngestao
             .RequireAuthorization(PoliticasDeAutorizacao.QualquerPerfil);
 
         grupo.MapGet("/", async (
+                [FromQuery] string? busca,
+                [FromQuery] string? decisao,
+                [FromQuery] string? tipoDeRegra,
+                [FromQuery] int? scoreMinimo,
+                [FromQuery] int? scoreMaximo,
+                [FromQuery] DateTimeOffset? de,
+                [FromQuery] DateTimeOffset? ate,
                 [FromQuery] int? pagina,
                 [FromQuery] int? tamanho,
                 [FromQuery] string? ordenarPor,
@@ -234,6 +241,24 @@ public static class EndpointsDeIngestao
                 ServicoDeConsultaDeRisco servico,
                 CancellationToken cancellationToken) =>
             {
+                // O filtro e resolvido ANTES da paginacao de proposito: um
+                // filtro invalido nao deve gastar consulta nenhuma, e a
+                // mensagem de erro precisa apontar o campo errado, e nao a
+                // pagina.
+                if (!FiltroDeTransacoes.TentarCriar(
+                        busca,
+                        decisao,
+                        tipoDeRegra,
+                        scoreMinimo,
+                        scoreMaximo,
+                        de,
+                        ate,
+                        out var filtro,
+                        out var erro))
+                {
+                    throw new ErroDeValidacao("filtro", erro);
+                }
+
                 var (paginacao, ordenacao) = ParametrosDeConsultaHttp.Ler(
                     pagina,
                     tamanho,
@@ -242,7 +267,11 @@ public static class EndpointsDeIngestao
                     CamposDeOrdenacaoDeTransacao,
                     "recebidaEm");
 
-                var resultado = await servico.ListarTransacoesAsync(paginacao, ordenacao, cancellationToken);
+                var resultado = await servico.ListarTransacoesAsync(
+                    filtro,
+                    paginacao,
+                    ordenacao,
+                    cancellationToken);
 
                 return Results.Ok(RespostaPaginada.De(resultado, TransacaoAvaliadaResumida.De));
             })
@@ -257,6 +286,13 @@ public static class EndpointsDeIngestao
             .WithName("ObterTransacao");
     }
 
+    /// <summary>
+    /// Campos por onde o console pode ordenar.
+    ///
+    /// Lista fechada: o nome que chega na query string e comparado com estes e
+    /// substituido pelo canonico, entao nada do que o cliente digitou alcanca
+    /// a montagem da consulta (decisao da Fase 0, `ParametrosDeOrdenacao`).
+    /// </summary>
     public static readonly string[] CamposDeOrdenacaoDeTransacao =
-        ["recebidaEm", "ocorridaEm", "valor"];
+        ["recebidaEm", "ocorridaEm", "valor", "score"];
 }

@@ -153,8 +153,17 @@ public sealed class ConfiguracaoDeTransacao : IEntityTypeConfiguration<Transacao
         // dentro de uma janela de tempo. E a forma da regra de velocidade.
         builder.HasIndex(t => new { t.OrganizacaoId, t.ClienteExternoId, t.OcorridaEm });
 
+        builder.Property(t => t.IdDeCorrelacao)
+            .HasMaxLength(Transacao.TamanhoMaximoDeCorrelacao);
+
         // Listagem por tenant, mais recentes primeiro.
         builder.HasIndex(t => new { t.OrganizacaoId, t.RecebidaEm });
+
+        // Console de transacoes da Fase 10: o filtro de periodo padrao e por
+        // OcorridaEm, e sem este indice ele varre a tabela do tenant inteiro.
+        // Nao e indice preventivo — e a consulta que a tela faz em todo
+        // carregamento (CLAUDE.md secao 46).
+        builder.HasIndex(t => new { t.OrganizacaoId, t.OcorridaEm });
 
         builder.HasOne<Integracao>()
             .WithMany()

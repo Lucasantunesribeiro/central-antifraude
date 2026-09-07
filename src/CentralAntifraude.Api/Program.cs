@@ -9,6 +9,7 @@ using CentralAntifraude.Api.Erros;
 using CentralAntifraude.Api.Identidade;
 using CentralAntifraude.Api.Integracoes;
 using CentralAntifraude.Api.Investigacao;
+using CentralAntifraude.Api.Operacao;
 using CentralAntifraude.Api.Risco;
 using CentralAntifraude.Application.Correlacao;
 using CentralAntifraude.Application.Identidade;
@@ -254,6 +255,8 @@ aplicacao.MapearEndpointsDeRisco();
 aplicacao.MapearEndpointsDeAlertas();
 aplicacao.MapearEndpointsDeCasos();
 aplicacao.MapearEndpointsDeBacktests();
+aplicacao.MapearEndpointsDoPainel();
+aplicacao.MapearEndpointsDeAuditoria();
 aplicacao.MapearEndpointsDeIngestao();
 
 // ---------------------------------------------------------------------------
