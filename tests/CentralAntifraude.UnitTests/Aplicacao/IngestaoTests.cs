@@ -418,7 +418,8 @@ public sealed class TransacaoTests
         null,
         "BR",
         "chave-000001",
-        new string('a', 64));
+        new string('a', 64),
+        "corr-000001");
 
     [Fact]
     public void Guarda_os_dois_tempos_separadamente()
@@ -446,7 +447,8 @@ public sealed class TransacaoTests
             null,
             null,
             "chave-000002",
-            new string('a', 64));
+            new string('a', 64),
+            null);
 
         Assert.Equal(TimeSpan.Zero, transacao.OcorridaEm.Offset);
         Assert.Equal(TimeSpan.Zero, transacao.RecebidaEm.Offset);
@@ -464,7 +466,7 @@ public sealed class TransacaoTests
     {
         Assert.Throws<ViolacaoDeInvariante>(() => Transacao.Registrar(
             Guid.Empty, Integracao, "p", Dinheiro.De(1m, "BRL"), Agora, Agora,
-            "c", "pi", null, null, null, "chave-000003", "hash"));
+            "c", "pi", null, null, null, "chave-000003", "hash", null));
     }
 
     [Fact]
@@ -472,7 +474,7 @@ public sealed class TransacaoTests
     {
         var transacao = Transacao.Registrar(
             Organizacao, Integracao, "p", Dinheiro.De(1m, "BRL"), Agora, Agora,
-            "c", "pi", null, null, " br ", "chave-000004", "hash");
+            "c", "pi", null, null, " br ", "chave-000004", "hash", null);
 
         Assert.Equal("BR", transacao.PaisDeOrigem);
     }

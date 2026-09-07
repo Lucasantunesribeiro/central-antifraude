@@ -43,7 +43,8 @@ internal static class CenarioDeRisco
             fingerprintDoIp: null,
             pais,
             $"idem-{Identificador.Novo():N}",
-            "fingerprint");
+            "fingerprint",
+            idDeCorrelacao: null);
     }
 
     public static TransacaoDoHistorico Anterior(

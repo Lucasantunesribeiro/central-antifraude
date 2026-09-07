@@ -410,7 +410,8 @@ public sealed class SecurityGate5Tests : IAsyncLifetime
             null,
             "BR",
             "idem-base",
-            "fingerprint");
+            "fingerprint",
+            null);
 
         var perfil = CatalogoPadraoDeRisco
             .Provisionar(transacao.OrganizacaoId, DateTimeOffset.UtcNow)

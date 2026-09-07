@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { criarClienteDeConsultas } from '../api/clienteDeConsultas';
@@ -33,6 +33,11 @@ const DETALHE: TransacaoDetalhada = {
   referenciaDoInstrumento: 'pi_demo_123',
   fingerprintDoDispositivo: 'disp-de-viagem',
   paisDeOrigem: 'PT',
+  idDeCorrelacao: 'req-000000000001',
+  alertas: [],
+  veredito: null,
+  casoDoVeredito: null,
+  vereditoRegistradoEm: null,
   avaliacao: {
     id: '01a069e3-bbbb-7da4-9b84-7bfdb54799ae',
     score: 45,
@@ -164,7 +169,10 @@ describe('listagem de transações', () => {
       vi.fn(() =>
         Promise.resolve(
           json({
+            pagina: 1,
+            tamanho: 25,
             total: 2,
+            totalDePaginas: 1,
             itens: [
               {
                 id: ID,
@@ -204,10 +212,15 @@ describe('listagem de transações', () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText('Revisar')).toBeInTheDocument();
-    expect(screen.getByText('45')).toBeInTheDocument();
+    // Escopo na tabela: desde a Fase 10 o console tem filtros, e "Revisar"
+    // tambem e uma opcao do seletor de decisao. Procurar na pagina inteira
+    // passaria a casar com o filtro em vez da linha.
+    const tabela = await screen.findByRole('table');
+
+    expect(within(tabela).getByText('Revisar')).toBeInTheDocument();
+    expect(within(tabela).getByText('45')).toBeInTheDocument();
 
     // A linha sem avaliação diz isso, em vez de mostrar zero.
-    expect(screen.getByText('sem avaliação')).toBeInTheDocument();
+    expect(within(tabela).getByText('sem avaliação')).toBeInTheDocument();
   });
 });
