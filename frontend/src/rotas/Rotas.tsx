@@ -2,6 +2,8 @@ import { Route, Routes } from 'react-router';
 import { LayoutDoApp } from '../layout/LayoutDoApp';
 import { PaginaDeLogin } from '../paginas/PaginaDeLogin';
 import { PaginaDeAlertas } from '../paginas/PaginaDeAlertas';
+import { PaginaDeBacktests } from '../paginas/PaginaDeBacktests';
+import { PaginaDoBacktest } from '../paginas/PaginaDoBacktest';
 import { PaginaDeCasos } from '../paginas/PaginaDeCasos';
 import { PaginaDoCaso } from '../paginas/PaginaDoCaso';
 import { PaginaDeIntegracoes } from '../paginas/PaginaDeIntegracoes';
@@ -50,6 +52,11 @@ export function Rotas() {
           element={<RotaProtegida perfis={['Administrador', 'SupervisorDeFraude']} />}
         >
           <Route path="regras/:id" element={<PaginaDaRegra />} />
+          {/* Backtest e supervisao inteira, leitura inclusive: e um ensaio
+              sobre uma decisao que ainda nao foi tomada, e nao uma decisao. O
+              material do Auditor sao as decisoes reais e a trilha. */}
+          <Route path="backtests" element={<PaginaDeBacktests />} />
+          <Route path="backtests/:id" element={<PaginaDoBacktest />} />
         </Route>
 
         {/* A restricao por perfil e repetida no backend, que e quem decide. */}

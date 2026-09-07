@@ -14,6 +14,11 @@ const NAVEGACAO: readonly {
   { para: '/casos', rotulo: 'Casos' },
   { para: '/transacoes', rotulo: 'Transações' },
   { para: '/regras', rotulo: 'Regras' },
+  {
+    para: '/backtests',
+    rotulo: 'Backtests',
+    perfis: ['Administrador', 'SupervisorDeFraude'],
+  },
   { para: '/integracoes', rotulo: 'Integrações', perfis: ['Administrador'] },
   { para: '/usuarios', rotulo: 'Usuários', perfis: ['Administrador'] },
 ];
