@@ -10,6 +10,7 @@ using CentralAntifraude.Api.Identidade;
 using CentralAntifraude.Api.Integracoes;
 using CentralAntifraude.Api.Investigacao;
 using CentralAntifraude.Api.Operacao;
+using CentralAntifraude.Api.Seguranca;
 using CentralAntifraude.Api.Risco;
 using CentralAntifraude.Application.Correlacao;
 using CentralAntifraude.Application.Identidade;
@@ -201,7 +202,58 @@ construtor.Services.AddRateLimiter(opcoes =>
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0,
             }));
+
+    // O refresh e particionado por IP, e nao pelo cookie. O valor do cookie e
+    // o segredo da sessao: usa-lo como chave de particao o colocaria num
+    // dicionario em memoria, que e exatamente o que o produto evita desde a
+    // Fase 2 (CLAUDE.md secao 56).
+    //
+    // O limite e generoso porque a renovacao e legitima e frequente — duas
+    // abas abertas renovam em paralelo. Ele existe para o caso oposto: alguem
+    // martelando a rota com cookies sorteados para descobrir um valido.
+    opcoes.AddPolicy(EndpointsDeIdentidade.LimiteDeRefresh, contexto =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ChaveDeLimiteDeLogin(contexto),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
+
+    // Emitir e revogar credencial de integracao e a operacao administrativa
+    // mais sensivel do produto: cada chamada devolve um segredo novo
+    // (CLAUDE.md secao 55). Particionado pela ORGANIZACAO — a conta
+    // comprometida de um cliente nao pode travar a operacao dos outros.
+    opcoes.AddPolicy(EndpointsDeIngestao.LimiteDeCredenciais, contexto =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ChaveDeLimiteDeCredenciais(contexto),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
 });
+
+// ---------------------------------------------------------------------------
+// Teto do corpo da requisicao.
+//
+// O padrao do Kestrel e 30 MB. Nenhuma rota deste produto precisa disso: a
+// maior entrada humana e uma nota de investigacao de 4.000 caracteres, e a
+// ingestao ja tem teto proprio de 8 KB. Sem um limite global, um corpo de 30 MB
+// seria lido inteiro antes de qualquer validacao — memoria gasta para ser
+// recusada depois.
+// ---------------------------------------------------------------------------
+construtor.Services.Configure<Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerOptions>(
+    opcoes => opcoes.Limits.MaxRequestBodySize = SessaoHttp.TamanhoMaximoDoCorpo);
+
+// ---------------------------------------------------------------------------
+// CORS para o modelo de deploy da Fase 14: frontend na Vercel, API numa
+// Function URL. A lista de origens e a MESMA da verificacao de Origin que
+// defende contra CSRF — duas listas sairiam de sincronia no primeiro ajuste.
+// ---------------------------------------------------------------------------
+construtor.Services.AddCors(opcoes => PoliticaDeCors.Registrar(opcoes, opcoesDeAutenticacao));
 
 if (construtor.Environment.IsDevelopment())
 {
@@ -231,15 +283,39 @@ if (aplicacao.Environment.IsDevelopment())
 // justamente a linha que alguem vai procurar durante um incidente.
 aplicacao.UseMiddleware<MiddlewareDeCorrelacao>();
 
+// Logo depois da correlacao e antes de tudo o mais: os cabecalhos precisam
+// valer inclusive nas respostas de erro, que sao escritas por um middleware
+// acima deste.
+aplicacao.UseMiddleware<MiddlewareDeCabecalhosDeSeguranca>();
+
+// O teto de corpo tambem pela feature: a opcao do Kestrel vale em producao e
+// nao existe no host de teste, e um limite sem teste e a pior forma de ter um
+// limite.
+aplicacao.UseMiddleware<MiddlewareDeLimiteDeCorpo>(SessaoHttp.TamanhoMaximoDoCorpo);
+
 aplicacao.UseExceptionHandler();
 
 // Sem isto, um 404 de rota nao encontrada volta com corpo vazio, quebrando a
 // promessa de que todo erro da API tem o mesmo formato.
 aplicacao.UseStatusCodePages();
 
-aplicacao.UseRateLimiter();
+// Antes da autenticacao: uma requisicao de origem nao autorizada precisa ser
+// recusada pelo navegador sem que o servidor gaste consulta nenhuma, e o
+// preflight `OPTIONS` nao carrega credencial para autenticar.
+aplicacao.UseCors(PoliticaDeCors.Nome);
 
 aplicacao.UseAuthentication();
+
+// DEPOIS da autenticacao, e nao antes. O limite de emissao de credencial e
+// particionado pela organizacao da identidade, e antes deste ponto
+// `HttpContext.User` esta vazio — a particao cairia no IP e a cota viraria
+// global, deixando a conta comprometida de um cliente travar a operacao dos
+// outros.
+//
+// O limite de login continua valendo: ele e particionado por IP e a rota e
+// anonima, entao a ordem nao muda nada para ele.
+aplicacao.UseRateLimiter();
+
 aplicacao.UseAuthorization();
 
 if (aplicacao.Environment.IsDevelopment())
@@ -283,6 +359,17 @@ await aplicacao.RunAsync();
 // Chave do limite de login: IP de origem.
 static string ChaveDeLimiteDeLogin(HttpContext contexto) =>
     contexto.Connection.RemoteIpAddress?.ToString() ?? "sem-ip";
+
+// Chave do limite de credenciais: a organizacao da identidade autenticada. A
+// conta comprometida de um cliente nao pode travar a operacao dos outros.
+static string ChaveDeLimiteDeCredenciais(HttpContext contexto)
+{
+    var organizacao = contexto.User.FindFirst(EmissorDeAccessToken.ClaimDeOrganizacao)?.Value;
+
+    return string.IsNullOrEmpty(organizacao)
+        ? $"ip:{contexto.Connection.RemoteIpAddress?.ToString() ?? "sem-ip"}"
+        : $"org:{organizacao}";
+}
 
 // Chave do limite de ingestao: o identificador PUBLICO da credencial - a
 // parte da chave que nao e segredo. O segredo nunca vira chave de dicionario

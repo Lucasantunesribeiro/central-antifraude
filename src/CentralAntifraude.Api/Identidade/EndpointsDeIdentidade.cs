@@ -11,6 +11,15 @@ public static class EndpointsDeIdentidade
     /// <summary>Politica de limite aplicada ao login.</summary>
     public const string LimiteDeLogin = "login";
 
+    /// <summary>
+    /// Limite da renovacao de sessao (CLAUDE.md secao 55).
+    ///
+    /// Generoso, porque renovar e legitimo e frequente — duas abas abertas
+    /// renovam em paralelo. Ele existe para o caso oposto: alguem martelando a
+    /// rota com cookies sorteados para descobrir um valido.
+    /// </summary>
+    public const string LimiteDeRefresh = "refresh";
+
     public static void MapearEndpointsDeAutenticacao(this IEndpointRouteBuilder rotas)
     {
         ArgumentNullException.ThrowIfNull(rotas);
@@ -89,6 +98,10 @@ public static class EndpointsDeIdentidade
                 }
             })
             .AllowAnonymous()
+            // Renovar e anonimo por natureza — a prova de identidade e o
+            // cookie. Sem limite, a rota vira um oraculo para adivinhar
+            // valores de refresh token (CLAUDE.md secao 55).
+            .RequireRateLimiting(LimiteDeRefresh)
             .WithName("RenovarSessao");
 
         // ------------------------------------------------------------------

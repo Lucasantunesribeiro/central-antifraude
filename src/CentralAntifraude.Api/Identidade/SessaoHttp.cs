@@ -21,6 +21,17 @@ namespace CentralAntifraude.Api.Identidade;
 /// </summary>
 public static class SessaoHttp
 {
+    /// <summary>
+    /// Teto do corpo de qualquer requisicao, em bytes.
+    ///
+    /// O padrao do Kestrel e 30 MB. Nenhuma rota deste produto precisa disso:
+    /// a maior entrada humana e uma nota de investigacao de 4.000 caracteres,
+    /// e a ingestao tem teto proprio de 8 KB. Sem o limite global, um corpo de
+    /// 30 MB seria lido inteiro antes de qualquer validacao — memoria gasta
+    /// para ser recusada depois.
+    /// </summary>
+    public const long TamanhoMaximoDoCorpo = 64 * 1024;
+
     public const string NomeDoCookie = "ca_sessao";
 
     /// <summary>Prefixo comum de todas as rotas de aplicacao da API.</summary>

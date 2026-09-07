@@ -29,6 +29,15 @@ public static class EndpointsDeIngestao
     /// </summary>
     public const long TamanhoMaximoDoCorpo = 8 * 1024;
 
+    /// <summary>
+    /// Limite de emissao e revogacao de credencial (CLAUDE.md secao 55).
+    ///
+    /// E a operacao administrativa mais sensivel do produto: cada chamada
+    /// devolve um segredo novo. Particionada pela organizacao, para que a
+    /// conta comprometida de um cliente nao trave a operacao dos outros.
+    /// </summary>
+    public const string LimiteDeCredenciais = "credenciais";
+
     /// <summary>Politica que exige uma integracao autenticada.</summary>
     public const string PoliticaDeIntegracao = "integracao:autenticada";
 
@@ -195,6 +204,7 @@ public static class EndpointsDeIngestao
                 CancellationToken cancellationToken) =>
                 Results.Ok(CredencialEmitidaResposta.De(
                     await servico.RotacionarCredencialAsync(id, cancellationToken))))
+            .RequireRateLimiting(LimiteDeCredenciais)
             .WithName("RotacionarCredencialDeIntegracao");
 
         grupo.MapDelete("/{id:guid}/credenciais/{credencialId:guid}", async (
@@ -207,6 +217,7 @@ public static class EndpointsDeIngestao
 
                 return Results.NoContent();
             })
+            .RequireRateLimiting(LimiteDeCredenciais)
             .WithName("RevogarCredencialDeIntegracao");
     }
 
