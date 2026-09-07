@@ -1,4 +1,7 @@
+using CentralAntifraude.Application.Backtests;
 using CentralAntifraude.Application.Mensageria;
+using CentralAntifraude.Application.Risco;
+using CentralAntifraude.Domain.Risco;
 using CentralAntifraude.Infrastructure.Mensageria;
 using CentralAntifraude.Infrastructure.Persistencia;
 using CentralAntifraude.Infrastructure.Persistencia.Repositorios;
@@ -25,12 +28,14 @@ internal sealed class CenarioDeMensageria : IAsyncDisposable
         IFilaDeMensagens fila,
         DespachanteDeEventos despachante,
         ProcessadorDeEventos processador,
+        ProcessadorDeBacktests backtests,
         OpcoesDaFila opcoes)
     {
         _contexto = contexto;
         Fila = fila;
         Despachante = despachante;
         Processador = processador;
+        Backtests = backtests;
         Opcoes = opcoes;
     }
 
@@ -39,6 +44,9 @@ internal sealed class CenarioDeMensageria : IAsyncDisposable
     public DespachanteDeEventos Despachante { get; }
 
     public ProcessadorDeEventos Processador { get; }
+
+    /// <summary>O consumidor da fila dedicada de backtests (Fase 9).</summary>
+    public ProcessadorDeBacktests Backtests { get; }
 
     public OpcoesDaFila Opcoes { get; }
 
@@ -51,7 +59,8 @@ internal sealed class CenarioDeMensageria : IAsyncDisposable
     /// </summary>
     public static CenarioDeMensageria Criar(
         string stringDeConexao,
-        OpcoesDaFila? opcoes = null)
+        OpcoesDaFila? opcoes = null,
+        OpcoesDeBacktest? opcoesDeBacktest = null)
     {
         var contexto = CenarioDeIdentidade.CriarContexto(stringDeConexao);
         var opcoesDaFila = opcoes ?? new OpcoesDaFila();
@@ -86,7 +95,33 @@ internal sealed class CenarioDeMensageria : IAsyncDisposable
             relogio,
             NullLogger<ProcessadorDeEventos>.Instance);
 
-        return new CenarioDeMensageria(contexto, fila, despachante, processador, opcoesDaFila);
+        // O consumidor de backtests roda com o MESMO motor da avaliacao real:
+        // e isso que o ROADMAP 9.4 exige, e montar aqui um motor diferente
+        // faria o teste provar o contrario do que ele afirma.
+        var opcoesDoBacktest = opcoesDeBacktest ?? new OpcoesDeBacktest();
+        var repositorioDeBacktests = new RepositorioDeBacktests(contexto);
+
+        var backtests = new ProcessadorDeBacktests(
+            repositorioDeBacktests,
+            new ExecutorDeBacktest(
+                repositorioDeBacktests,
+                new MotorDeRisco(),
+                new OpcoesDeAvaliacao(),
+                opcoesDoBacktest,
+                relogio),
+            new UnidadeDeTrabalho(contexto),
+            fila,
+            opcoesDoBacktest,
+            relogio,
+            NullLogger<ProcessadorDeBacktests>.Instance);
+
+        return new CenarioDeMensageria(
+            contexto,
+            fila,
+            despachante,
+            processador,
+            backtests,
+            opcoesDaFila);
     }
 
     /// <summary>
@@ -126,6 +161,32 @@ internal sealed class CenarioDeMensageria : IAsyncDisposable
         {
             var despacho = await Despachante.DespacharLoteAsync(cancellationToken);
             var consumo = await Processador.ConsumirLoteAsync(cancellationToken);
+
+            if (despacho.Total == 0 && consumo.Total == 0)
+            {
+                break;
+            }
+        }
+
+        return ciclos;
+    }
+
+    /// <summary>
+    /// Despacha a Outbox e consome a fila de backtests ate ela esvaziar.
+    ///
+    /// Separado do ciclo operacional de proposito: e assim que o teste
+    /// consegue afirmar "o worker de alertas nao encostou nesta mensagem".
+    /// </summary>
+    public async Task<int> RodarBacktestsAteEsvaziarAsync(
+        CancellationToken cancellationToken,
+        int maximoDeCiclos = 10)
+    {
+        var ciclos = 0;
+
+        for (; ciclos < maximoDeCiclos; ciclos++)
+        {
+            var despacho = await Despachante.DespacharLoteAsync(cancellationToken);
+            var consumo = await Backtests.ConsumirLoteAsync(cancellationToken);
 
             if (despacho.Total == 0 && consumo.Total == 0)
             {
