@@ -42,6 +42,8 @@ public static class SerializadorDeConteudoDeEvento
         {
             TransacaoAvaliadaV1.NomeDoTipo =>
                 JsonSerializer.Deserialize<TransacaoAvaliadaV1>(json, Opcoes),
+            BacktestSolicitadoV1.NomeDoTipo =>
+                JsonSerializer.Deserialize<BacktestSolicitadoV1>(json, Opcoes),
             _ => null,
         };
 

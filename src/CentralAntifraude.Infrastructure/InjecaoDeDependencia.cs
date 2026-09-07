@@ -1,4 +1,5 @@
 using CentralAntifraude.Application.Alertas;
+using CentralAntifraude.Application.Backtests;
 using CentralAntifraude.Application.Auditoria;
 using CentralAntifraude.Application.Comum;
 using CentralAntifraude.Application.Eventos;
@@ -77,6 +78,7 @@ public static class InjecaoDeDependencia
         AdicionarIdentidade(servicos, configuracao);
         AdicionarConcorrencia(servicos, configuracao);
         AdicionarRisco(servicos, configuracao);
+        AdicionarBacktests(servicos, configuracao);
         AdicionarAlertas(servicos);
         AdicionarMensageria(servicos, configuracao);
         AdicionarIngestao(servicos, configuracao);
@@ -149,6 +151,22 @@ public static class InjecaoDeDependencia
         return opcoes;
     }
 
+    /// <summary>Le e valida as opcoes de backtest.</summary>
+    public static OpcoesDeBacktest LerOpcoesDeBacktest(IConfiguration configuracao)
+    {
+        ArgumentNullException.ThrowIfNull(configuracao);
+
+        var opcoes = new OpcoesDeBacktest();
+        configuracao.GetSection(OpcoesDeBacktest.Secao).Bind(opcoes);
+
+        // Falha fechada: um teto de contexto menor do que o de transacoes
+        // analisadas faria toda execucao no limite falhar por um motivo que a
+        // mensagem nao explicaria. Melhor nao subir.
+        opcoes.Validar();
+
+        return opcoes;
+    }
+
     /// <summary>Le e valida as opcoes de retry de concorrencia.</summary>
     public static OpcoesDeConcorrencia LerOpcoesDeConcorrencia(IConfiguration configuracao)
     {
@@ -196,6 +214,7 @@ public static class InjecaoDeDependencia
         servicos.AddScoped<IFilaDeMensagens, FilaEmPostgres>();
         servicos.AddScoped<DespachanteDeEventos>();
         servicos.AddScoped<ProcessadorDeEventos>();
+        servicos.AddScoped<ProcessadorDeBacktests>();
 
         // Os efeitos de uma mensagem, na ordem em que serao aplicados.
         //
@@ -213,6 +232,21 @@ public static class InjecaoDeDependencia
         // dois caminhos de inicializacao diferentes entre teste e producao.
         servicos.AddHostedService<LacoDoDespachante>();
         servicos.AddHostedService<LacoDoConsumidor>();
+        servicos.AddHostedService<LacoDeBacktests>();
+    }
+
+    private static void AdicionarBacktests(IServiceCollection servicos, IConfiguration configuracao)
+    {
+        servicos.AddSingleton(LerOpcoesDeBacktest(configuracao));
+
+        servicos.AddScoped<IRepositorioDeBacktests, RepositorioDeBacktests>();
+        servicos.AddScoped<ServicoDeBacktests>();
+
+        // O executor usa o mesmo MotorDeRisco singleton da avaliacao real. Se
+        // um dia alguem registrar um motor diferente aqui, o ROADMAP 9.4 terá
+        // sido violado nesta linha — e ha um teste de arquitetura que verifica
+        // que o motor continua unico.
+        servicos.AddScoped<ExecutorDeBacktest>();
     }
 
     private static void AdicionarAlertas(IServiceCollection servicos)

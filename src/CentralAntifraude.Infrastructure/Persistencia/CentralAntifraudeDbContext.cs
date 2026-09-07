@@ -1,5 +1,6 @@
 using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Domain.Alertas;
+using CentralAntifraude.Domain.Backtests;
 using CentralAntifraude.Domain.Auditoria;
 using CentralAntifraude.Domain.Eventos;
 using CentralAntifraude.Domain.Identidade;
@@ -73,6 +74,8 @@ public class CentralAntifraudeDbContext : DbContext
 
     public DbSet<ResultadoDeInvestigacaoDaTransacao> ResultadosDeInvestigacao =>
         Set<ResultadoDeInvestigacaoDaTransacao>();
+
+    public DbSet<ExecucaoDeBacktest> ExecucoesDeBacktest => Set<ExecucaoDeBacktest>();
 
     public DbSet<EventoDeSaida> EventosDeSaida => Set<EventoDeSaida>();
 
@@ -184,6 +187,13 @@ public class CentralAntifraudeDbContext : DbContext
 
         modelBuilder.Entity<ResultadoDeInvestigacaoDaTransacao>()
             .HasQueryFilter(FiltroDeTenant, r => r.OrganizacaoId == OrganizacaoAtual);
+
+        // O backtest e configuracao de risco do tenant: qual regra ele esta
+        // pensando em publicar e o que isso faria com o historico dele. Uma
+        // consulta futura sem filtro colocaria a estrategia antifraude de um
+        // cliente na tela de outro.
+        modelBuilder.Entity<ExecucaoDeBacktest>()
+            .HasQueryFilter(FiltroDeTenant, e => e.OrganizacaoId == OrganizacaoAtual);
 
         // A Outbox tambem e filtrada. Ela guarda decisao, score e sinais
         // de um tenant; uma consulta futura escrita sem o filtro vazaria

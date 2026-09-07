@@ -176,6 +176,39 @@ public sealed class LacoDoDespachante : LacoDeSegundoPlano
     }
 }
 
+/// <summary>
+/// Consome a fila de backtests.
+///
+/// Laco separado, e nao um segundo tipo de mensagem no laco operacional: um
+/// backtest de milhares de transacoes ocuparia o ciclo inteiro, e o alerta de
+/// uma transacao bloqueada ficaria esperando atras dele (CLAUDE.md secao 30).
+/// Na Fase 14 os dois viram Lambdas diferentes, com gatilhos diferentes — e o
+/// codigo de dentro do ciclo nao muda.
+/// </summary>
+public sealed class LacoDeBacktests : LacoDeSegundoPlano
+{
+    public LacoDeBacktests(
+        IServiceScopeFactory escopos,
+        OpcoesDeSegundoPlano opcoes,
+        ILogger<LacoDeBacktests> log)
+        : base(escopos, opcoes, log)
+    {
+    }
+
+    protected override string Nome => "executor-de-backtests";
+
+    protected override async Task<bool> ExecutarCicloAsync(
+        IServiceProvider servicos,
+        CancellationToken cancellationToken)
+    {
+        var resultado = await servicos
+            .GetRequiredService<ProcessadorDeBacktests>()
+            .ConsumirLoteAsync(cancellationToken);
+
+        return resultado.Total > 0;
+    }
+}
+
 /// <summary>Consome a fila operacional.</summary>
 public sealed class LacoDoConsumidor : LacoDeSegundoPlano
 {

@@ -82,8 +82,11 @@ public sealed partial class DespachanteDeEventos
             {
                 var envelope = EnvelopeDeEvento.De(evento);
 
+                // A fila e escolhida pelo TIPO do evento, e nao fixa: desde a
+                // Fase 9 o mesmo despachante alimenta a fila operacional e a
+                // de backtests (CLAUDE.md secao 30).
                 await _fila.EnviarAsync(
-                    IFilaDeMensagens.FilaOperacional,
+                    RoteamentoDeFilas.Para(evento.Tipo),
                     SerializadorDeEnvelope.Serializar(envelope),
                     cancellationToken);
 
