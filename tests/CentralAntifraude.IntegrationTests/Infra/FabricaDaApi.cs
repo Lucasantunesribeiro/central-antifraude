@@ -40,10 +40,22 @@ public sealed class FabricaDaApi : WebApplicationFactory<Program>
     public List<string> Registros { get; } = [];
 
     private readonly string _stringDeConexao;
+    private readonly IReadOnlyDictionary<string, string> _ajustes;
 
-    public FabricaDaApi(string stringDeConexao)
+    /// <summary>
+    /// Hospeda a API com configuracao extra.
+    ///
+    /// Existe para os testes de CORS e de limite: as duas coisas dependem de
+    /// configuracao que o resto da suite nao quer ligada — origens permitidas
+    /// mudam o comportamento de toda requisicao, e um teste de rate limit
+    /// gastaria a cota das outras classes se dividisse o mesmo host.
+    /// </summary>
+    public FabricaDaApi(
+        string stringDeConexao,
+        IReadOnlyDictionary<string, string>? ajustes = null)
     {
         _stringDeConexao = stringDeConexao;
+        _ajustes = ajustes ?? new Dictionary<string, string>(StringComparer.Ordinal);
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -68,6 +80,11 @@ public sealed class FabricaDaApi : WebApplicationFactory<Program>
         builder.UseSetting(
             "Logging:LogLevel:Microsoft.EntityFrameworkCore.Database.Command",
             "Information");
+
+        foreach (var (chave, valor) in _ajustes)
+        {
+            builder.UseSetting(chave, valor);
+        }
 
         builder.ConfigureLogging(log =>
         {
