@@ -27,8 +27,9 @@ solução certificada de compliance.
 | 6 | Alertas Operacionais | ✅ concluída |
 | 7 | Casos e Investigação | ✅ concluída |
 | 8 | Gestão e Versionamento de Regras | ✅ concluída |
-| **9** | **Backtests** | ✅ **concluída** |
-| 10–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
+| 9 | Backtests | ✅ concluída |
+| **10** | **Operação, Busca, Painel e Auditoria** | ✅ **concluída** |
+| 11–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
 
 Hoje a plataforma recebe transações de sistemas externos autenticados por
 credencial própria, registra cada tentativa **exatamente uma vez** mesmo sob
@@ -108,6 +109,7 @@ docs/
   security-gate-7.md                 resultado do gate da Fase 7
   security-gate-8.md                 resultado do gate da Fase 8
   security-gate-9.md                 resultado do gate da Fase 9
+  security-gate-10.md                resultado do gate da Fase 10
   baseline-de-performance.md         números medidos do caminho crítico
 ```
 
@@ -458,6 +460,41 @@ recusam em vez de truncar. Detalhes no
 
 ---
 
+## O console operacional
+
+O analista abre o expediente no **painel** e trabalha no **console de
+transações**. Os dois só mostram números que levam a uma decisão.
+
+**Recebidas e avaliadas são números diferentes, e a tela diz por quê.** Uma
+transação atrasada chega hoje sobre um fato de ontem: o console filtra pela
+ocorrência — "o que aconteceu na terça" —, e o painel conta pela avaliação — "o
+que foi decidido hoje". Igualá-los esconderia o comportamento que o produto
+existe para tratar.
+
+O console filtra por busca, decisão, tipo de sinal, faixa de score e período,
+ordena por quatro colunas e pagina — **tudo no servidor, numa consulta só**. O
+total acompanha o filtro: contar antes de filtrar daria páginas vazias no fim, e
+esse é o tipo de defeito que ninguém reporta e todo mundo desconfia.
+
+**Nada do que o cliente digita vira SQL.** O campo de ordenação vem de lista
+fechada, decisão e tipo de regra são vocabulários fechados — `decisao=2` é
+recusado, e não interpretado como `Revisar` —, e a busca livre é casada como
+literal, com os curingas de `LIKE` escapados. Um `%` digitado por engano
+devolveria a tabela inteira e a tela pareceria filtrada: pior do que um erro,
+porque uma lista cheia não levanta suspeita.
+
+**As métricas de regra são contagens, e nunca taxa de acerto.** O painel mostra
+quantas vezes cada regra acionou e o que a investigação humana concluiu sobre
+aquelas transações — com o denominador à vista. As transações investigadas não
+são amostra aleatória: viraram caso justamente porque o motor as marcou.
+
+A **trilha de auditoria**, gravada desde a Fase 1, virou consultável — por
+Administrador e Auditor, e por mais ninguém. Ela é um controle sobre quem opera,
+e não há rota que a altere. Detalhes no
+[ADR 0015](docs/adr/0015-console-operacional.md).
+
+---
+
 ## Testes
 
 ```bash
@@ -492,6 +529,7 @@ tem — um teste de concorrência verde no SQLite não provaria nada.
 | Casos: timeline append-only, resolvido imutável e lost update | [ADR 0012](docs/adr/0012-casos-e-investigacao.md) |
 | Regras: rascunho, versão imutável e sucessão do perfil | [ADR 0013](docs/adr/0013-gestao-e-versionamento-de-regras.md) |
 | Backtests: mesmo motor, candidato congelado e isolamento de produção | [ADR 0014](docs/adr/0014-backtests.md) |
+| Console, painel e auditoria: filtro tipado, contagem ao vivo e trilha só de leitura | [ADR 0015](docs/adr/0015-console-operacional.md) |
 
 Três decisões são reforçadas em tempo de compilação por
 `src/BannedSymbols.txt`: `DateTime.UtcNow`, `DateTime.Now` e `Guid.NewGuid()`

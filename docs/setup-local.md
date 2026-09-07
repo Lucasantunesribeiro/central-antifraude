@@ -350,6 +350,56 @@ Os limites são configuráveis: `Backtest__JanelaMaximaEmDias`,
 `Backtest__MaximoDeExecucoesEmAndamento` e
 `Backtest__TempoMaximoDeExecucaoEmSegundos`.
 
+### Console, painel e auditoria (Fase 10)
+
+Entre com qualquer perfil e abra **Painel** e **Transações**. A trilha de
+auditoria fica em **Auditoria**, visível só para Administrador e Auditor.
+
+```sql
+-- O numero de protocolo que liga a transacao ao log do servidor.
+SELECT identificador_externo, id_de_correlacao FROM transacoes
+ORDER BY recebida_em DESC LIMIT 5;
+
+-- O mesmo identificador na Outbox: o fio atravessa HTTP, dominio e evento.
+SELECT tipo, id_de_correlacao, ocorrido_em FROM eventos_de_saida
+ORDER BY ocorrido_em DESC LIMIT 5;
+
+-- O que o painel conta como "avaliadas": ancorado em avaliada_em, e nao na
+-- ocorrencia. Uma transacao atrasada foi DECIDIDA hoje.
+SELECT date(avaliada_em) AS dia, decisao, count(*)
+FROM avaliacoes_de_risco GROUP BY 1, 2 ORDER BY 1 DESC;
+
+-- A fila assincrona esta andando? Zero e o estado saudavel.
+SELECT count(*) FROM eventos_de_saida WHERE publicado_em IS NULL;
+
+-- A trilha, do mais recente para o mais antigo.
+SELECT ocorrido_em, operacao, autor_descricao, entidade, detalhe
+FROM registros_de_auditoria ORDER BY ocorrido_em DESC LIMIT 20;
+```
+
+**Para ver o filtro literal funcionando**, na prática:
+
+1. em **Transações**, busque por parte de um identificador — a lista encolhe;
+2. busque por `%` seguido de uma letra qualquer. Volta vazio, porque o `%` é
+   texto e não curinga. Sem esse escape, a lista voltaria cheia e pareceria
+   filtrada.
+
+**Para ver a diferença entre recebidas e avaliadas**, envie uma transação com
+`ocorridaEm` de três dias atrás: ela entra em *recebidas* de hoje e o console a
+encontra no período de três dias atrás.
+
+**Se uma consulta devolver `400`**, os motivos desta fase são:
+
+| Campo | O que aconteceu |
+|---|---|
+| `ordenacao` | Campo de ordenação fora da lista fechada. A mensagem traz os aceitos. |
+| `filtro` | Decisão, tipo de regra ou operação fora do vocabulário; faixa de score invertida; busca curta ou longa demais. |
+| `paginacao` | Página menor que 1 ou tamanho acima de 100. |
+| `dias` | Janela do painel fora de 1 a 90 dias. |
+
+Nenhum deles é corrigido em silêncio: reduzir o tamanho para o teto faria você
+acreditar que recebeu a lista inteira.
+
 ## 5. Rodar
 
 ```bash

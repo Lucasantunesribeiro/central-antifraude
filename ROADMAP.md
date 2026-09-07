@@ -2844,14 +2844,122 @@ Testar:
 
 ## 10.9 Critérios de conclusão
 
-- [ ] Console de transações completo.
-- [ ] Detalhe consolidado.
-- [ ] Painel responde perguntas operacionais reais.
-- [ ] Auditoria consultável.
-- [ ] Métricas definidas corretamente.
-- [ ] Consultas eficientes o suficiente para baseline.
-- [ ] Security Gate 10 verde.
-- [ ] CI verde.
+- [x] Console de transações completo.
+- [x] Detalhe consolidado.
+- [x] Painel responde perguntas operacionais reais.
+- [x] Auditoria consultável.
+- [x] Métricas definidas corretamente.
+- [x] Consultas eficientes o suficiente para baseline.
+- [x] Security Gate 10 verde.
+- [ ] CI verde — *pendente do primeiro `push`, que não foi autorizado. Cada passo do workflow foi executado localmente e está verde.*
+
+---
+
+## 10.10 Resultado da Fase 10
+
+**Concluída em 2026-09-07.**
+
+### Evidências
+
+| Critério | Como foi verificado |
+|---|---|
+| Build backend | `dotnet build -c Release`, **0 erros e 0 avisos** |
+| Build frontend | `npm run build`, `tsc`, `oxlint` e `prettier --check` limpos |
+| Console completo | busca, decisão, tipo de sinal, faixa de score, período, ordenação por 4 campos e paginação — tudo no servidor, numa consulta só |
+| **Total acompanha o filtro** | as três decisões filtradas somam o total sem filtro; sem isso a paginação mostraria páginas vazias no fim |
+| Detalhe consolidado | avaliação, alertas com o caso que os recolheu, veredito humano e o identificador de correlação |
+| Painel | recebidas × avaliadas, três decisões sempre visíveis, tendência sem buracos, fila humana, casos parados e eventos pendentes na Outbox |
+| Métricas de regra | acionamentos cruzados com veredito; **as quatro colunas somam exatamente os acionamentos**, e nenhuma taxa é calculada |
+| Auditoria consultável | trilha cronológica, filtro por operação com o vocabulário que existe no tenant, e **nenhuma rota que a altere** |
+| Correlação ponta a ponta | o identificador da transação é o mesmo que a Outbox gravou — conferido no banco |
+| Testes | 519 unitários + 25 arquitetura + 410 integração + 134 frontend = **1.088, todos verdes** |
+| Security Gate 10 | [`docs/security-gate-10.md`](docs/security-gate-10.md) |
+| Migration | `ConsoleOperacional` aplicada em PostgreSQL real; `has-pending-model-changes` sem alteração pendente |
+| Dependências | `dotnet list package --vulnerable`: nenhuma; `npm audit`: 0 |
+| Segredos | `gitleaks detect` e `detect --no-git`: nenhum |
+
+### Decisões congeladas
+
+| Decisão | Registro |
+|---|---|
+| Filtrar, ordenar e paginar são a mesma consulta | `docs/adr/0015-console-operacional.md` |
+| A busca livre é literal: curingas de `LIKE` escapados | `docs/adr/0015` |
+| Console filtra por ocorrência; painel conta por avaliação | `docs/adr/0015` |
+| O painel conta ao vivo; a projeção diária mantém o papel da Fase 5 | `docs/adr/0015` |
+| Métricas de regra são contagens com denominador, nunca taxa | `docs/adr/0015` |
+| A trilha é lida por Administrador e Auditor, e por mais ninguém | `docs/adr/0015` |
+| A transação guarda o identificador de correlação | `docs/adr/0015` |
+| O detalhe reúne avaliação, alerta, caso e veredito numa consulta | `docs/adr/0015` |
+| Recusar, nunca corrigir em silêncio | `docs/adr/0015` |
+| Sem exportação — decisão, e não esquecimento | `docs/adr/0015` |
+
+### Uma decisão da Fase 5 foi revertida, com motivo
+
+`ResumoDiarioDeDecisoes` foi criada dizendo "a Fase 10 usa esta tabela no painel
+operacional". Não usa.
+
+A projeção é alimentada pelo caminho assíncrono e fica para trás quando a fila
+atrasa. Um painel lendo dela discordaria da lista de transações, e **duas
+respostas para a mesma pergunta geram investigação sobre um problema que não
+existe** (`CLAUDE.md` seção 44). No envelope de portfólio, contar ao vivo custa
+um `GROUP BY` sobre um índice que já existe.
+
+A projeção mantém o papel que sempre teve: ser o efeito assíncrono que prova a
+idempotência do consumidor. No lugar dela, o painel expõe algo que ela não
+responde — quantos eventos ainda não saíram da Outbox, que é a medida direta de
+fila parada.
+
+### Defeitos reais encontrados e corrigidos
+
+**1. `AutoInclude` dentro de junção à esquerda derruba a consulta inteira.** A
+avaliação traz os sinais por `AutoInclude`, e uma coleção dentro de um
+`LEFT JOIN` faz o EF Core recusar a tradução — a listagem inteira respondia
+`500`. `IgnoreAutoIncludes` não é otimização aqui: é a condição para a consulta
+existir. A listagem também não mostra sinal nenhum; quem precisa deles é o
+detalhe, que busca a avaliação pelo caminho próprio.
+
+**2. O par intermediário da junção não pode ser um `record` posicional.** Com o
+par projetado em `new Linha(a, b)`, o `ORDER BY` vira
+`new Linha(...).Transacao.RecebidaEm` e o EF não enxerga através do construtor —
+a consulta deixa de ser traduzível de novo, com outro `500`. Um tipo **anônimo**
+resolve, porque o EF o trata de forma especial. A consequência é que a junção e
+a projeção precisam ficar no mesmo método, e isso está documentado no código.
+
+**3. Dois testes afirmavam números do cenário, e não a semântica do filtro.** As
+primeiras versões de `O_filtro_de_decisao_...` e `O_filtro_de_score_...`
+esperavam totais fixos que dependiam de quantas transações o cenário criava.
+Reescritos para afirmar o que o filtro promete: as três decisões filtradas somam
+o total sem filtro, e todo item devolvido respeita a borda pedida. Passaram a
+provar o comportamento em vez da aritmética da montagem.
+
+### Fora de escopo, deliberadamente
+
+- **Sem exportação CSV.** O ROADMAP 10.7 a torna opcional, e ela adicionaria
+  superfície de CSV injection e um caminho de saída em massa para resolver um
+  problema que ninguém tem hoje. O item correspondente do Security Gate 10 é
+  **não aplicável**, e não pendente.
+- **Sem busca por texto em casos e notas.** O console cobre transações, que é
+  onde a investigação começa.
+- **Sem filtro por integração.** Nenhuma organização tem mais de uma hoje.
+- **Sem gráfico com biblioteca.** A tendência são três números por dia e um teto
+  conhecido; uma dependência a mais não resolveria problema de domínio nenhum.
+
+### Débito técnico não bloqueante
+
+1. **CI ainda não executado.** Cada comando roda localmente e está verde; o
+   GitHub Actions só roda após o primeiro `push`, que continua não autorizado.
+2. **O painel dispara oito consultas agregadas por carregamento.** São `count` e
+   `GROUP BY` sobre índices existentes, no envelope de portfólio. Se o volume
+   crescer, é aqui que se mede primeiro.
+3. **A busca livre é `ILIKE '%termo%'` e não usa índice.** É busca de
+   investigação, sobre o conjunto já restrito ao tenant. Um índice de trigrama
+   resolveria, e não se justifica sem medição.
+4. **A projeção diária ficou sem leitor no produto.** Continua sendo o efeito
+   que prova a idempotência do consumidor — o que já justifica a existência
+   dela —, mas nenhuma tela a lê.
+5. **Verificação visual no navegador segue pendente.** O último passo exige
+   digitar a senha de sessão no formulário, o que o agente não faz. Débito
+   herdado da Fase 2.
 
 ---
 
@@ -3973,7 +4081,7 @@ A autorização de uma fase não autoriza automaticamente a fase seguinte.
 | 7 — Casos e Investigação | ✅ Concluída (2026-09-05) |
 | 8 — Gestão e Versionamento de Regras | ✅ Concluída (2026-09-06) |
 | 9 — Backtests | ✅ Concluída (2026-09-07) |
-| 10 — Operação, Busca e Auditoria | ⬜ Não iniciada |
+| 10 — Operação, Busca e Auditoria | ✅ Concluída (2026-09-07) |
 | 11 — Segurança Aplicacional | ⬜ Não iniciada |
 | 12 — Observabilidade, Resiliência e Performance | ⬜ Não iniciada |
 | 13 — Demo e UX Final | ⬜ Não iniciada |
