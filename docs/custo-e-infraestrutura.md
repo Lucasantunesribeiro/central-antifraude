@@ -225,14 +225,14 @@ O template não declara parâmetro nenhum, e a ausência é a decisão: o que
 precisa estar no Parameter Store é segredo, e segredo dentro de um arquivo de
 infraestrutura versionado é um segredo publicado (`CLAUDE.md` seção 59).
 
-As funções leem o caminho `/central-antifraude/{ambiente}/` no arranque, e cada
+As funções leem o caminho `/portfolio/central-antifraude/{ambiente}/` no arranque, e cada
 parâmetro vira chave de configuração trocando `/` por `:`:
 
 | Parâmetro | Tipo | Vira a chave |
 |---|---|---|
-| `/central-antifraude/producao/ConnectionStrings/Postgres` | `SecureString` | `ConnectionStrings:Postgres` |
-| `/central-antifraude/producao/Autenticacao/ChaveDeAssinatura` | `SecureString` | `Autenticacao:ChaveDeAssinatura` |
-| `/central-antifraude/producao/Ingestao/ChaveDeFingerprint` | `SecureString` | `Ingestao:ChaveDeFingerprint` |
+| `/portfolio/central-antifraude/producao/ConnectionStrings/Postgres` | `SecureString` | `ConnectionStrings:Postgres` |
+| `/portfolio/central-antifraude/producao/Autenticacao/ChaveDeAssinatura` | `SecureString` | `Autenticacao:ChaveDeAssinatura` |
+| `/portfolio/central-antifraude/producao/Ingestao/ChaveDeFingerprint` | `SecureString` | `Ingestao:ChaveDeFingerprint` |
 
 Os dois últimos não são conveniência: a chave de assinatura é o que separa uma
 sessão legítima de uma forjada, e a de fingerprint é o segredo do HMAC que
@@ -258,28 +258,82 @@ libera.
 
 ---
 
-## 9. O que a validação local provou, e o que ela não pode provar
+## 9. O que foi implantado, e o que a nuvem ensinou
 
-Vale registrar a fronteira, porque ela é a diferença entre "verificado" e
-"esperado".
+**Implantado em 2026-09-08.** Conta AWS `632404567709`, região `us-east-1`,
+stack `central-antifraude-producao`.
 
-**Provado localmente:**
+### 9.1 Inventário real
 
-- o template é um SAM válido, e passa no lint (`sam validate --lint`);
-- `sam build` empacota as quatro funções com o runtime `dotnet10` em `arm64`,
-  e os quatro artefatos foram gerados;
-- cada string de handler do template resolve a uma classe e a um método que
-  existem no assembly, conferido por reflexão num teste automatizado;
-- todo `CodeUri` aponta para uma pasta com projeto dentro;
-- o aviso ao despachante sai **depois** do commit, conferido por uma conexão de
-  fora da transação.
+26 recursos, todos previstos — nenhum apareceu por engano:
 
-**Não provado, e só verificável na nuvem:**
+| Tipo | Qtd. | Cobra? |
+|---|---|---|
+| `AWS::Lambda::Function` | 4 | por uso |
+| `AWS::Lambda::Url` | 1 | não |
+| `AWS::Lambda::EventSourceMapping` | 2 | não |
+| `AWS::SQS::Queue` | 4 (2 de trabalho + 2 DLQ) | por uso |
+| `AWS::Scheduler::Schedule` | 1 | por uso |
+| `AWS::Logs::LogGroup` | 4 | por volume |
+| `AWS::CloudWatch::Alarm` | 3 | 10 grátis, always-free |
+| `AWS::IAM::Role` | 5 | não |
+| `AWS::Lambda::Permission` | 2 | não |
 
-- o tempo de arranque frio do .NET 10 em `arm64`, somado ao despertar do Neon;
-- o comportamento real do gatilho de SQS sob concorrência reservada;
-- se as permissões IAM que o SAM gera a partir das políticas são suficientes na
-  prática — o teste de permissão é o deploy;
-- a leitura efetiva do Parameter Store pela role de execução;
-- o CORS da Function URL contra a origem real da Vercel.
+Nenhum RDS, EC2, ECS, NAT Gateway ou API Gateway. **Nenhum recurso de custo
+fixo.**
+
+Configuração conferida no ambiente real: as 4 funções em `dotnet10`/`arm64`,
+retenção de 14 dias nos 4 grupos de log, scheduler em `rate(15 minutes)` e
+`ENABLED`, redrive nas duas filas de trabalho (`maxReceiveCount` 5 e 3).
+
+Parâmetros no SSM: 3, todos `SecureString` com `alias/aws/ssm` — a chave
+gerenciada pela AWS, que **não cobra**. Uma chave própria (CMK) custaria US$ 1,00
+por mês, e teria sido o único custo fixo do projeto.
+
+### 9.2 Custo observado
+
+Gasto da conta no mês, por serviço, depois do deploy:
+
+```
+AWS Key Management Service   0,1042   <- IAM Identity Center, alheio a este projeto
+AWS Secrets Manager          0,00001  <- chamadas de API, nenhum segredo armazenado
+Amazon S3                    0,000055 <- artefatos de deploy do SAM
+```
+
+**A Central Antifraude não acrescentou nenhuma linha de custo.** A cobrança de
+KMS é uma chave replicada do IAM Identity Center, em `PendingReplicaDeletion` —
+some sozinha e não pertence a esta stack.
+
+Proteção: budget `central-antifraude-meta-zero` de **US$ 1,00/mês**, com alertas
+por e-mail em 50%, 80% e 100% do realizado e 100% do previsto. Budgets sem
+*ações* são gratuitos e ilimitados; só os "action-enabled" têm limite de dois.
+
+### 9.3 O que a nuvem ensinou, e que a validação local não pegaria
+
+Cinco defeitos passaram por template válido, lint limpo, 1.073 testes verdes e
+uma stack `CREATE_COMPLETE`. Todos falhavam em silêncio.
+
+| Defeito | Como se manifestava | Teste que hoje o pega |
+|---|---|---|
+| Reserva de concorrência acima do limite da conta | rollback da stack inteira | `Nenhuma_funcao_reserva_concorrencia` |
+| IAM sem o ARN do *caminho* do SSM | 502 em toda invocação | `Cada_funcao_le_o_caminho_do_SSM_e_os_parametros_nele` |
+| CORS declarado na Function URL **e** na aplicação | `curl` 200, navegador reprova | `O_CORS_e_declarado_em_um_lugar_so` |
+| `IContextoDoUsuarioAtual` ausente no contêiner dos workers | despachante morria em toda invocação | `HospedagemDosLambdasTests` (5 testes) |
+| Backtest não acordava o despachante | ficava "Pendente" por até 15 min | `Solicitar_backtest_tambem_acorda_o_despachante` |
+
+O padrão dos cinco é o mesmo: **a fronteira entre o que a aplicação declara e o
+que a nuvem exige**. Nenhum é bug de lógica de domínio, e nenhum apareceria sem
+criar recurso.
+
+O mais instrutivo é o da concorrência. A conta tem limite de **10** execuções
+simultâneas — e não os 1.000 do padrão, porque contas novas começam baixo e
+sobem com o uso. As quatro reservas somavam exatamente 10, e a AWS exige deixar
+10 não reservados. O efeito de removê-las é melhor do que o plano original: o
+limite da conta já é um teto, e é global.
+
+### 9.4 O que continua não medido
+
+- Cold start em condição realmente fria de longo prazo (dias sem acesso).
+- Comportamento sob carga: o envelope de portfólio nunca foi exercido de perto.
+- Custo ao longo de um mês inteiro — o deploy tem horas de vida.
 

@@ -3848,22 +3848,84 @@ Configurar:
 ## 14.11 Critérios de conclusão
 
 - [x] Pricing atual verificado.
-- [x] Estimativa documentada.
-- [x] IaC reproduzível.
-- [x] Secrets fora do código.
-- [ ] Budget/alerta configurado quando possível. — *exige conta AWS*
-- [ ] Produção deployada somente com autorização. — *não autorizada*
-- [ ] Browser flows validados. — *exige ambiente publicado*
-- [ ] Async flows validados em AWS. — *exige recursos criados*
+- [x] Estimativa documentada, e revista contra o gasto real.
+- [x] IaC reproduzível — quatro `sam deploy` sobre a mesma stack.
+- [x] Secrets fora do código, no Parameter Store como `SecureString`.
+- [x] Budget/alerta configurado — `central-antifraude-meta-zero`, US$ 1,00/mês.
+- [x] Produção deployada com autorização explícita de 2026-09-08.
+- [ ] Browser flows validados. — *frontend não publicado: a CLI da Vercel perdeu a sessão na atualização e o login é interativo*
+- [x] Async flows validados em AWS — Outbox, SQS, worker, DLQ e scheduler.
 - [x] Runtime real reproduzido em testes quando necessário.
-- [x] Custo esperado dentro da meta.
+- [x] Custo esperado dentro da meta — nenhuma linha nova de custo.
 - [x] CI verde.
 
 ---
 
-## 14.12 Resultado da Fase 14 — parte local
+## 14.12 Resultado da Fase 14 — implantação real
 
-**Preparação concluída em 2026-09-08. Deploy não realizado e não autorizado.**
+**Implantado em 2026-09-08.** Conta AWS `632404567709`, região `us-east-1`,
+projeto Neon `central-antifraude`. Nenhum `git push`, nenhuma tag, nenhuma
+release.
+
+### O que está no ar
+
+| Camada | Estado |
+|---|---|
+| Neon | projeto `wispy-voice-47751025`, PostgreSQL 17, 0,25–0,5 CU, suspensão em 5 min |
+| Migrations | 11 aplicadas; 26 tabelas conferidas |
+| AWS | stack `central-antifraude-producao`, 26 recursos, nenhum de custo fixo |
+| API | `https://45xjudga7f5htauszrnldapspe0ceavu.lambda-url.us-east-1.on.aws/` |
+| Frontend | **não publicado** — ver débito 1 |
+
+### O que foi provado no ambiente real
+
+| Verificação | Evidência |
+|---|---|
+| `/health/live` e `/health/ready` | 200; `postgresql: Healthy` |
+| Jornada completa | transação → `Bloquear` score 75 com 3 sinais → Outbox → SQS → worker → alerta `Alta/Aberto` |
+| **Correlação ponta a ponta** | `alerta-1788893733` gravado em `eventos_processados`, do outro lado da fila |
+| Idempotência | reenvio idêntico devolveu 200 com o mesmo `avaliadaEm`; corpo diferente devolveu 409; **1 transação, 1 avaliação, 1 alerta** para 3 requisições |
+| Backtest | fila e função próprias; 34 analisadas, 2 mudanças; produção intacta |
+| DLQ | mensagem recusada foi reentregue 5× e chegou à DLQ em ~150 s; removida depois |
+| **Recovery pelo scheduler** | evento órfão pendente às 18:57 publicado às **19:08:33**, dentro da janela de 15 min |
+| Segurança | 401/403/404 corretos; token adulterado 401; rate limit 429 na 10ª tentativa; logs sem segredo |
+| Custo | nenhuma linha nova; budget de US$ 1,00 com alertas |
+
+### Os cinco defeitos que só a nuvem revelou
+
+Todos passaram por template válido, lint limpo, 1.073 testes verdes e stack
+`CREATE_COMPLETE`. Todos falhavam em silêncio. Cada um virou teste.
+
+1. **Reserva de concorrência impossível** — a conta tem limite de 10, não 1.000.
+2. **IAM sem o ARN do caminho do SSM** — 502 em toda invocação.
+3. **CORS declarado duas vezes** — `curl` 200, navegador reprova.
+4. **`IContextoDoUsuarioAtual` ausente no contêiner dos workers** — os testes de
+   integração não pegariam, porque montam a API pelo `Program.cs`.
+5. **Backtest não acordava o despachante** — ficava "Pendente" por até 15 min.
+
+### Débito técnico não bloqueante
+
+1. **Frontend não publicado.** A CLI da Vercel instalada (46.0.2) já não consegue
+   fazer deploy — o endpoint exige 47.2.2+ — e a atualização para a 59 descartou
+   a sessão, porque o formato de credencial mudou. `vercel login` é interativo e
+   depende do usuário. O projeto está criado, a variável `VITE_API_BASE_URL`
+   configurada, o CORS do backend já aponta para
+   `https://central-antifraude.vercel.app`, e o `vercel.json` está pronto.
+   Falta um comando.
+2. **Cold start de longo prazo não medido.** A varredura de quinze minutos acorda
+   o banco, então a janela suspensa dura no máximo dez minutos por ciclo — o que
+   confirma o cálculo, mas impede medir o pior caso (dias sem acesso).
+3. **`ssm:DescribeParameters` com `Resource: "*"`** na política gerada pelo SAM. A
+   ação lista nomes e não lê valores, e a API do SSM não aceita recurso
+   específico para ela. Registrado como concessão da política gerenciada.
+4. **O CI não roda `sam validate`.** Exige o SAM CLI no runner, e o workflow só
+   roda depois do primeiro `push`, que continua não autorizado.
+
+---
+
+## 14.13 Resultado da Fase 14 — a parte local, registrada antes do deploy
+
+**Preparação concluída em 2026-09-08.**
 
 A fase se divide em duas metades que não podem ser confundidas: o que é
 preparável na máquina, e o que só existe depois de criar recurso na nuvem.
@@ -4410,7 +4472,7 @@ A autorização de uma fase não autoriza automaticamente a fase seguinte.
 | 11 — Segurança Aplicacional | ✅ Concluída (2026-09-07) |
 | 12 — Observabilidade, Resiliência e Performance | ✅ Concluída (2026-09-07) |
 | 13 — Demo e UX Final | ✅ Concluída (2026-09-08) |
-| 14 — Infraestrutura e Deploy | 🟨 Preparação concluída (2026-09-08); deploy pendente de autorização |
+| 14 — Infraestrutura e Deploy | 🟨 Implantada em 2026-09-08; falta publicar o frontend na Vercel |
 | 15 — Validação Final e Release | ⬜ Não iniciada |
 
 Legenda:

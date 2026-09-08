@@ -5,9 +5,10 @@
 CloudFormation, funções Lambda, filas SQS, Function URL, Parameter Store e o
 frontend hospedado.
 
-**Nenhum recurso foi criado.** Este gate examina a infraestrutura declarada, e
-não uma infraestrutura no ar. A distinção importa: metade das verificações
-abaixo só pode ser confirmada de verdade depois do deploy, e isso está dito.
+**Executado em duas rodadas.** A primeira sobre a infraestrutura declarada,
+antes de existir recurso; a segunda contra o ambiente publicado, em
+2026-09-08. A seção 11 traz o resultado da segunda — e é ela que vale como
+prova, porque três das conclusões da primeira estavam erradas.
 
 ---
 
@@ -188,22 +189,111 @@ que existia.
 
 ---
 
-## 9. O que este gate NÃO prova
+## 9. Segunda rodada: o gate contra o ambiente publicado
 
-Nomeado para não ser confundido com cobertura:
+Conta `632404567709`, região `us-east-1`, stack `central-antifraude-producao`.
 
-- **Nenhum recurso existe.** Tudo acima é sobre infraestrutura declarada.
-- **As roles IAM não foram exercidas.** Uma política insuficiente só aparece na
-  primeira chamada real.
-- **A leitura do Parameter Store não foi feita.** O caminho e o formato estão
-  corretos no código; a permissão efetiva é assunto do deploy.
-- **O CORS não foi testado contra um navegador.** Está declarado nos dois
-  lugares e eles concordam, o que é diferente de funcionar.
-- **Não houve pentest.** É a Fase 15.
+### 9.1 Segredos nos logs de produção
+
+Varredura dos quatro grupos de log, duas horas de janela, procurando prefixo de
+senha do Neon, `Password=`, nomes das chaves de assinatura e de fingerprint,
+formato de chave de integração, blocos de chave privada e `AKIA`:
+
+| Grupo | Eventos | Resultado |
+|---|---|---|
+| api | 299 | limpo |
+| despachante | 35 | limpo |
+| consumidor | 33 | limpo |
+| backtests | 10 | limpo |
+
+Nenhum evento casou com nenhum padrão. O log estruturado da Fase 12 registra
+`CorrelationId`, `EventId` e `Decisao` — e não payload.
+
+### 9.2 Autorização e isolamento, na API publicada
+
+| Verificação | Esperado | Obtido |
+|---|---|---|
+| `GET /api/alertas` sem token | 401 | **401** |
+| Auditor fazendo `POST /api/integracoes` | 403 | **403** |
+| Auditor fazendo `GET /api/alertas` | 200 | **200** |
+| `GET /api/casos/{guid de outro tenant}` | 404 | **404** |
+| Token adulterado (um caractere a mais) | 401 | **401** |
+| `POST /api/ingestao/transacoes` sem credencial | 401 | **401** |
+
+O 404 no recurso alheio é a política da seção 52 do `CLAUDE.md`: cross-tenant não
+revela existência.
+
+### 9.3 Cabeçalhos e rate limiting
+
+`referrer-policy: no-referrer`, `x-frame-options: DENY`,
+`x-content-type-options: nosniff`. Não há `Server` nem `X-Powered-By` — a
+Function URL não anuncia a pilha.
+
+Rate limiting no login, medido: nove tentativas com senha errada devolveram 401,
+e a décima devolveu **429**.
+
+**HSTS não é emitido pela API**, e isso é correto: a Function URL só atende
+HTTPS, e HSTS é instrução para o navegador sobre um *site*. Quem serve HTML é a
+Vercel, e é lá que ele está declarado.
+
+### 9.4 IAM efetivo
+
+Políticas geradas pelo SAM, lidas da role real da API:
+
+- `sqs:SendMessage*` preso ao ARN de cada fila, nomeadamente;
+- `lambda:InvokeFunction` preso **ao despachante**, e não a tudo;
+- `ssm:GetParameter*` preso a `parameter/portfolio/central-antifraude/producao`
+  e aos filhos.
+
+Uma folga que **não foi escolhida por nós**: o SAM inclui
+`ssm:DescribeParameters` com `Resource: "*"`. A ação não lê valor nenhum — só
+lista nomes — e a API do SSM não aceita recurso específico para ela. Fica
+registrada como o que é: uma concessão da política gerenciada, não uma decisão.
+
+Receber e apagar mensagem não aparecem em política nenhuma: vêm do gatilho de
+SQS, que o SAM anexa à role da função que consome aquela fila.
+
+### 9.5 Superfície pública
+
+Um único endpoint alcançável da internet: a Function URL da API, com
+`AuthType: NONE` — deliberado, porque a autenticação é da aplicação. As quatro
+filas, as três funções de trabalho e os parâmetros do SSM não têm endpoint
+público. Os três parâmetros são `SecureString` com `alias/aws/ssm`.
+
+### 9.6 O defeito de segurança que o deploy revelou
+
+O CORS estava declarado em **dois** lugares — Function URL e aplicação — e a
+resposta simples voltava com `Access-Control-Allow-Origin` duplicado. Navegador
+trata header CORS duplicado como falha.
+
+Não era uma brecha: era o oposto, um bloqueio. Mas a lição é de segurança:
+**duas autoridades para a mesma decisão não somam proteção, dividem
+responsabilidade** — e a tentação seguinte teria sido afrouxar uma das duas para
+"destravar". A autoridade agora é uma, e um teste impede a volta.
+
+Verificado depois da correção: um header apenas; preflight 204; origem
+desconhecida não recebe cabeçalho CORS nenhum.
 
 ---
 
-## 10. Veredito
+## 10. O que este gate NÃO prova
+
+Nomeado para não ser confundido com cobertura:
+
+- **Não houve pentest.** É a Fase 15, e nada aqui substitui um.
+- **Não houve teste de carga.** O rate limiting foi verificado num caminho; o
+  comportamento sob volume não.
+- **O CORS não foi validado num navegador de verdade** — foi validado no
+  protocolo, contando cabeçalhos. É melhor do que a rodada anterior, que apenas
+  presumia, e ainda assim é menos do que abrir a página.
+- **Isolamento entre tenants foi testado com um tenant só.** O 404 no recurso
+  alheio prova o comportamento, mas a demo tem uma organização apenas; a
+  cobertura multi-tenant de verdade continua sendo a da suíte de integração.
+- **A retenção de log ainda não expirou nada.** Os grupos têm horas de vida.
+
+---
+
+## 11. Veredito
 
 **Aprovado para preparação. Não aprovado para deploy automático** — deploy
 continua exigindo autorização explícita (`CLAUDE.md` seção 109), e nenhuma foi

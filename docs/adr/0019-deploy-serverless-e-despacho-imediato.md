@@ -131,6 +131,41 @@ qualquer que tenha sido o motivo.
 
 ---
 
+## O que o deploy real corrigiu neste ADR
+
+Escrito antes de existir recurso, este documento errou em três pontos. Ficam
+registrados porque a correção é mais instrutiva que o acerto.
+
+**1. "Concorrência reservada por função" não era possível.** O ADR previa um
+teto por função como contenção de acidente. A conta tem limite de **10**
+execuções simultâneas — e não os 1.000 do padrão, porque contas novas começam
+baixo — e a AWS exige deixar 10 não reservados. As quatro reservas somavam
+exatamente 10, e o CloudFormation reverteu a stack.
+
+O resultado é melhor do que o plano: o limite da conta já é um teto, e é
+**global**, portanto mais apertado do que quatro tetos que somariam o mesmo.
+
+**2. "As duas camadas de CORS precisam concordar" era a premissa errada.** Elas
+não precisavam concordar — precisavam não coexistir. Com CORS na Function URL e
+na aplicação, toda resposta simples voltava com `Access-Control-Allow-Origin`
+duplicado, e navegador trata isso como falha. O preflight saía correto, o `curl`
+recebia 200, e só o navegador reprovava.
+
+**3. O despacho imediato foi tratado como detalhe da ingestão, e é
+responsabilidade de todo produtor de evento.** Solicitar um backtest gravava na
+Outbox sem acordar ninguém: o evento esperava a varredura de quinze minutos, o
+backtest ficava "Pendente", e quem pediu concluía que travou. Enquanto o aviso
+for chamada explícita, cada produtor novo precisa lembrar — e é um teste que
+faz o esquecimento aparecer no CI.
+
+**O que se confirmou.** A rede de segurança funcionou exatamente como desenhada,
+e a prova veio de graça do defeito 3: o evento órfão de `BacktestSolicitado.v1`
+ficou pendente às 18:57 e a varredura o publicou às **19:08:33**, dentro da
+janela de quinze minutos. O backtest concluiu sete segundos depois. Sem a
+Outbox, aquele evento teria se perdido.
+
+---
+
 ## Alternativas descartadas
 
 **Manter o laço em processo dentro da API.** Um `BackgroundService` numa Lambda
