@@ -3371,17 +3371,97 @@ Se **sim**:
 
 ## 12.10 Critérios de conclusão
 
-- [ ] Correlation ponta a ponta.
-- [ ] Structured logs seguros.
-- [ ] Métricas úteis.
-- [ ] DLQ observável.
-- [ ] Cenários de falha testados.
-- [ ] Cenários de carga executados.
-- [ ] Queries críticas analisadas.
-- [ ] Índices justificados.
-- [ ] Retry não genérico.
-- [ ] Decisão sobre Redis baseada em evidência.
-- [ ] CI verde.
+- [x] Correlation ponta a ponta.
+- [x] Structured logs seguros.
+- [x] Métricas úteis.
+- [x] DLQ observável.
+- [x] Cenários de falha testados.
+- [x] Cenários de carga executados.
+- [x] Queries críticas analisadas.
+- [x] Índices justificados.
+- [x] Retry não genérico.
+- [x] Decisão sobre Redis baseada em evidência.
+- [ ] CI verde — *pendente do primeiro `push`, que não foi autorizado. Cada passo do workflow foi executado localmente e está verde.*
+
+---
+
+## 12.11 Resultado da Fase 12
+
+**Concluída em 2026-09-07.**
+
+### Evidências
+
+| Critério | Como foi verificado |
+|---|---|
+| Build backend | `dotnet build -c Release`, **0 erros e 0 avisos** |
+| Build frontend | `npm run build`, `tsc`, `oxlint` e `prettier --check` limpos |
+| **Correlation ponta a ponta** | teste que lê **log** e exige o mesmo `CorrelationId` nos quatro elos: requisição, publicação, efeito e alerta |
+| Structured logs seguros | busca do analista, credencial, token e corpo do evento ausentes do log |
+| Métricas úteis | 17 instrumentos em 5 medidores, com catálogo em código e teste de emissão real |
+| DLQ observável | contador + aviso na movimentação, e runbook com as consultas de inspeção e reprocessamento |
+| Cenários de falha | 5 formas de **dependência ausente** — banco, fila, efeito, acúmulo, cancelamento |
+| Cenários de carga | 4 cenários medidos, números em [`docs/baseline-de-performance.md`](docs/baseline-de-performance.md) |
+| Queries críticas | `EXPLAIN` com 4.000 linhas nas três consultas do caminho quente |
+| Índices justificados | **nenhum índice novo** — a evidência disse que os existentes bastam |
+| Retry não genérico | inalterado desde a Fase 4; agora com métrica que o torna visível |
+| Decisão sobre Redis | [ADR 0017](docs/adr/0017-sem-redis.md) — não, com os números ao lado |
+| Security Gate 12 | [`docs/security-gate-12.md`](docs/security-gate-12.md) |
+| Testes | 519 unitários + 25 arquitetura + 469 integração + 134 frontend = **1.147, todos verdes** |
+| Migration | nenhuma nesta fase; `has-pending-model-changes` sem alteração pendente |
+
+### Decisões congeladas
+
+| Decisão | Registro |
+|---|---|
+| Uma linha de log e duas métricas por requisição | `Api/Observabilidade/MiddlewareDeTelemetria.cs` |
+| A operação é o **padrão da rota**, nunca o caminho nem a query string | idem |
+| Correlação reposta pelo worker a partir do envelope | `ContextoDeCorrelacaoMutavel`, `ProcessadorDeEventos` |
+| Catálogo de métricas com lista de dimensões **permitidas** | `Application/Observabilidade/Telemetria.cs` |
+| Profundidade de fila é amostrada por tempo, e não por ciclo | `AmostradorDeIndicadores` |
+| **Nenhuma rota de métricas** — os números são do processo, e não do tenant | ADR 0016, Decisão 4 |
+| PostgreSQL continua suficiente: sem Redis | [ADR 0017](docs/adr/0017-sem-redis.md) |
+
+### Defeito real encontrado e corrigido
+
+**O `UseExceptionHandler` limpa o endpoint antes de escrever a resposta de
+erro.** Lendo apenas `HttpContext.GetEndpoint()`, toda requisição terminada em
+erro de domínio — 404, 409, 400 — seria registrada como `desconhecida`:
+justamente as requisições que alguém vai investigar perderiam o nome da
+operação. A leitura passou a considerar também o `IExceptionHandlerFeature`.
+
+Encontrado por um teste que esperava `GET /api/casos/{id}` num 404 e recebeu
+`desconhecida` — e não por revisão de código.
+
+### Regressão criada e corrigida na mesma fase
+
+A linha de log por requisição transformou uma leitura sem trava do coletor de
+logs de teste em `Collection was modified`: antes, só erros escreviam, e a
+corrida praticamente não acontecia. O coletor passou a devolver **fotografia**
+em vez da lista viva, e três testes que travavam a lista à mão deixaram de
+precisar disso.
+
+### O número que contraria a intuição
+
+Oito clientes **independentes** produziram uma contenção de serialização, e a
+causa não está no domínio: com a tabela pequena, o planejador escolhe varredura
+sequencial, e sob `SERIALIZABLE` isso toma predicado sobre a relação inteira.
+Está medido, explicado pelo plano de execução e registrado — porque um número
+inexplicado numa medição de carga é pior do que um número ruim explicado.
+
+### Débito técnico não bloqueante
+
+1. **CI ainda não executado.** Cada comando roda localmente e está verde; o
+   GitHub Actions só roda após o primeiro `push`, que continua não autorizado.
+2. **Nenhum exportador de métricas.** Os instrumentos existem no processo e são
+   lidos pelos testes. O exportador é da Fase 14 e se conecta aos mesmos
+   medidores sem tocar em ponto de chamada nenhum.
+3. **Retenção e acesso ao log em produção** pertencem à Fase 14.
+4. **Sem teste de volume de log.** Uma linha por requisição é barata no envelope
+   de portfólio; em volume alto, log é custo e é vetor de negação de serviço.
+5. **Rate limiting continua por instância.** Limitação herdada da Fase 11, e a
+   única necessidade real de estado compartilhado que o projeto conhece.
+6. **Verificação visual no navegador segue pendente.** Débito herdado da
+   Fase 2.
 
 ---
 
@@ -4176,7 +4256,7 @@ A autorização de uma fase não autoriza automaticamente a fase seguinte.
 | 9 — Backtests | ✅ Concluída (2026-09-07) |
 | 10 — Operação, Busca e Auditoria | ✅ Concluída (2026-09-07) |
 | 11 — Segurança Aplicacional | ✅ Concluída (2026-09-07) |
-| 12 — Observabilidade, Resiliência e Performance | ⬜ Não iniciada |
+| 12 — Observabilidade, Resiliência e Performance | ✅ Concluída (2026-09-07) |
 | 13 — Demo e UX Final | ⬜ Não iniciada |
 | 14 — Infraestrutura e Deploy | ⬜ Não iniciada |
 | 15 — Validação Final e Release | ⬜ Não iniciada |

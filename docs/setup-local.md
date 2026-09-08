@@ -461,6 +461,44 @@ O teste lê as rotas do roteamento da aplicação real e compara com a tabela
 declarada. Uma rota sem entrada quebra a build — que é o ponto: quem cria a
 rota precisa declarar quem a alcança.
 
+### Observabilidade: seguir o fio (Fase 12)
+
+Com a API no ar e os laços de fundo ligados
+(`SegundoPlano__Habilitado=true`), dá para acompanhar uma operação inteira por
+um único identificador:
+
+```bash
+# Envie uma transação com um identificador escolhido por você.
+curl -s -D - -o /dev/null -X POST http://localhost:5175/api/ingestao/transacoes   -H "Authorization: ApiKey $CHAVE"   -H "X-Correlation-Id: teste-do-fio-0001"   -H "Idempotency-Key: idem-$RANDOM"   -H "Content-Type: application/json"   -d '{"identificadorExterno":"fio-1","valor":100,"moeda":"BRL", ... }'   | grep -i x-correlation-id
+
+# No console da API, quatro linhas carregam o mesmo identificador:
+#   [100] POST /api/ingestao/transacoes respondeu 201 em ... ms
+#   [502] Evento ... publicado na fila eventos-operacionais
+#   [514] Efeito aplicado ...
+#   [610] Alerta ... criado com prioridade ...  (só quando a decisão gera alerta)
+```
+
+Em desenvolvimento o console é texto legível; fora dele é **JSON por linha**,
+que é o formato que o CloudWatch indexa por propriedade sem parser.
+
+O catálogo de métricas, os sinais que valem alarme e o procedimento de fila de
+mortas estão em [`observabilidade.md`](observabilidade.md).
+
+**Não há rota de métricas**, e isso é decisão, não pendência: profundidade de
+Outbox e de fila são números do processo, e não de uma organização
+([ADR 0016](adr/0016-observabilidade-e-resiliencia.md)).
+
+Para ver a fila de mortas de perto, envenene uma mensagem à mão:
+
+```sql
+-- Corpo que nenhum consumidor sabe ler. Depois de MaximoDeRecebimentos
+-- entregas, ela sai de circulação e vira aviso no log (EventId 530).
+INSERT INTO fila_de_mensagens (id, fila, corpo, disponivel_em, recebimentos, inserida_em)
+VALUES (gen_random_uuid(), 'eventos-operacionais', '{"nao":"e um envelope"}', now(), 0, now());
+
+SELECT fila, recebimentos, motivo FROM mensagens_mortas;
+```
+
 ## 5. Rodar
 
 ```bash

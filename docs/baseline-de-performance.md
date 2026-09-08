@@ -1,6 +1,6 @@
 # Baseline de performance — caminho crítico
 
-Medição da Fase 4. **Isto não é um SLA.**
+Medições das Fases 4 e 12. **Isto não é um SLA.**
 
 O `ROADMAP.md` seção 4.8 pede explicitamente que não se invente número de
 banco. O que está aqui é uma referência do ambiente medido, para que uma
@@ -110,6 +110,84 @@ Com o orçamento anterior de 4 tentativas, o primeiro cenário respondia **2×
 
 ---
 
+## Fase 12 — os quatro cenários de carga
+
+Medidos em 2026-09-07, no mesmo ambiente descrito acima.
+Teste: `CargaTests`. Os números saem na saída do teste, e não são afirmados
+como limite — os tetos verificados no CI ficam uma ordem de grandeza acima.
+
+| Cenário | Forma | Vazão | p50 | p95 | p99 |
+|---|---|---|---|---|---|
+| **A** — throughput normal | 8 clientes × 8 transações | **56/s** | 19 ms | 463 ms | 850 ms |
+| **B** — cliente quente | 20 simultâneas, mesmo cliente | 20/s | 833 ms | 987 ms | 1.015 ms |
+| **C** — tempestade de idempotência | 25× a mesma requisição | **156/s** | 120 ms | 125 ms | 156 ms |
+| **D** — acúmulo assíncrono | 60 eventos represados | 78/s | — | — | — |
+
+Leitura de cada um:
+
+- **A.** 63 aceitas e **1 em contenção** (503). Ver a seção seguinte: o número
+  não vem do domínio.
+- **B.** O caso que o isolamento forte torna caro de propósito — todas leem a
+  mesma janela histórica. Nenhuma inconsistência, nenhum 500.
+- **C.** Vinte e cinco repetições custam o que **uma** custa: a idempotência
+  reconhece a duplicata antes de avaliar. Um cliente com retry agressivo não
+  multiplica a carga do motor.
+- **D.** Drenado em 6 ciclos, sem perda, sem duplicata e com a fila de mortas
+  vazia ao final.
+
+---
+
+## Fase 12 — o número que contraria a intuição
+
+No cenário A, **clientes independentes entraram em contenção de serialização**.
+Eles não compartilham dado nenhum: a janela histórica de um não inclui as
+transações do outro.
+
+A causa não está no domínio, e sim no plano de execução. Sob `SERIALIZABLE`, o
+PostgreSQL toma predicado sobre o que a consulta **lê** — e uma varredura
+sequencial lê a relação inteira, então o predicado cobre a tabela toda e todos
+passam a conflitar com todos. Com a tabela pequena, varrer é legitimamente mais
+barato do que abrir índice, e o planejador escolhe varrer.
+
+A Fase 4 já tinha encontrado isso e mitigado com `SET LOCAL cpu_tuple_cost`
+(ADR 0009, Decisão 5). O que esta medição acrescenta é o limite da mitigação:
+ela **reduz**, mas não elimina, enquanto o volume for baixo. O que elimina é
+volume — e a próxima seção mostra o plano com dados.
+
+Consequência prática: nenhuma. O contrato já devolve `503` com `Retry-After`, e
+repetir com a mesma chave de idempotência é seguro. Registrado porque um número
+inexplicado numa medição de carga é pior do que um número ruim explicado.
+
+---
+
+## Fase 12 — planos de execução com volume
+
+4.000 transações e 4.000 eventos semeados, com `ANALYZE` antes de medir.
+Teste: `DesempenhoDeConsultasTests`.
+
+| Consulta | Plano |
+|---|---|
+| Janela histórica do cliente | `Index Scan Backward using ix_transacoes_organizacao_id_cliente_externo_id_ocorrida_em` (custo 0,29..157,41) |
+| Primeira página do console | `Index Scan Backward using ix_transacoes_organizacao_id_ocorrida_em` (custo 0,29..5,57) |
+| Outbox pendente | `Bitmap Index Scan on ix_eventos_de_saida_pendentes` (custo 0,00..8,54) |
+
+Três coisas que estes planos provam:
+
+1. **a ordem das colunas do índice é o que o faz servir** — organização,
+   cliente e só então tempo. Invertida, ele responderia "todas as transações de
+   setembro", que ninguém pergunta;
+2. **o `LIMIT` é alcançado pelo índice**, e não por ordenação posterior: o custo
+   da primeira página do console é 5,57 sobre 4.000 linhas;
+3. **o índice parcial da Outbox funciona**. Ela é uma tabela que só cresce —
+   milhões publicadas, dezenas pendentes —, e um índice sobre tudo indexaria
+   justamente as linhas que ninguém procura.
+
+**Nenhum índice novo foi criado nesta fase.** O `ROADMAP.md` 12.8 exige
+evidência antes de acrescentar índice, e a evidência disse que os existentes
+bastam.
+
+---
+
 ## O que esta baseline não cobre
 
 Registrado para não virar falsa sensação de medida:
@@ -120,7 +198,9 @@ Registrado para não virar falsa sensação de medida:
   de ida e volta domina o número.
 - **Build Release.** As medições são em Debug, que é o que o CI executa nos
   testes.
-- **Tabelas grandes.** Todos os números vêm de tabelas pequenas. O
-  comportamento esperado com volume é *melhor* para conflito serializável (o
-  índice fica seletivo) e *estável* para latência (o `LIMIT` já limita), mas
-  isso não foi medido.
+- **Latência com tabelas grandes.** A Fase 12 mediu o **plano** com 4.000
+  linhas e confirmou que o índice é escolhido, mas não cronometrou latência
+  nesse volume — e cronometrar seria medir o cache desta máquina.
+- **Carga sustentada continua fora.** Os quatro cenários da Fase 12 são rajadas
+  de segundos. Um teste de carga contínua mediria o comportamento do pool de
+  conexões e do coletor de lixo, que é outra pergunta.

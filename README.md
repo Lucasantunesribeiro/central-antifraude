@@ -29,8 +29,9 @@ solução certificada de compliance.
 | 8 | Gestão e Versionamento de Regras | ✅ concluída |
 | 9 | Backtests | ✅ concluída |
 | 10 | Operação, Busca, Painel e Auditoria | ✅ concluída |
-| **11** | **Hardening de Segurança Aplicacional** | ✅ **concluída** |
-| 12–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
+| 11 | Hardening de Segurança Aplicacional | ✅ concluída |
+| **12** | **Observabilidade, Resiliência e Performance** | ✅ **concluída** |
+| 13–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
 
 Hoje a plataforma recebe transações de sistemas externos autenticados por
 credencial própria, registra cada tentativa **exatamente uma vez** mesmo sob
@@ -112,8 +113,10 @@ docs/
   security-gate-9.md                 resultado do gate da Fase 9
   security-gate-10.md                resultado do gate da Fase 10
   security-gate-11.md                resultado do gate da Fase 11
+  security-gate-12.md                resultado do gate da Fase 12
   threat-model.md                    fluxos, ameaças e mitigações
   matriz-de-autorizacao.md           quem alcança o quê
+  observabilidade.md                 catálogo de logs e métricas, runbook da DLQ
   baseline-de-performance.md         números medidos do caminho crítico
 ```
 
@@ -524,6 +527,59 @@ O isolamento entre organizações tem varredura própria: um recurso de cada
 família nasce no tenant B pelo caminho real do produto, cada identificador passa
 pela API do tenant A, e o estado de B é conferido **no banco** depois — um `404`
 devolvido *depois* de gravar seria pior do que um `200`.
+
+---
+
+## Operação: seguir uma transação de ponta a ponta
+
+Toda requisição recebe um `CorrelationId`, que volta no cabeçalho da resposta e
+acompanha a operação até o efeito — inclusive **através do processo de fundo**,
+que é onde esse tipo de rastro costuma arrebentar. Quatro linhas de log, em dois
+processos diferentes, carregam o mesmo identificador: a requisição, a publicação
+na fila, o efeito aplicado pelo worker e o alerta criado.
+
+O teste que garante isso lê **log**, e não banco. O banco já provava a cadeia
+desde a Fase 5; o que faltava era exatamente aquilo que ele não pode mostrar.
+
+O produto emite 17 métricas em 5 medidores, e as dimensões que elas podem
+carregar são uma **lista de permissão** — `decisao`, `prioridade`, `resultado`,
+`operacao`, `fila`, `laco`. Uma métrica nova com dimensão fora dessa lista
+quebra a build, e quem a criou precisa declarar quantos valores ela pode ter. O
+risco fechado não é uma métrica cara que existe hoje; é a próxima.
+
+Duas escolhas que parecem detalhe e não são:
+
+- **a operação registrada é o padrão da rota**, `GET /api/casos/{id}`, e nunca o
+  caminho concreto. Métrica não tem tenant nem autorização, e o caminho carrega
+  identificador de recurso de um cliente;
+- **não existe rota de métricas.** Profundidade de Outbox e de fila são números
+  do processo, e não de uma organização: devolvê-los ao administrador de um
+  tenant contaria a ele o volume de trabalho dos outros.
+
+Catálogo completo, sinais que valem alarme e o procedimento de fila de mortas em
+[`docs/observabilidade.md`](docs/observabilidade.md). Decisões no
+[ADR 0016](docs/adr/0016-observabilidade-e-resiliencia.md).
+
+---
+
+## Performance: o que foi medido, e o que a medição revelou
+
+Quatro cenários de carga em
+[`docs/baseline-de-performance.md`](docs/baseline-de-performance.md) — throughput
+normal, cliente quente, tempestade de idempotência e acúmulo assíncrono. O
+caminho crítico responde com p50 de **19 ms**, e vinte e cinco repetições
+simultâneas da mesma requisição custam o que **uma** custa.
+
+O resultado mais interessante é o que não fazia sentido: clientes
+**independentes** entrando em contenção de serialização. A causa não está no
+domínio, e sim no plano de execução — com a tabela pequena, o PostgreSQL escolhe
+varredura sequencial, e sob `SERIALIZABLE` isso toma predicado sobre a relação
+inteira, fazendo todos conflitarem com todos. Com volume, o índice é escolhido e
+o efeito some. Está medido, explicado por `EXPLAIN` e registrado.
+
+**Nenhum índice novo foi criado**: a evidência disse que os existentes bastam. E
+o checkpoint de Redis do roadmap foi respondido com número, e não com opinião —
+[ADR 0017](docs/adr/0017-sem-redis.md).
 
 ---
 
