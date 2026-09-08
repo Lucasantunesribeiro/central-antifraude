@@ -56,6 +56,12 @@ public sealed class HospedagemDosLambdasTests
                 ["Mensageria:FilaDeBacktests"] =
                     "https://sqs.us-east-1.amazonaws.com/000000000000/backtests",
                 ["Mensageria:FuncaoDoDespachante"] = "despachante",
+                // A regiao, como a Lambda a forneceria por AWS_REGION. Sem ela,
+                // construir o cliente AWS falha com "No RegionEndpoint
+                // configured" — e foi exatamente esse o defeito que passou na
+                // maquina de dev (que tinha a variavel no ambiente) e quebrou o
+                // CI num runner limpo.
+                ["AWS:Region"] = "us-east-1",
             })
             .Build();
 

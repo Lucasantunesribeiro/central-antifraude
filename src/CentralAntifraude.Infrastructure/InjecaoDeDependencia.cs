@@ -194,6 +194,26 @@ public static class InjecaoDeDependencia
     }
 
     /// <summary>Le a configuracao de SQS. Ausencia significa "nao estamos na AWS".</summary>
+    /// <summary>
+    /// A regiao da AWS, quando o ambiente a declara — senao <c>null</c>, e o SDK
+    /// descobre sozinho (o que so e garantido dentro de uma Lambda real).
+    ///
+    /// Ordem de procura: a chave <c>AWS:Region</c> da configuracao, depois as
+    /// variaveis <c>AWS_REGION</c> e <c>AWS_DEFAULT_REGION</c>. A primeira permite
+    /// que um teste forneca a regiao sem tocar no ambiente do processo; as duas
+    /// ultimas sao as que a AWS e o proprio SDK usam.
+    /// </summary>
+    private static Amazon.RegionEndpoint? RegiaoDaConfiguracao(IConfiguration configuracao)
+    {
+        var nome = configuracao["AWS:Region"]
+            ?? Environment.GetEnvironmentVariable("AWS_REGION")
+            ?? Environment.GetEnvironmentVariable("AWS_DEFAULT_REGION");
+
+        return string.IsNullOrWhiteSpace(nome)
+            ? null
+            : Amazon.RegionEndpoint.GetBySystemName(nome);
+    }
+
     public static OpcoesDaFilaSqs LerOpcoesDaFilaSqs(IConfiguration configuracao)
     {
         ArgumentNullException.ThrowIfNull(configuracao);
@@ -252,8 +272,24 @@ public static class InjecaoDeDependencia
 
         if (opcoesDeSqs.UsaSqs)
         {
-            servicos.AddSingleton<IAmazonSQS>(_ => new AmazonSQSClient());
-            servicos.AddSingleton<IAmazonLambda>(_ => new AmazonLambdaClient());
+            // A regiao, explicita.
+            //
+            // `new AmazonSQSClient()` sem argumento faz o SDK DESCOBRIR a regiao
+            // do ambiente. Numa Lambda de verdade isso funciona — a AWS define
+            // `AWS_REGION` —, mas em qualquer outro lugar depende de o ambiente
+            // ter a variavel. Foi assim que o teste do grafo passou na maquina
+            // de dev (que tinha `AWS_DEFAULT_REGION`) e falhou no runner limpo
+            // do CI com "No RegionEndpoint or ServiceURL configured".
+            //
+            // Ler a regiao da configuracao a torna um dado explicito, e nao um
+            // efeito do ambiente. O fallback para a descoberta padrao preserva o
+            // comportamento em Lambda, onde a variavel sempre existe.
+            var regiaoDaAws = RegiaoDaConfiguracao(configuracao);
+
+            servicos.AddSingleton<IAmazonSQS>(_ =>
+                regiaoDaAws is null ? new AmazonSQSClient() : new AmazonSQSClient(regiaoDaAws));
+            servicos.AddSingleton<IAmazonLambda>(_ =>
+                regiaoDaAws is null ? new AmazonLambdaClient() : new AmazonLambdaClient(regiaoDaAws));
             servicos.AddScoped<IFilaDeMensagens, FilaSqs>();
             servicos.AddScoped<IDespachanteImediato, DespachanteImediatoEmLambda>();
         }
