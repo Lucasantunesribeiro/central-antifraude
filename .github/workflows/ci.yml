@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Instalar o SDK .NET
         uses: actions/setup-dotnet@v5
@@ -85,7 +85,7 @@ jobs:
         working-directory: frontend
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
@@ -117,7 +117,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           # Historico completo: um segredo removido no ultimo commit continua
           # recuperavel nos anteriores, entao varrer so a arvore atual daria
