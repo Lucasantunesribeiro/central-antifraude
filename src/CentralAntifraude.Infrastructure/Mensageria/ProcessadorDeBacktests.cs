@@ -148,12 +148,7 @@ public sealed partial class ProcessadorDeBacktests
         }
 
         using var escopoDeLog = _log.BeginScope(
-            new Dictionary<string, object>(StringComparer.Ordinal)
-            {
-                ["CorrelationId"] = envelope.CorrelationId,
-                ["EventId"] = envelope.EventId,
-                ["EventType"] = envelope.TipoComposto,
-            });
+            EscopoDeLog.DoEvento(envelope.CorrelationId, envelope.EventId, envelope.TipoComposto));
 
         if (envelope.Conteudo is not BacktestSolicitadoV1 conteudo)
         {

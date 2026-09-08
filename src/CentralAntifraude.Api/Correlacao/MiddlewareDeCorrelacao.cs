@@ -1,4 +1,5 @@
 using CentralAntifraude.Application.Correlacao;
+using CentralAntifraude.Application.Observabilidade;
 using CentralAntifraude.Domain.Primitivos;
 
 namespace CentralAntifraude.Api.Correlacao;
@@ -43,10 +44,8 @@ public sealed class MiddlewareDeCorrelacao
 
         // Escopo de log: toda linha emitida durante a requisicao carrega o
         // identificador, que e o que permite seguir o fluxo ponta a ponta.
-        using (_log.BeginScope(new Dictionary<string, object>(StringComparer.Ordinal)
-        {
-            ["CorrelationId"] = idDeCorrelacao,
-        }))
+        using (_log.BeginScope(new EscopoDeLog(
+            new KeyValuePair<string, object>("CorrelationId", idDeCorrelacao))))
         {
             await _proximo(contexto);
         }

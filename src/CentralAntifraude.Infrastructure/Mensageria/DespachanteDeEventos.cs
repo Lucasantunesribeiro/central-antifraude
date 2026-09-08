@@ -99,12 +99,7 @@ public sealed partial class DespachanteDeEventos
             // fronteira entre o sincrono e o assincrono — o lugar onde uma
             // investigacao mais precisa dele.
             using var escopoDeLog = _log.BeginScope(
-                new Dictionary<string, object>(StringComparer.Ordinal)
-                {
-                    ["CorrelationId"] = evento.IdDeCorrelacao,
-                    ["EventId"] = evento.Id,
-                    ["EventType"] = evento.Tipo,
-                });
+                EscopoDeLog.DoEvento(evento.IdDeCorrelacao, evento.Id, evento.Tipo));
 
             try
             {

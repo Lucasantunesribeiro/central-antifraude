@@ -177,12 +177,7 @@ public sealed partial class ProcessadorDeEventos
         // TODA linha emitida enquanto esta mensagem e processada — inclusive as
         // de erro, que sao as que alguem vai ler primeiro.
         using var escopoDeLog = _log.BeginScope(
-            new Dictionary<string, object>(StringComparer.Ordinal)
-            {
-                ["CorrelationId"] = envelope.CorrelationId,
-                ["EventId"] = envelope.EventId,
-                ["EventType"] = envelope.TipoComposto,
-            });
+            EscopoDeLog.DoEvento(envelope.CorrelationId, envelope.EventId, envelope.TipoComposto));
 
         // O tenant do envelope e uma AFIRMACAO de quem enviou. Conferir contra
         // o banco e o que separa "evento nosso" de "mensagem forjada": uma
