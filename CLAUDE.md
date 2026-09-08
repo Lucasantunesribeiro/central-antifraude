@@ -1573,8 +1573,13 @@ Não criar dashboard genérico de portfólio.
 
 Priorizar:
 
-- densidade adequada;
-- tabelas;
+- **uma ação principal óbvia por tela** — quem chega precisa saber o que fazer,
+  e não apenas o que está acontecendo;
+- **legibilidade antes de densidade**: corpo de 16 px, rótulo de 14 px, alvo de
+  clique de pelo menos 40 px de altura;
+- **poucos blocos por tela** — o que não couber vai para aba ou seção
+  recolhível, e não para mais uma faixa empilhada;
+- tabelas, com a **linha inteira clicável** quando ela representa um registro;
 - filtros;
 - status;
 - timeline;
@@ -1582,6 +1587,14 @@ Priorizar:
 - investigação;
 - navegação rápida;
 - leitura de dados.
+
+> **Correção registrada em 2026-09-08.** Este item dizia apenas "densidade
+> adequada", e densidade virou desculpa para letra miúda e informação
+> espalhada: o painel chegou a ter onze blocos, 1.853 caracteres de texto e
+> nenhuma ação principal, e a fila de alertas tinha uma única ação na tela
+> inteira. A referência visual passou a ser Stripe e Vercel — respiro e ação
+> clara — em vez de terminal denso. Cabe menos linha por tela, e a troca é
+> deliberada. Ver ADR 0018.
 
 Evitar:
 

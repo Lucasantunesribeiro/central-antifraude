@@ -70,16 +70,139 @@ export function PaginaDoPainel() {
 
       {painel.isSuccess ? (
         <>
+          {/*
+            O que abre a tela: quantos alertas esperam alguem e o botao para ir
+            trabalha-los. Antes esta pagina tinha ONZE blocos e nenhuma acao
+            principal — quem chegava aqui sabia o estado do mundo e nao sabia o
+            que fazer com ele.
+          */}
+          <Chamada painel={painel.data} />
           <Volume painel={painel.data} />
-          <SaudeDaFila painel={painel.data} />
-          <Decisoes painel={painel.data} />
-          <Tendencia painel={painel.data} />
-          <FilaHumana painel={painel.data} />
-          <Sinais painel={painel.data} />
-          <MetricasDeRegra dias={dias} />
+
+          {/*
+            O resto vai para abas. Nada sumiu: tendencia, regras e saude do
+            sistema continuam ali, atras de um clique. A tela deixa de exigir
+            que se leia tudo para achar uma coisa.
+          */}
+          <Abas
+            abas={[
+              {
+                id: 'resumo',
+                rotulo: 'Resumo',
+                conteudo: (
+                  <>
+                    <Decisoes painel={painel.data} />
+                    <FilaHumana painel={painel.data} />
+                  </>
+                ),
+              },
+              {
+                id: 'tendencia',
+                rotulo: 'Tendência',
+                conteudo: <Tendencia painel={painel.data} />,
+              },
+              {
+                id: 'regras',
+                rotulo: 'Regras',
+                conteudo: (
+                  <>
+                    <Sinais painel={painel.data} />
+                    <MetricasDeRegra dias={dias} />
+                  </>
+                ),
+              },
+              {
+                id: 'sistema',
+                rotulo: 'Sistema',
+                conteudo: <SaudeDaFila painel={painel.data} />,
+              },
+            ]}
+          />
         </>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * A unica coisa que a tela pede que voce faca.
+ *
+ * Um painel sem acao principal transforma quem chega em espectador: ele fica
+ * sabendo o estado do mundo e nao sabe por onde comecar. O numero grande e a
+ * pergunta ("quantos esperam alguem?"), e o botao ao lado e a resposta.
+ *
+ * Quando nao ha nada esperando, o botao continua ali — so muda de tom e de
+ * texto. Esconde-lo faria a tela mudar de forma conforme o dia, e quem usa
+ * todo dia aprende pela posicao das coisas.
+ */
+function Chamada({ painel }: { painel: Painel }) {
+  const esperando = painel.alertasAbertos;
+
+  return (
+    <section className={esperando > 0 ? 'chamada chamada--urgente' : 'chamada'}>
+      <div className="chamada__numero">
+        <span className="chamada__valor numerico">{esperando}</span>
+        <span className="chamada__rotulo">
+          {esperando === 1 ? 'alerta esperando alguém' : 'alertas esperando alguém'}
+        </span>
+      </div>
+
+      <Link className="botao botao--principal botao--grande" to="/alertas">
+        Trabalhar a fila
+        <span aria-hidden="true">→</span>
+      </Link>
+    </section>
+  );
+}
+
+/**
+ * Abas: o mesmo conteudo, atras de um clique.
+ *
+ * Nao e um componente de biblioteca de proposito. O padrao ARIA de abas pede
+ * tres coisas — `tablist`, `tab` com `aria-selected` e `tabpanel` amarrado por
+ * `aria-controls` — e todas as tres cabem aqui. Uma dependencia nova para isso
+ * seria peso sem problema resolvido.
+ */
+function Abas({
+  abas,
+}: {
+  abas: readonly { id: string; rotulo: string; conteudo: React.ReactNode }[];
+}) {
+  const [ativa, definirAtiva] = useState(abas[0]!.id);
+
+  return (
+    <div className="abas">
+      <div className="abas__lista" role="tablist" aria-label="Seções do painel">
+        {abas.map((aba) => (
+          <button
+            key={aba.id}
+            type="button"
+            role="tab"
+            id={`aba-${aba.id}`}
+            aria-selected={aba.id === ativa}
+            aria-controls={`painel-${aba.id}`}
+            className={aba.id === ativa ? 'abas__aba abas__aba--ativa' : 'abas__aba'}
+            onClick={() => definirAtiva(aba.id)}
+          >
+            {aba.rotulo}
+          </button>
+        ))}
+      </div>
+
+      {abas.map((aba) =>
+        aba.id === ativa ? (
+          <div
+            key={aba.id}
+            role="tabpanel"
+            id={`painel-${aba.id}`}
+            aria-labelledby={`aba-${aba.id}`}
+            className="abas__conteudo"
+          >
+            {aba.conteudo}
+          </div>
+        ) : null,
+      )}
+    </div>
   );
 }
 
@@ -117,14 +240,6 @@ function Volume({ painel }: { painel: Painel }) {
         nota={
           semAvaliacao > 0 ? `${semAvaliacao} chegaram sem decisão` : 'todas decididas'
         }
-      />
-      <Indicador
-        rotulo="Esperando alguém"
-        valor={painel.alertasAbertos}
-        nota={
-          painel.alertasAbertos > 0 ? 'alerta sem dono na fila' : 'nenhum alerta parado'
-        }
-        destaque={painel.alertasAbertos > 0}
       />
       <Indicador
         rotulo="Investigações"

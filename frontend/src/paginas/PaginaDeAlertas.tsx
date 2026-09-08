@@ -273,10 +273,45 @@ function LinhaDoAlerta({
   selecionado: boolean;
   aoAlternar: () => void;
 }) {
+  const navegar = useNavigate();
+
   const escondidos = alerta.totalDeSinais - alerta.principaisSinais.length;
 
   return (
-    <tr>
+    /*
+      A LINHA INTEIRA abre a transação.
+
+      Numa fila de trabalho o alvo tem que ser a linha: mirar um link de seis
+      letras no fim de nove colunas é o que fazia esta tela parecer relatório
+      em vez de ferramenta.
+
+      Três cuidados que isto exige, e que a versão ingênua erra:
+
+      1. o clique não pode disparar quando a pessoa marcou a caixa de seleção
+         ou clicou no próprio link — daí a checagem do alvo;
+      2. um `<tr>` não é foco de teclado, e transformá-lo em botão exigiria
+         reescrever a semântica da tabela. O link continua ali e continua sendo
+         quem carrega o destino: quem navega por teclado chega por ele, e a
+         linha é só um atalho de ponteiro;
+      3. selecionar texto não pode navegar — por isso o clique é ignorado
+         quando há seleção ativa.
+    */
+    <tr
+      className="linha-clicavel"
+      onClick={(evento) => {
+        const alvo = evento.target as HTMLElement;
+
+        if (alvo.closest('a, input, button, label')) {
+          return;
+        }
+
+        if ((window.getSelection()?.toString().length ?? 0) > 0) {
+          return;
+        }
+
+        navegar(`/transacoes/${alerta.transacaoId}`);
+      }}
+    >
       <td>
         {/* Só alerta na fila entra num caso novo. Um já investigado aparece
             sem caixa, e não com a caixa desabilitada: a ausência diz "isto não

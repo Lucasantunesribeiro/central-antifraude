@@ -103,6 +103,18 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/**
+ * Abre uma aba do painel.
+ *
+ * Desde que o painel virou abas, tendencia, regras e saude do sistema nao
+ * estao no DOM ate alguem clicar — e e assim que a tela funciona de verdade.
+ * Um teste que continuasse achando esse conteudo sem clicar estaria afirmando
+ * o contrario do que o usuario ve.
+ */
+async function abrirAba(rotulo: string) {
+  await userEvent.click(await screen.findByRole('tab', { name: rotulo }));
+}
+
 describe('painel operacional', () => {
   it('separa o que chegou do que foi decidido', async () => {
     // Uma transação atrasada chega hoje sobre um fato de ontem. Igualar os
@@ -123,6 +135,8 @@ describe('painel operacional', () => {
     expect(within(avaliadas).getByText('10')).toBeInTheDocument();
     expect(recebidas).not.toBe(avaliadas);
 
+    await abrirAba('Sistema');
+
     expect(screen.getByText(/caminho assíncrono está em dia/)).toBeInTheDocument();
   });
 
@@ -132,7 +146,9 @@ describe('painel operacional', () => {
     montar({ ...PAINEL, eventosPendentes: 4 });
 
     expect(
-      await screen.findByText(/alertas destas transações ainda não foram criados/),
+      await abrirAba('Sistema').then(() =>
+        screen.findByText(/alertas destas transações ainda não foram criados/),
+      ),
     ).toBeInTheDocument();
   });
 
@@ -154,9 +170,11 @@ describe('painel operacional', () => {
     // pico na segunda.
     montar();
 
-    const cartao = (await screen.findByText('Tendência')).closest(
-      '.cartao',
-    ) as HTMLElement;
+    await abrirAba('Tendência');
+
+    const cartao = (
+      await screen.findByText('Decisões por dia, do mais antigo para o mais recente')
+    ).closest('.cartao') as HTMLElement;
     const linhas = within(cartao).getAllByRole('row').slice(1);
 
     expect(linhas).toHaveLength(3);
@@ -165,6 +183,8 @@ describe('painel operacional', () => {
 
   it('mostra as métricas de regra sem chamar nada de taxa de acerto', async () => {
     montar();
+
+    await abrirAba('Regras');
 
     const cartao = (await screen.findByText('Regras no período')).closest(
       '.cartao',
@@ -196,7 +216,15 @@ describe('painel operacional', () => {
 
     // As métricas de regra acompanham o período: dois números do mesmo painel
     // que falassem de janelas diferentes não poderiam ser lidos juntos.
-    expect(urls.some((u) => u.includes('/api/painel/regras?dias=30'))).toBe(true);
+    //
+    // Elas vivem numa aba, então a consulta só sai quando a aba abre — e é
+    // isso que o teste passa a afirmar. A invariante é a mesma; o momento em
+    // que ela pode ser observada mudou.
+    await abrirAba('Regras');
+
+    await waitFor(() =>
+      expect(urls.some((u) => u.includes('/api/painel/regras?dias=30'))).toBe(true),
+    );
   });
 });
 

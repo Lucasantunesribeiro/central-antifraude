@@ -1,9 +1,21 @@
 /*
-  Sistema visual do console operacional — "Modern Enterprise Craft".
+  Sistema visual do console operacional.
 
-  Os tokens vem de `DESIGN.md`, o sistema gerado no Stitch e aprovado pelo
-  Lucas. Nada aqui foi escolhido a olho: cor, tamanho, altura de linha e raio
-  sao os valores daquele documento.
+  A PALETA vem de `DESIGN.md` (o sistema gerado no Stitch) e continua intacta.
+  A ESCALA nao: ela foi refeita depois de o Lucas usar o produto e dizer que
+  estava confuso e apertado demais.
+
+  O que a medicao mostrou, e que motivou a mudanca:
+
+    painel   -> 11 blocos, 1.853 caracteres de texto, ZERO acoes principais
+    alertas  -> UMA acao na tela inteira, e a linha da tabela nao clicava
+    fontes   -> 121 dos ~143 textos em 13 px ou menos
+
+  A direcao antiga vinha do `CLAUDE.md` secao 79 ("densidade adequada"), e
+  densidade tinha virado desculpa para letra miuda e para espalhar informacao.
+  A referencia agora e outra — Stripe e Vercel: 16 px de corpo, respiro, poucos
+  blocos por tela e uma acao primaria obvia. Cabe menos linha por tela, e essa
+  e a troca aceita de proposito.
 
   As tres ideias que o sistema carrega, e que a versao anterior nao tinha:
 
@@ -75,12 +87,23 @@
   --espaco-6: 24px;
   --espaco-8: 32px;
 
-  --raio: 4px;
-  --raio-painel: 0;
+  /*
+    Cantos suaves de novo. Raio zero pertence ao visual de terminal, que era a
+    direcao anterior; num produto arejado ele deixa cada painel com cara de
+    janela de sistema antigo.
+  */
+  --raio: 8px;
+  --raio-painel: 12px;
 
-  --largura-lateral: 240px;
-  --altura-linha: 32px;
-  --altura-campo: 28px;
+  --largura-lateral: 248px;
+
+  /*
+    Linha de 52 px, e nao de 32. A de 32 cabe mais alertas na tela e torna cada
+    um um alvo estreito: o ponteiro erra, e o olho perde a linha ao atravessar
+    oito colunas. Numa fila de trabalho, acertar importa mais do que caber.
+  */
+  --altura-linha: 52px;
+  --altura-campo: 40px;
 
   /* Medida de leitura para texto corrido. Tabela e painel NAO usam isto. */
   --medida: 46rem;
@@ -93,8 +116,8 @@
 
   color-scheme: dark;
   font-family: var(--fonte-sistema);
-  font-size: 13px;
-  line-height: 18px;
+  font-size: 16px;
+  line-height: 24px;
 }
 
 /*
@@ -129,31 +152,31 @@ body {
 }
 
 h1 {
-  font-size: 20px;
-  line-height: 28px;
+  font-size: 28px;
+  line-height: 36px;
   font-weight: 600;
   letter-spacing: -0.015em;
   margin: 0;
 }
 
 h2 {
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 19px;
+  line-height: 28px;
   font-weight: 600;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.01em;
   margin: 0;
 }
 
 h3 {
-  font-size: 13px;
-  line-height: 18px;
+  font-size: 16px;
+  line-height: 24px;
   font-weight: 600;
   margin: 0;
 }
 
 code,
 .chave {
-  font-size: 12px;
+  font-size: 14px;
 }
 
 /* Um identificador que E o titulo da pagina herda o tamanho do titulo. Sem
@@ -224,7 +247,7 @@ h1 code {
 }
 
 .app__marca-nome {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.01em;
   display: flex;
@@ -244,8 +267,8 @@ h1 code {
 
 .app__marca-ambiente {
   font-family: var(--fonte-mono);
-  font-size: 10px;
-  line-height: 12px;
+  font-size: 11px;
+  line-height: 14px;
   letter-spacing: 0.04em;
   color: var(--cor-texto-fraco);
   text-transform: uppercase;
@@ -276,8 +299,8 @@ h1 code {
 }
 
 .app__grupo-titulo {
-  font-size: 10px;
-  line-height: 12px;
+  font-size: 12px;
+  line-height: 16px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--cor-texto-fraco);
@@ -293,7 +316,7 @@ h1 code {
   color: var(--cor-texto-suave);
   text-decoration: none;
   border-radius: var(--raio);
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .app__navegacao a:hover {
@@ -323,13 +346,13 @@ h1 code {
   line-height: 16px;
   min-width: 0;
   flex: 1;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 500;
 }
 
 .app__sessao-perfil {
   color: var(--cor-texto-fraco);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 400;
 }
 
@@ -338,16 +361,18 @@ h1 code {
 }
 
 .app__conteudo {
-  padding: var(--espaco-5) var(--espaco-6) var(--espaco-8);
+  padding: var(--espaco-8) var(--espaco-8) 64px;
   min-width: 0;
 }
 
 /* =============================================================== pagina == */
 
+/* Respiro entre blocos: 32 px, e nao 16. O que separa duas coisas na tela e o
+   vazio entre elas — com 16 px o olho le as duas como um bloco so. */
 .pagina {
   display: flex;
   flex-direction: column;
-  gap: var(--espaco-4);
+  gap: var(--espaco-8);
 }
 
 .pagina--larga {
@@ -362,12 +387,11 @@ h1 code {
   color: var(--cor-texto-suave);
   margin: 0;
   max-width: var(--medida);
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .pagina__migalha {
-  font-family: var(--fonte-mono);
-  font-size: 12px;
+  font-size: 14px;
   color: var(--cor-texto-fraco);
   margin: 0;
 }
@@ -379,10 +403,10 @@ h1 code {
   background: var(--cor-painel);
   border: 1px solid var(--cor-borda-forte);
   border-radius: var(--raio-painel);
-  padding: var(--espaco-4);
+  padding: var(--espaco-6);
   display: flex;
   flex-direction: column;
-  gap: var(--espaco-3);
+  gap: var(--espaco-4);
 }
 
 .cartao > h2 + .pagina__resumo,
@@ -411,27 +435,25 @@ h1 code {
 
 .tabela__legenda {
   text-align: left;
-  color: var(--cor-texto-fraco);
-  font-family: var(--fonte-mono);
-  font-size: 11px;
-  letter-spacing: 0.02em;
+  color: var(--cor-texto-suave);
+  font-size: 14px;
   padding-bottom: var(--espaco-2);
 }
 
 .tabela th,
 .tabela td {
   height: var(--altura-linha);
-  padding: 0 var(--espaco-2);
+  padding: 0 var(--espaco-4);
+  font-size: 15px;
   border-bottom: 1px solid var(--cor-borda);
   vertical-align: middle;
 }
 
 .tabela thead th {
-  height: 30px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  color: var(--cor-texto-fraco);
+  height: 44px;
+  font-size: 13px;
+  letter-spacing: 0;
+  color: var(--cor-texto-suave);
   font-weight: 500;
   background: var(--cor-estrutura);
   position: sticky;
@@ -502,8 +524,8 @@ h1 code {
 }
 
 .tabela input[type='checkbox'] {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   accent-color: var(--cor-acento);
   margin: 0;
   vertical-align: middle;
@@ -549,7 +571,7 @@ h1 code {
 .estado__descricao {
   margin: 0;
   color: var(--cor-texto-suave);
-  font-size: 12px;
+  font-size: 16px;
 }
 
 .estado__indicador {
@@ -586,18 +608,20 @@ h1 code {
   chega — daltonismo, captura em preto e branco, projetor ruim. Circulo para
   permitir, losango para revisar, triangulo para bloquear.
 */
+/*
+  Sem caixa alta e sem monoespacada. As duas juntas, em 10 px, faziam o selo
+  pedir esforco para ser lido — e ele e a informacao mais importante da linha.
+  Texto normal de 14 px se le de relance.
+*/
 .selo {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 20px;
-  padding: 0 6px;
-  font-family: var(--fonte-mono);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  border-radius: 3px;
+  gap: 8px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 6px;
   border: 1px solid var(--cor-borda-forte);
   color: var(--cor-texto-suave);
   background: var(--cor-painel);
@@ -606,8 +630,8 @@ h1 code {
 
 .selo::before {
   content: '';
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   flex-shrink: 0;
   background: currentcolor;
   border-radius: 50%;
@@ -676,16 +700,16 @@ h1 code {
 }
 
 .score__numero {
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 700;
-  line-height: 18px;
-  min-width: 22px;
+  line-height: 24px;
+  min-width: 28px;
   text-align: right;
 }
 
 .score__barra {
-  width: 64px;
-  height: 4px;
+  width: 80px;
+  height: 6px;
   background: var(--cor-elevado);
   border-radius: 2px;
   overflow: hidden;
@@ -716,7 +740,7 @@ h1 code {
 /* O score da tela de detalhe e a maior coisa da pagina: e a resposta que a
    pessoa veio buscar. */
 .avaliacao__resultado .score__numero {
-  font-size: 48px;
+  font-size: 64px;
   line-height: 1;
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -751,23 +775,21 @@ h1 code {
 
 .avaliacao__procedencia dt,
 .descricao dt {
-  font-size: 11px;
-  line-height: 14px;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  color: var(--cor-texto-fraco);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--cor-texto-suave);
   margin-bottom: 2px;
 }
 
 .avaliacao__procedencia dd,
 .descricao dd {
   margin: 0;
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .descricao dd.numerico {
-  font-size: 28px;
-  line-height: 32px;
+  font-size: 36px;
+  line-height: 44px;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
@@ -790,7 +812,7 @@ h1 code {
 */
 .sinal {
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr);
+  grid-template-columns: 60px minmax(0, 1fr);
   gap: var(--espaco-3);
   align-items: baseline;
   padding: var(--espaco-3) 0;
@@ -811,7 +833,7 @@ h1 code {
 }
 
 .sinal__tipo {
-  font-size: 13px;
+  font-size: 17px;
   font-weight: 600;
 }
 
@@ -821,9 +843,9 @@ h1 code {
   justify-self: start;
   display: inline-flex;
   align-items: center;
-  height: 20px;
-  padding: 0 6px;
-  font-size: 12px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--cor-atencao);
   background: var(--cor-atencao-fundo);
@@ -833,9 +855,9 @@ h1 code {
 
 .sinal__explicacao {
   grid-column: 2;
-  margin: 2px 0 0;
+  margin: var(--espaco-1) 0 0;
   color: var(--cor-texto-suave);
-  font-size: 12px;
+  font-size: 15px;
 }
 
 .sinal__evidencia {
@@ -849,7 +871,7 @@ h1 code {
 .sinal__par {
   display: flex;
   gap: var(--espaco-1);
-  font-size: 11px;
+  font-size: 14px;
 }
 
 .sinal__par dt {
@@ -876,11 +898,9 @@ h1 code {
 .sinal__origem {
   grid-column: 2;
   justify-self: start;
-  margin-top: var(--espaco-1);
+  margin-top: var(--espaco-2);
   font-family: var(--fonte-mono);
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 13px;
   color: var(--cor-texto-fraco);
   border: 1px solid var(--cor-borda);
   border-radius: 3px;
@@ -898,7 +918,7 @@ h1 code {
 }
 
 .sinais-resumidos > * {
-  font-size: 11px;
+  font-size: 14px;
   color: var(--cor-texto-suave);
   background: var(--cor-estrutura);
   border: 1px solid var(--cor-borda);
@@ -980,17 +1000,17 @@ h1 code {
   gap: var(--espaco-1);
 }
 
+/* Rotulo em texto normal: caixa alta de 11 px e o tipo de coisa que se le
+   duas vezes. */
 .campo__rotulo {
-  font-size: 11px;
-  line-height: 14px;
+  font-size: 14px;
+  line-height: 20px;
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  color: var(--cor-texto-fraco);
+  color: var(--cor-texto-suave);
 }
 
 .campo__ajuda {
-  font-size: 11px;
+  font-size: 14px;
   color: var(--cor-texto-fraco);
 }
 
@@ -998,13 +1018,13 @@ h1 code {
 .campo select,
 .campo textarea {
   font: inherit;
-  font-size: 12px;
   color: var(--cor-texto);
   background: var(--cor-estrutura);
   border: 1px solid var(--cor-borda);
   border-radius: var(--raio);
-  padding: 0 var(--espaco-2);
+  padding: 0 var(--espaco-3);
   height: var(--altura-campo);
+  font-size: 15px;
 }
 
 .campo input:hover,
@@ -1053,8 +1073,8 @@ h1 code {
 }
 
 .campo--caixa input {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   accent-color: var(--cor-acento);
   margin: 0;
   padding: 0;
@@ -1062,7 +1082,7 @@ h1 code {
 }
 
 .campo--caixa span {
-  font-size: 12px;
+  font-size: 15px;
   color: var(--cor-texto-suave);
 }
 
@@ -1086,10 +1106,10 @@ h1 code {
   gap: var(--espaco-2);
   align-self: flex-start;
   height: var(--altura-campo);
-  padding: 0 var(--espaco-3);
+  padding: 0 var(--espaco-4);
   font-family: var(--fonte-sistema);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 500;
   color: var(--cor-texto);
   background: var(--cor-painel);
   border: 1px solid var(--cor-borda-forte);
@@ -1228,14 +1248,13 @@ h1 code {
 }
 
 .timeline__origem {
-  font-family: var(--fonte-mono);
-  font-size: 11px;
+  font-size: 14px;
   color: var(--cor-texto-fraco);
 }
 
 .timeline__descricao {
-  margin: 2px 0 0;
-  font-size: 13px;
+  margin: var(--espaco-1) 0 0;
+  font-size: 16px;
 }
 
 /* ================================================================= notas == */
@@ -1260,8 +1279,7 @@ h1 code {
   display: flex;
   gap: var(--espaco-2);
   align-items: baseline;
-  font-family: var(--fonte-mono);
-  font-size: 11px;
+  font-size: 14px;
   color: var(--cor-texto-fraco);
 }
 
@@ -1270,9 +1288,9 @@ h1 code {
 }
 
 .nota__conteudo {
-  margin: var(--espaco-1) 0 0;
+  margin: var(--espaco-2) 0 0;
   white-space: pre-wrap;
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .nota__formulario {
@@ -1290,8 +1308,7 @@ h1 code {
 }
 
 .paginacao__posicao {
-  font-family: var(--fonte-mono);
-  font-size: 11px;
+  font-size: 14px;
   color: var(--cor-texto-suave);
 }
 
@@ -1307,7 +1324,7 @@ h1 code {
 }
 
 .barra-de-selecao__contagem {
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 600;
 }
 
@@ -1334,15 +1351,16 @@ h1 code {
 */
 .indicadores {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-  gap: var(--espaco-3);
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--espaco-4);
 }
 
 .indicador {
   display: flex;
   flex-direction: column;
-  gap: var(--espaco-1);
-  padding: var(--espaco-3) var(--espaco-4);
+  gap: var(--espaco-2);
+  padding: var(--espaco-5) var(--espaco-6);
+  border-radius: var(--raio-painel);
   background: var(--cor-painel);
   border: 1px solid var(--cor-borda-forte);
 }
@@ -1354,17 +1372,15 @@ h1 code {
 }
 
 .indicador__rotulo {
-  font-size: 11px;
-  line-height: 14px;
+  font-size: 15px;
+  line-height: 20px;
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  color: var(--cor-texto-fraco);
+  color: var(--cor-texto-suave);
 }
 
 .indicador__valor {
-  font-size: 28px;
-  line-height: 32px;
+  font-size: 44px;
+  line-height: 52px;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
@@ -1374,7 +1390,7 @@ h1 code {
 }
 
 .indicador__nota {
-  font-size: 11px;
+  font-size: 14px;
   color: var(--cor-texto-fraco);
 }
 
@@ -1385,11 +1401,11 @@ h1 code {
   gap: var(--espaco-2) var(--espaco-4);
   align-items: baseline;
   margin: 0;
-  padding: var(--espaco-2) var(--espaco-3);
+  padding: var(--espaco-3) var(--espaco-4);
   border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
   background: var(--cor-estrutura);
-  font-family: var(--fonte-mono);
-  font-size: 11px;
+  font-size: 14px;
   color: var(--cor-texto-fraco);
 }
 
@@ -1423,17 +1439,15 @@ h1 code {
 }
 
 .faixa-meta dt {
-  font-size: 11px;
-  line-height: 14px;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  color: var(--cor-texto-fraco);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--cor-texto-suave);
   margin-bottom: 2px;
 }
 
 .faixa-meta dd {
   margin: 0;
-  font-size: 13px;
+  font-size: 16px;
   overflow-wrap: anywhere;
 }
 
@@ -1475,4 +1489,130 @@ h1 code {
     position: sticky;
     top: var(--espaco-5);
   }
+}
+
+/* ============================================================== chamada == */
+
+/*
+  A unica coisa que o painel PEDE que voce faca.
+
+  Um painel sem acao principal transforma quem chega em espectador: fica
+  sabendo o estado do mundo e nao sabe por onde comecar. O numero e a pergunta,
+  o botao ao lado e a resposta — e os dois moram na mesma faixa para que a
+  ligacao entre eles nao dependa de ninguem juntar as pontas.
+*/
+.chamada {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-6);
+  flex-wrap: wrap;
+  padding: var(--espaco-6) var(--espaco-8);
+  border: 1px solid var(--cor-borda-forte);
+  border-radius: var(--raio-painel);
+  background: var(--cor-painel);
+}
+
+.chamada--urgente {
+  border-color: var(--cor-atencao-borda);
+  background: linear-gradient(90deg, var(--cor-atencao-fundo), var(--cor-painel) 55%);
+}
+
+.chamada__numero {
+  display: flex;
+  align-items: baseline;
+  gap: var(--espaco-4);
+  min-width: 0;
+}
+
+.chamada__valor {
+  font-size: 64px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.chamada--urgente .chamada__valor {
+  color: var(--cor-atencao);
+}
+
+.chamada__rotulo {
+  font-size: 19px;
+  color: var(--cor-texto-suave);
+}
+
+/* Botao de acao principal: alvo grande e obvio, nao um link no canto. */
+.botao--grande {
+  height: 52px;
+  padding: 0 var(--espaco-6);
+  font-size: 17px;
+  font-weight: 600;
+  border-radius: var(--raio);
+}
+
+/* ================================================================= abas == */
+
+/*
+  Abas em vez de rolagem.
+
+  Nada foi removido do painel: tendencia, regras e saude do sistema continuam
+  ali. O que mudou e que a tela deixou de exigir que se leia tudo para achar
+  uma coisa.
+*/
+.abas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-6);
+}
+
+.abas__lista {
+  display: flex;
+  gap: var(--espaco-2);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.abas__aba {
+  font: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--cor-texto-suave);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: var(--espaco-3) var(--espaco-4);
+  margin-bottom: -1px;
+  cursor: pointer;
+}
+
+.abas__aba:hover {
+  color: var(--cor-texto);
+}
+
+.abas__aba--ativa {
+  color: var(--cor-texto);
+  border-bottom-color: var(--cor-acento);
+}
+
+.abas__conteudo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-6);
+}
+
+/* ====================================================== linha clicavel === */
+
+/*
+  A linha inteira abre o registro, e nao um link de seis letras no canto.
+
+  Numa fila de trabalho o alvo tem que ser a linha: mirar um link estreito no
+  fim de oito colunas e o que fazia a tela parecer um relatorio em vez de uma
+  ferramenta. O link continua la para quem navega por teclado — ele e quem
+  carrega o destino de verdade; a linha so o aciona.
+*/
+.tabela tbody tr.linha-clicavel {
+  cursor: pointer;
+}
+
+.tabela tbody tr.linha-clicavel:hover td {
+  background: var(--cor-elevado);
 }
