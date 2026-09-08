@@ -1,0 +1,48 @@
+# Vigilancia continua de dependencias.
+#
+# A auditoria da Fase 15 encontrou zero vulnerabilidades — mas "zero hoje" nao
+# e "zero amanha". Este arquivo faz o GitHub abrir PR quando uma dependencia
+# ganhar correcao de seguranca ou versao nova.
+#
+# A politica da secao 15.6 do ROADMAP e deliberadamente conservadora: nada de
+# major upgrade cego na fase final. Por isso as atualizacoes major sao
+# IGNORADAS aqui — elas viram decisao manual, com testes verdes e
+# compatibilidade confirmada, e nao merge automatico.
+
+version: 2
+updates:
+  # ---------------------------------------------------------------- backend .NET
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Um PR por semana para o conjunto de patches/minors, em vez de um PR por
+      # pacote: revisar dez PRs separados de bump de patch e a receita para
+      # ninguem revisar nenhum.
+      patches-e-minors:
+        update-types: [minor, patch]
+    ignore:
+      # Major e decisao humana (secao 15.6).
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
+
+  # ---------------------------------------------------------------- frontend npm
+  - package-ecosystem: npm
+    directory: "/frontend"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      patches-e-minors:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
+
+  # -------------------------------------------------------- GitHub Actions do CI
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
