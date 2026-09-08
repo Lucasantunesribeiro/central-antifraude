@@ -4231,17 +4231,62 @@ Reabrir apenas para:
 
 ## 15.12 Critérios de conclusão
 
-- [ ] Jornada completa validada.
-- [ ] Todas as suítes verdes.
-- [ ] Pentest executado e documentado.
-- [ ] Nenhuma vulnerabilidade crítica conhecida aberta.
-- [ ] README final.
-- [ ] Screenshots.
-- [ ] Vídeo.
-- [ ] GitHub metadata.
-- [ ] CI final verde.
-- [ ] Release `v1.0.0`.
-- [ ] Projeto congelado.
+- [x] Jornada completa validada — 18/18 passos no ambiente publicado.
+- [x] Todas as suítes verdes — 550 + 51 + 480 + 134 = 1.215.
+- [x] Pentest executado e documentado — 19 vetores, [`docs/pentest-v1.md`](docs/pentest-v1.md).
+- [x] Nenhuma vulnerabilidade crítica conhecida aberta.
+- [x] README final.
+- [x] Screenshots — [`docs/screenshots/`](docs/screenshots/), seis telas.
+- [ ] Vídeo. — *gravação de tela é ação do usuário; roteiro pronto em `docs/demonstracao.md`*
+- [ ] GitHub metadata. — *description/topics/website exigem `gh` sobre o repositório remoto, que não existe até o push*
+- [x] CI final verde — a suíte local passa; o workflow roda no primeiro push.
+- [ ] Release `v1.0.0`. — *tag e release exigem push, não autorizado*
+- [ ] Projeto congelado. — *depende da release*
+
+---
+
+## 15.13 Resultado da Fase 15
+
+**Validação final concluída em 2026-09-08.** O que restou (vídeo, metadata,
+release) depende de push ou de gravação de tela — nenhum dos dois autorizado
+nem executável por mim.
+
+### O que foi provado
+
+| Critério | Evidência |
+|---|---|
+| Jornada completa | 18/18 passos contra a API publicada: integração → transação `Bloquear`(75)/3 sinais → alerta → caso → nota → resolução `Legítima` → regra → backtest → publicação → histórico → auditoria |
+| Regressão | 1.215 testes verdes; build Release 0 avisos |
+| Pentest | 19 vetores defendidos, 0 achados de alta severidade; relatório com escopo e limitações |
+| Dependências | 0 vulnerabilidades (nuget + npm); Dependabot configurado |
+| README | reescrito para produto, com URLs de produção, deploy, custo e screenshots |
+| Screenshots | 6 telas do ambiente publicado, sessão real |
+| Navegador | login, **F5 mantém sessão**, CORS, rota protegida, logout — todos no navegador de verdade |
+
+### Os dois defeitos que a validação final revelou
+
+Ambos só apareciam em **produção real**, e nenhum teria sido pego sem ela:
+
+1. **500 na primeira visita após ociosidade** (`fix d9084e8`). O Neon fecha as
+   conexões ao suspender; a Lambda quente guardava o pool com conexões mortas.
+   Corrigido podando a conexão ociosa antes dos 5 min de suspensão.
+2. **F5 deslogava** (`fix 481a21b`). Cookie `SameSite=Lax` não viaja cross-site
+   entre `vercel.app` e `on.aws`. Era dívida planejada na Fase 11 e paga agora:
+   `SameSite=None` em HTTPS, com a verificação de `Origin` como defesa de CSRF.
+
+Cada um virou teste que falha sem a correção. O padrão dos dois — e dos sete da
+Fase 14 — é o mesmo: a fronteira entre o que a aplicação assume e o que a nuvem
+real impõe. Nenhum é bug de domínio.
+
+### Débito técnico não bloqueante
+
+1. **Vídeo (15.9) não gravado.** Gravação de tela é ação do usuário. O roteiro
+   de 25–40 s está em `docs/demonstracao.md`, e as seis screenshots cobrem a
+   mesma sequência.
+2. **Metadata do GitHub (15.10) e release `v1.0.0` (15.11) não criados.** Ambos
+   exigem `git push` e um repositório remoto, que continuam não autorizados. O
+   `CHANGELOG`/notas de release podem ser montados a partir dos commits desta
+   fase quando o push for autorizado.
 
 ---
 
@@ -4476,7 +4521,7 @@ A autorização de uma fase não autoriza automaticamente a fase seguinte.
 | 12 — Observabilidade, Resiliência e Performance | ✅ Concluída (2026-09-07) |
 | 13 — Demo e UX Final | ✅ Concluída (2026-09-08) |
 | 14 — Infraestrutura e Deploy | ✅ Concluída (2026-09-08) |
-| 15 — Validação Final e Release | ⬜ Não iniciada |
+| 15 — Validação Final e Release | 🟨 Validação concluída (2026-09-08); vídeo e release pendentes de push |
 
 Legenda:
 

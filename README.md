@@ -33,7 +33,7 @@ solução certificada de compliance.
 | 12 | Observabilidade, Resiliência e Performance | ✅ concluída |
 | 13 | Dados de Demonstração e UX Final | ✅ concluída |
 | 14 | Infraestrutura, Custo e Deploy | ✅ concluída — **em produção** |
-| **15** | **Validação Final, Pentest e Release** | ✅ **concluída** |
+| **15** | **Validação Final, Pentest e Release** | 🟨 validada; falta a release `v1.0.0` |
 
 Hoje a plataforma recebe transações de sistemas externos autenticados por
 credencial própria, registra cada tentativa **exatamente uma vez** mesmo sob
