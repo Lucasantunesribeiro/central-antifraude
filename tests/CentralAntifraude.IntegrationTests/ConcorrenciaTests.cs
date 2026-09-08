@@ -256,11 +256,7 @@ public sealed class ConcorrenciaTests : IAsyncLifetime
             resposta.Dispose();
         }
 
-        List<string> registros;
-        lock (_fabrica.Registros)
-        {
-            registros = [.. _fabrica.Registros];
-        }
+        var registros = _fabrica.Registros;
 
         var refeitas = registros
             .Where(r => r.Contains("Operacao critica refeita", StringComparison.Ordinal))

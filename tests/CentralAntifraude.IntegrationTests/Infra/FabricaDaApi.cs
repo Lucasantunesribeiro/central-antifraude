@@ -37,7 +37,18 @@ public sealed class FabricaDaApi : WebApplicationFactory<Program>
     /// nao diz por que - o handler de autenticacao nao escreve o motivo na
     /// resposta, de proposito.
     /// </summary>
-    public List<string> Registros { get; } = [];
+    /// <summary>
+    /// Uma fotografia das linhas de log, em texto. Cada leitura devolve uma
+    /// copia: ha sempre alguma requisicao escrevendo enquanto o teste le.
+    /// </summary>
+    public IReadOnlyList<string> Registros => Logs.Texto;
+
+    /// <summary>
+    /// As mesmas linhas, com nivel, EventId e propriedades estruturadas —
+    /// inclusive as herdadas de escopo. E o que permite afirmar que uma linha
+    /// carrega `CorrelationId`, em vez de procurar o valor dentro do texto.
+    /// </summary>
+    public ColetorDeLogs Logs { get; }
 
     private readonly string _stringDeConexao;
     private readonly IReadOnlyDictionary<string, string> _ajustes;
@@ -56,6 +67,7 @@ public sealed class FabricaDaApi : WebApplicationFactory<Program>
     {
         _stringDeConexao = stringDeConexao;
         _ajustes = ajustes ?? new Dictionary<string, string>(StringComparer.Ordinal);
+        Logs = new ColetorDeLogs();
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -89,7 +101,7 @@ public sealed class FabricaDaApi : WebApplicationFactory<Program>
         builder.ConfigureLogging(log =>
         {
             log.ClearProviders();
-            log.AddProvider(new ProvedorDeLogEmMemoria(Registros));
+            log.AddProvider(Logs);
             log.SetMinimumLevel(LogLevel.Debug);
         });
 
@@ -117,53 +129,4 @@ public sealed class FabricaDaApi : WebApplicationFactory<Program>
     public HttpClient CriarClienteSemCookieAutomatico() =>
         CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
 
-    private sealed class ProvedorDeLogEmMemoria : ILoggerProvider
-    {
-        private readonly List<string> _destino;
-
-        public ProvedorDeLogEmMemoria(List<string> destino) => _destino = destino;
-
-        public ILogger CreateLogger(string categoryName) => new LogEmMemoria(categoryName, _destino);
-
-        public void Dispose()
-        {
-        }
-
-        private sealed class LogEmMemoria : ILogger
-        {
-            private readonly string _categoria;
-            private readonly List<string> _destino;
-
-            public LogEmMemoria(string categoria, List<string> destino)
-            {
-                _categoria = categoria;
-                _destino = destino;
-            }
-
-            public IDisposable? BeginScope<TState>(TState state)
-                where TState : notnull => null;
-
-            public bool IsEnabled(LogLevel logLevel) => true;
-
-            public void Log<TState>(
-                LogLevel logLevel,
-                EventId eventId,
-                TState state,
-                Exception? exception,
-                Func<TState, Exception?, string> formatter)
-            {
-                var mensagem = $"[{logLevel}] {_categoria}: {formatter(state, exception)}";
-
-                if (exception is not null)
-                {
-                    mensagem += $" || {exception.GetType().Name}: {exception.Message}";
-                }
-
-                lock (_destino)
-                {
-                    _destino.Add(mensagem);
-                }
-            }
-        }
-    }
 }

@@ -216,11 +216,8 @@ public sealed class BaselineDePerformanceTests : IAsyncLifetime
     /// </summary>
     private int ContarComandos()
     {
-        lock (_fabrica.Registros)
-        {
-            return _fabrica.Registros.Count(r =>
-                r.Contains("Microsoft.EntityFrameworkCore.Database.Command", StringComparison.Ordinal));
-        }
+        return _fabrica.Registros.Count(r =>
+            r.Contains("Microsoft.EntityFrameworkCore.Database.Command", StringComparison.Ordinal));
     }
 
     private static double Percentil(IReadOnlyList<double> ordenadas, int percentil)

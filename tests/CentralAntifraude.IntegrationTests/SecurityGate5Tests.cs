@@ -310,11 +310,7 @@ public sealed class SecurityGate5Tests : IAsyncLifetime
 
         await _mensageria.RodarAteEsvaziarAsync(Cancelamento);
 
-        List<string> registros;
-        lock (_fabrica.Registros)
-        {
-            registros = [.. _fabrica.Registros];
-        }
+        var registros = _fabrica.Registros;
 
         var texto = string.Join("\n", registros);
 

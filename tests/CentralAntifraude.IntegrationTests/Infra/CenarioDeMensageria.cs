@@ -1,4 +1,5 @@
 using CentralAntifraude.Application.Backtests;
+using CentralAntifraude.Application.Correlacao;
 using CentralAntifraude.Application.Mensageria;
 using CentralAntifraude.Application.Risco;
 using CentralAntifraude.Domain.Risco;
@@ -57,16 +58,31 @@ internal sealed class CenarioDeMensageria : IAsyncDisposable
     /// requisicao. Se algum deles dependesse do filtro global de tenant para
     /// enxergar o que precisa, ele veria vazio aqui — e o teste denunciaria.
     /// </summary>
+    /// <param name="envolverFila">
+    /// Substitui a fila por uma versao decorada. Existe para os testes de
+    /// resiliencia: e o unico jeito de simular "o broker esta fora" sem
+    /// derrubar o banco junto, que e o que aconteceria se a fila fosse
+    /// desligada por baixo.
+    /// </param>
+    /// <param name="manipuladores">
+    /// Substitui os efeitos. Um efeito que falha e um cenario legitimo — banco
+    /// intermitente, conflito — e o worker precisa se comportar do mesmo jeito
+    /// nos dois casos.
+    /// </param>
     public static CenarioDeMensageria Criar(
         string stringDeConexao,
         OpcoesDaFila? opcoes = null,
-        OpcoesDeBacktest? opcoesDeBacktest = null)
+        OpcoesDeBacktest? opcoesDeBacktest = null,
+        Func<IFilaDeMensagens, IFilaDeMensagens>? envolverFila = null,
+        IReadOnlyList<IManipuladorDeEvento>? manipuladores = null)
     {
         var contexto = CenarioDeIdentidade.CriarContexto(stringDeConexao);
         var opcoesDaFila = opcoes ?? new OpcoesDaFila();
         var relogio = new RelogioDeTeste();
 
-        var fila = new FilaEmPostgres(contexto, opcoesDaFila);
+        IFilaDeMensagens fila = new FilaEmPostgres(contexto, opcoesDaFila, NullLogger<FilaEmPostgres>.Instance);
+
+        fila = envolverFila is null ? fila : envolverFila(fila);
 
         var despachante = new DespachanteDeEventos(
             contexto,
@@ -77,7 +93,7 @@ internal sealed class CenarioDeMensageria : IAsyncDisposable
         // Os efeitos, na mesma ordem em que a composicao real os registra. O
         // teste precisa da mesma ordem porque ela decide qual savepoint cobre
         // qual efeito.
-        IManipuladorDeEvento[] manipuladores =
+        IReadOnlyList<IManipuladorDeEvento> efeitos = manipuladores ??
         [
             new ProjecaoDeDecisoesDiarias(contexto),
             new CriadorDeAlertas(
@@ -90,9 +106,10 @@ internal sealed class CenarioDeMensageria : IAsyncDisposable
             contexto,
             new UnidadeDeTrabalho(contexto),
             fila,
-            manipuladores,
+            efeitos,
             opcoesDaFila,
             relogio,
+            new ContextoDeCorrelacaoMutavel(),
             NullLogger<ProcessadorDeEventos>.Instance);
 
         // O consumidor de backtests roda com o MESMO motor da avaliacao real:
@@ -113,6 +130,7 @@ internal sealed class CenarioDeMensageria : IAsyncDisposable
             fila,
             opcoesDoBacktest,
             relogio,
+            new ContextoDeCorrelacaoMutavel(),
             NullLogger<ProcessadorDeBacktests>.Instance);
 
         return new CenarioDeMensageria(

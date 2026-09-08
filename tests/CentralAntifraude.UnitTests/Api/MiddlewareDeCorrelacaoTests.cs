@@ -1,4 +1,5 @@
 using CentralAntifraude.Api.Correlacao;
+using CentralAntifraude.Application.Correlacao;
 using CentralAntifraude.Domain.Primitivos;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -56,7 +57,7 @@ public sealed class MiddlewareDeCorrelacaoTests
         Assert.True(correlacao.IdDeCorrelacao.Length <= 64);
     }
 
-    private static async Task<(HttpContext Contexto, ContextoDeCorrelacao Correlacao)> Executar(
+    private static async Task<(HttpContext Contexto, ContextoDeCorrelacaoMutavel Correlacao)> Executar(
         string? cabecalhoRecebido)
     {
         var contexto = new DefaultHttpContext();
@@ -65,7 +66,7 @@ public sealed class MiddlewareDeCorrelacaoTests
             contexto.Request.Headers[MiddlewareDeCorrelacao.NomeDoCabecalho] = cabecalhoRecebido;
         }
 
-        var correlacao = new ContextoDeCorrelacao();
+        var correlacao = new ContextoDeCorrelacaoMutavel();
 
         var middleware = new MiddlewareDeCorrelacao(
             _ => Task.CompletedTask,
