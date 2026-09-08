@@ -30,8 +30,9 @@ solução certificada de compliance.
 | 9 | Backtests | ✅ concluída |
 | 10 | Operação, Busca, Painel e Auditoria | ✅ concluída |
 | 11 | Hardening de Segurança Aplicacional | ✅ concluída |
-| **12** | **Observabilidade, Resiliência e Performance** | ✅ **concluída** |
-| 13–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
+| 12 | Observabilidade, Resiliência e Performance | ✅ concluída |
+| **13** | **Dados de Demonstração e UX Final** | ✅ **concluída** |
+| 14–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
 
 Hoje a plataforma recebe transações de sistemas externos autenticados por
 credencial própria, registra cada tentativa **exatamente uma vez** mesmo sob
@@ -114,6 +115,8 @@ docs/
   security-gate-10.md                resultado do gate da Fase 10
   security-gate-11.md                resultado do gate da Fase 11
   security-gate-12.md                resultado do gate da Fase 12
+  security-gate-13.md                resultado do gate da Fase 13
+  demonstracao.md                    o roteiro da demo, em 8 minutos
   threat-model.md                    fluxos, ameaças e mitigações
   matriz-de-autorizacao.md           quem alcança o quê
   observabilidade.md                 catálogo de logs e métricas, runbook da DLQ
@@ -580,6 +583,28 @@ o efeito some. Está medido, explicado por `EXPLAIN` e registrado.
 **Nenhum índice novo foi criado**: a evidência disse que os existentes bastam. E
 o checkpoint de Redis do roadmap foi respondido com número, e não com opinião —
 [ADR 0017](docs/adr/0017-sem-redis.md).
+
+---
+
+## A demonstração
+
+O banco de desenvolvimento não é ruído: são **seis histórias escritas para
+serem entendidas** — movimento normal, compra atípica bloqueada, rajada,
+sinal isolado que *não* alarma, falso positivo resolvido como legítima e um
+caso aberto com dois alertas.
+
+**As decisões não estão escritas à mão.** O seed monta a transação, monta o
+contexto histórico e pergunta ao motor de risco de verdade, com a versão de
+perfil publicada de verdade. Mexer no peso de uma regra muda os números da
+demonstração junto — que é o único jeito de ela não virar mentira.
+
+Isso tem um preço, e ele apareceu: três histórias não saíram como planejadas.
+Duas viraram conteúdo em vez de defeito — **um sinal sozinho não alcança o
+limiar**, nem o geográfico (+25) nem o de velocidade (+35). Sem um caso assim,
+quem vê o produto conclui que todo sinal vira alerta.
+
+O roteiro de oito minutos está em [`docs/demonstracao.md`](docs/demonstracao.md),
+e oito testes garantem que as histórias continuam acontecendo.
 
 ---
 

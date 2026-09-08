@@ -3599,15 +3599,87 @@ Painel
 
 ## 13.8 Critérios de conclusão
 
-- [ ] Seed conta histórias reais do produto.
-- [ ] Existe falso positivo explícito.
-- [ ] Dados 100% fictícios.
-- [ ] Demo reproduzível.
-- [ ] Fluxos críticos possuem loading/error/empty.
-- [ ] UX parece console operacional.
-- [ ] Acessibilidade básica revisada.
-- [ ] Storytelling pronto para recrutador.
-- [ ] CI verde.
+- [x] Seed conta histórias reais do produto.
+- [x] Existe falso positivo explícito.
+- [x] Dados 100% fictícios.
+- [x] Demo reproduzível.
+- [x] Fluxos críticos possuem loading/error/empty.
+- [x] UX parece console operacional.
+- [x] Acessibilidade básica revisada.
+- [x] Storytelling pronto para recrutador.
+- [ ] CI verde — *pendente do primeiro `push`, que não foi autorizado. Cada passo do workflow foi executado localmente e está verde.*
+
+---
+
+## 13.9 Resultado da Fase 13
+
+**Concluída em 2026-09-08.**
+
+### Evidências
+
+| Critério | Como foi verificado |
+|---|---|
+| Build backend | `dotnet build -c Release`, **0 erros e 0 avisos** |
+| Build frontend | `tsc`, `oxlint`, `prettier --check` e `vitest` limpos |
+| **Seed narrativo** | 6 histórias em `SeedNarrativo`, com as decisões pedidas ao `MotorDeRisco` real |
+| Falso positivo | caso resolvido como `Legítima` sobre um alerta de `Revisar`, com a decisão automática intacta |
+| Dados fictícios | teste varre toda transação da demo: `pi_demo_*`, apelido de cliente, sem `@` |
+| Demo reproduzível | idempotente pelo marcador; 8 testes em `SeedNarrativoTests` |
+| **UX** | barra lateral agrupada, largura fluida, hierarquia tipográfica, decisão com forma além de cor |
+| **Acessibilidade** | medida no navegador: 7/7 controles rotulados, 9/9 contrastes acima do mínimo |
+| Storytelling | roteiro de 8 minutos em [`docs/demonstracao.md`](docs/demonstracao.md) |
+| Security Gate 13 | [`docs/security-gate-13.md`](docs/security-gate-13.md) |
+| Testes | 519 unitários + 25 arquitetura + 477 integração + 134 frontend = **1.155, todos verdes** |
+| Migration | nenhuma nesta fase |
+
+### Decisões congeladas
+
+| Decisão | Registro |
+|---|---|
+| Barra lateral agrupada por função, no lugar da barra horizontal | `LayoutDoApp.tsx` |
+| Conteúdo fluido; medida de leitura só no texto corrido | `global.css` |
+| Decisão de risco marcada por cor **e forma** — círculo, losango, triângulo | `global.css`, `.selo--*` |
+| O seed pergunta as decisões ao motor, em vez de gravá-las | `SeedNarrativo.cs` |
+| Integração da demo nasce **sem credencial** | idem |
+| Conta pública recomendada: Auditor (leitura) | [`security-gate-13.md`](docs/security-gate-13.md) |
+| Tom de texto fraco calibrado por medição de contraste | `global.css` |
+
+### O que a narrativa revelou sobre o motor
+
+Três histórias não saíram como planejadas, e duas viraram conteúdo em vez de
+correção:
+
+1. **Divergência geográfica sozinha vale +25 e não alcança o limiar de 40** — a
+   transação passa com o sinal registrado. Virou a história D, que existe hoje
+   para mostrar que o score é aditivo.
+2. **Velocidade sozinha vale +35** — mesmo efeito, por outra regra.
+3. **A janela de velocidade é de dez minutos**, e a rajada escrita com quatro
+   minutos de intervalo deixava a mais antiga de fora. Esse era erro de quem
+   escreveu o seed, e o teste o pegou.
+
+### Defeitos reais encontrados e corrigidos
+
+- **Contraste abaixo do mínimo** em rótulo de filtro e cabeçalho de tabela:
+  4,15:1 contra os 4,5:1 exigidos, justamente nos textos de 9,5 px.
+- **Caixa de marcar quebrada** na tela de Casos: o campo herdava
+  `flex-direction: column` e a caixa ficava sozinha em cima, com o rótulo
+  quebrado em três linhas embaixo.
+- **A linha do tempo do caso não era persistida** pelo seed: eventos e notas não
+  são navegações do agregado, e quem grava precisa pedi-las.
+
+### Débito técnico não bloqueante
+
+1. **CI ainda não executado.** Depende do primeiro `push`, que continua não
+   autorizado.
+2. **Quatro telas não conferidas a olho**: regras, backtests, auditoria e
+   administração — herdam o sistema de estilos e passam nos testes.
+3. **Sem teste automatizado de contraste.** A medição foi feita uma vez, à mão.
+4. **Nenhum leitor de tela real foi usado** — mediu-se a estrutura, não a
+   experiência.
+5. **Conta pública de demonstração é recomendação, não configuração** — depende
+   do deploy da Fase 14.
+6. **Nomes de classe CSS mantidos** mesmo onde já não descrevem bem o que
+   estilizam, para não esconder o diff desta fase.
 
 ---
 
@@ -4257,7 +4329,7 @@ A autorização de uma fase não autoriza automaticamente a fase seguinte.
 | 10 — Operação, Busca e Auditoria | ✅ Concluída (2026-09-07) |
 | 11 — Segurança Aplicacional | ✅ Concluída (2026-09-07) |
 | 12 — Observabilidade, Resiliência e Performance | ✅ Concluída (2026-09-07) |
-| 13 — Demo e UX Final | ⬜ Não iniciada |
+| 13 — Demo e UX Final | ✅ Concluída (2026-09-08) |
 | 14 — Infraestrutura e Deploy | ⬜ Não iniciada |
 | 15 — Validação Final e Release | ⬜ Não iniciada |
 
