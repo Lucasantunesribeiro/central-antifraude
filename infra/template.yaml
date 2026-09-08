@@ -1,0 +1,367 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: >
+  Central Antifraude — infraestrutura serverless.
+
+  Tudo aqui cobra por USO. Não há um único recurso com custo fixo: sem NAT
+  Gateway, sem RDS, sem ElastiCache, sem API Gateway. Essa é a decisão que
+  sustenta a meta de US$ 0,00 do CLAUDE.md seção 76 — um NAT Gateway sozinho
+  custaria mais do que todo o resto somado, parado, para sempre.
+
+  A conta projetada está em docs/custo-e-infraestrutura.md, com as fontes de
+  preço. O item mais apertado usa 16% da sua camada gratuita.
+
+  NADA AQUI FOI APLICADO. Criar estes recursos exige autorização explícita
+  (CLAUDE.md seção 109).
+
+Parameters:
+  Ambiente:
+    Type: String
+    Default: producao
+    AllowedValues: [producao, homologacao]
+
+  OrigemDoFrontend:
+    Type: String
+    Description: >
+      Origem exata do frontend na Vercel, com esquema e sem barra final.
+      Alimenta o CORS E a verificação de Origin que defende contra CSRF — as
+      duas leem a mesma lista, porque duas listas sairiam de sincronia no
+      primeiro ajuste (Fase 11).
+
+  IntervaloDaVarredura:
+    Type: String
+    Default: rate(15 minutes)
+    Description: >
+      Rede de segurança da Outbox, e não o caminho normal — a API invoca o
+      despachante assim que o evento é gravado.
+
+      15 minutos não é um número arredondado: o Neon suspende o compute após 5
+      minutos de inatividade, e o plano gratuito dá 100 CU-horas por mês. Uma
+      varredura a cada 5 minutos manteria o banco acordado 24/7 e consumiria
+      ~182 CU-horas — quase o dobro do gratuito. A 15 minutos, o banco fica
+      acordado cerca de um terço do tempo. Ver docs/custo-e-infraestrutura.md
+      seção 4.
+
+Globals:
+  Function:
+    Runtime: dotnet8
+    Architectures: [arm64]
+    MemorySize: 512
+    Timeout: 30
+    Environment:
+      Variables:
+        ASPNETCORE_ENVIRONMENT: Production
+        # A cultura invariante é obrigatória: sem ela, o runtime do Lambda
+        # depende do ICU da imagem base, e formatação de decimal muda de
+        # comportamento entre a máquina de desenvolvimento e a nuvem — num
+        # sistema que decide risco por valor monetário.
+        DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: 'false'
+    LoggingConfig:
+      LogFormat: JSON
+      ApplicationLogLevel: INFO
+      SystemLogLevel: WARN
+
+Resources:
+  # =========================================================== parâmetros ==
+  #
+  # Parâmetros PADRÃO, e não avançados: os padrões não têm custo de
+  # armazenamento nem de chamada; os avançados custam US$ 0,05 por mês cada.
+  #
+  # Os segredos NÃO vivem neste template. Eles são criados fora dele, à mão ou
+  # por script, e referenciados por nome — um valor secreto dentro de um
+  # arquivo de infraestrutura versionado é um segredo publicado.
+
+  ParametroDaOrigem:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/central-antifraude/${Ambiente}/origem-do-frontend'
+      Type: String
+      Value: !Ref OrigemDoFrontend
+
+  # ================================================================ filas ==
+  #
+  # Duas filas, e não uma. Um backtest de milhares de transações ocuparia o
+  # ciclo inteiro, e o alerta de uma transação bloqueada ficaria esperando
+  # atrás dele (CLAUDE.md seção 30).
+
+  FilaOperacional:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'central-antifraude-${Ambiente}-eventos-operacionais'
+      # 30 segundos: precisa ser ao menos o timeout da função que consome,
+      # senão a mensagem reaparece enquanto ainda está sendo processada e o
+      # efeito é tentado duas vezes em paralelo.
+      VisibilityTimeout: 30
+      MessageRetentionPeriod: 345600
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt FilaOperacionalMortas.Arn
+        # Cinco entregas antes de desistir. O consumidor é idempotente, então
+        # repetir é barato; o que não pode é uma mensagem defeituosa circular
+        # para sempre, consumindo o worker e escondendo as boas atrás dela.
+        maxReceiveCount: 5
+
+  FilaOperacionalMortas:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'central-antifraude-${Ambiente}-eventos-operacionais-mortas'
+      # 14 dias: tempo suficiente para alguém voltar de férias e ainda
+      # encontrar a mensagem para analisar.
+      MessageRetentionPeriod: 1209600
+
+  FilaDeBacktests:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'central-antifraude-${Ambiente}-backtests'
+      # Mais longo que a fila operacional porque a função também é: um backtest
+      # varre histórico.
+      VisibilityTimeout: 960
+      MessageRetentionPeriod: 345600
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt FilaDeBacktestsMortas.Arn
+        maxReceiveCount: 3
+
+  FilaDeBacktestsMortas:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'central-antifraude-${Ambiente}-backtests-mortas'
+      MessageRetentionPeriod: 1209600
+
+  # ================================================================== API ==
+  #
+  # Function URL, e não API Gateway. O CLAUDE.md seção 74 é explícito: sem API
+  # Gateway sem necessidade concreta. Ele traria roteamento, autorizadores e
+  # planos de uso — nada disso é usado aqui, e ele cobra por requisição onde a
+  # Function URL não cobra nada.
+
+  FuncaoDaApi:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'central-antifraude-${Ambiente}-api'
+      CodeUri: ../src/CentralAntifraude.Api/
+      Handler: CentralAntifraude.Api
+      # A API é o caminho crítico e o único que uma pessoa espera olhando: mais
+      # memória significa mais CPU, e o custo é medido em GB-s, não em MB
+      # alocados. A folga de duas ordens de grandeza na cota permite isso.
+      MemorySize: 1024
+      Timeout: 29
+      # Teto, e não reserva: impede que um laço acidental consuma a cota mensal
+      # numa tarde. Não é economia — é contenção de acidente.
+      ReservedConcurrentExecutions: 5
+      FunctionUrlConfig:
+        AuthType: NONE
+        # O CORS do próprio produto continua sendo o da aplicação (Fase 11).
+        # Este aqui é a camada da Function URL, e as duas precisam concordar.
+        Cors:
+          AllowOrigins: [!Ref OrigemDoFrontend]
+          AllowMethods: [GET, POST, PUT, DELETE, OPTIONS]
+          AllowHeaders: [Authorization, Content-Type, Accept, X-Correlation-Id, Idempotency-Key]
+          AllowCredentials: true
+          MaxAge: 600
+      Environment:
+        Variables:
+          Autenticacao__OrigensPermitidas__0: !Ref OrigemDoFrontend
+          Mensageria__FilaOperacional: !Ref FilaOperacional
+          Mensageria__FilaDeBacktests: !Ref FilaDeBacktests
+          Mensageria__FuncaoDoDespachante: !Ref FuncaoDoDespachante
+          # Os laços de fundo ficam DESLIGADOS na API: em Lambda cada laço é
+          # uma função própria, e um BackgroundService dentro da API rodaria
+          # apenas enquanto a instância estivesse quente — ou seja, quase
+          # nunca, e de forma imprevisível.
+          SegundoPlano__Habilitado: 'false'
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt FilaOperacional.QueueName
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt FilaDeBacktests.QueueName
+        # Permissão de invocar SÓ o despachante, e não "lambda:InvokeFunction"
+        # em tudo. É o que transforma um erro de código num erro de permissão
+        # em vez de numa invocação inesperada.
+        - LambdaInvokePolicy:
+            FunctionName: !Ref FuncaoDoDespachante
+        - SSMParameterReadPolicy:
+            ParameterName: !Sub 'central-antifraude/${Ambiente}/*'
+
+  # ========================================================== despachante ==
+
+  FuncaoDoDespachante:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'central-antifraude-${Ambiente}-despachante'
+      CodeUri: ../src/CentralAntifraude.Lambdas/
+      Handler: CentralAntifraude.Lambdas::CentralAntifraude.Lambdas.DespachanteHandler::TratarAsync
+      Timeout: 60
+      # Um de cada vez. Vários despachantes são seguros — o SKIP LOCKED cuida
+      # disso desde a Fase 5 —, mas cada um acorda o banco, e acordar o banco é
+      # o que custa dinheiro aqui.
+      ReservedConcurrentExecutions: 1
+      Environment:
+        Variables:
+          Mensageria__FilaOperacional: !Ref FilaOperacional
+          Mensageria__FilaDeBacktests: !Ref FilaDeBacktests
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt FilaOperacional.QueueName
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt FilaDeBacktests.QueueName
+        - SSMParameterReadPolicy:
+            ParameterName: !Sub 'central-antifraude/${Ambiente}/*'
+      Events:
+        Varredura:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: !Ref IntervaloDaVarredura
+            Description: >
+              Rede de segurança da Outbox. O caminho normal é a API invocar
+              esta função logo após gravar o evento; esta varredura existe para
+              o caso de aquela invocação ter falhado.
+
+  # ============================================================= workers ==
+
+  FuncaoDoConsumidor:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'central-antifraude-${Ambiente}-consumidor'
+      CodeUri: ../src/CentralAntifraude.Lambdas/
+      Handler: CentralAntifraude.Lambdas::CentralAntifraude.Lambdas.ConsumidorHandler::TratarAsync
+      Timeout: 30
+      ReservedConcurrentExecutions: 2
+      Policies:
+        - SSMParameterReadPolicy:
+            ParameterName: !Sub 'central-antifraude/${Ambiente}/*'
+      Events:
+        Fila:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt FilaOperacional.Arn
+            BatchSize: 10
+            # Falha parcial reportada por item: sem isto, uma mensagem ruim no
+            # meio de nove boas faria as nove voltarem para a fila e serem
+            # reprocessadas. A Inbox tornaria isso inofensivo, mas inofensivo
+            # não é de graça.
+            FunctionResponseTypes: [ReportBatchItemFailures]
+
+  FuncaoDeBacktests:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'central-antifraude-${Ambiente}-backtests'
+      CodeUri: ../src/CentralAntifraude.Lambdas/
+      Handler: CentralAntifraude.Lambdas::CentralAntifraude.Lambdas.BacktestHandler::TratarAsync
+      # Bem mais longo, e ainda assim menor que a visibilidade da fila.
+      Timeout: 900
+      MemorySize: 1024
+      ReservedConcurrentExecutions: 2
+      Policies:
+        - SSMParameterReadPolicy:
+            ParameterName: !Sub 'central-antifraude/${Ambiente}/*'
+      Events:
+        Fila:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt FilaDeBacktests.Arn
+            # Um por vez: um backtest é longo, e agrupar dez numa invocação
+            # arriscaria o timeout da função inteira por causa do último.
+            BatchSize: 1
+            FunctionResponseTypes: [ReportBatchItemFailures]
+
+  # ================================================================ logs ==
+  #
+  # Retenção declarada explicitamente. O padrão do CloudWatch é "nunca
+  # expirar", e log guardado para sempre é a despesa que só aparece no
+  # terceiro mês — quando ninguém mais lembra de onde veio.
+
+  LogsDaApi:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/central-antifraude-${Ambiente}-api'
+      RetentionInDays: 14
+
+  LogsDoDespachante:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/central-antifraude-${Ambiente}-despachante'
+      RetentionInDays: 14
+
+  LogsDoConsumidor:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/central-antifraude-${Ambiente}-consumidor'
+      RetentionInDays: 14
+
+  LogsDeBacktests:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/central-antifraude-${Ambiente}-backtests'
+      RetentionInDays: 14
+
+  # ============================================================= alarmes ==
+  #
+  # Três, e não quinze. Alarme que dispara sem ação possível vira ruído, e
+  # ruído treina a pessoa a ignorar o próximo.
+
+  AlarmeDeMensagensMortas:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'central-antifraude-${Ambiente}-mensagens-mortas'
+      AlarmDescription: >
+        Qualquer mensagem na fila de mortas é trabalho que o sistema aceitou e
+        não entregou. O limiar é 1 de propósito.
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt FilaOperacionalMortas.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+  AlarmeDeIdadeDaFila:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'central-antifraude-${Ambiente}-fila-parada'
+      AlarmDescription: >
+        Mensagem mais antiga acima de 15 minutos. Mede o que a contagem não
+        mede: uma fila com trezentas mensagens de dois segundos é tráfego; uma
+        com três de quarenta minutos é um worker parado.
+      Namespace: AWS/SQS
+      MetricName: ApproximateAgeOfOldestMessage
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt FilaOperacional.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 900
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  AlarmeDeErrosDaApi:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'central-antifraude-${Ambiente}-api-com-erro'
+      AlarmDescription: Falhas da função da API — não inclui 4xx, que são o contrato funcionando.
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FuncaoDaApi
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+Outputs:
+  UrlDaApi:
+    Description: Function URL da API. Alimenta a variável de ambiente do frontend na Vercel.
+    Value: !GetAtt FuncaoDaApiUrl.FunctionUrl
+
+  FilaOperacionalUrl:
+    Value: !Ref FilaOperacional
+
+  FilaDeBacktestsUrl:
+    Value: !Ref FilaDeBacktests
