@@ -3847,17 +3847,97 @@ Configurar:
 
 ## 14.11 Critérios de conclusão
 
-- [ ] Pricing atual verificado.
-- [ ] Estimativa documentada.
-- [ ] IaC reproduzível.
-- [ ] Secrets fora do código.
-- [ ] Budget/alerta configurado quando possível.
-- [ ] Produção deployada somente com autorização.
-- [ ] Browser flows validados.
-- [ ] Async flows validados em AWS.
-- [ ] Runtime real reproduzido em testes quando necessário.
-- [ ] Custo esperado dentro da meta.
-- [ ] CI verde.
+- [x] Pricing atual verificado.
+- [x] Estimativa documentada.
+- [x] IaC reproduzível.
+- [x] Secrets fora do código.
+- [ ] Budget/alerta configurado quando possível. — *exige conta AWS*
+- [ ] Produção deployada somente com autorização. — *não autorizada*
+- [ ] Browser flows validados. — *exige ambiente publicado*
+- [ ] Async flows validados em AWS. — *exige recursos criados*
+- [x] Runtime real reproduzido em testes quando necessário.
+- [x] Custo esperado dentro da meta.
+- [x] CI verde.
+
+---
+
+## 14.12 Resultado da Fase 14 — parte local
+
+**Preparação concluída em 2026-09-08. Deploy não realizado e não autorizado.**
+
+A fase se divide em duas metades que não podem ser confundidas: o que é
+preparável na máquina, e o que só existe depois de criar recurso na nuvem.
+Toda a primeira metade está feita e verificada. A segunda está intocada.
+
+### Evidências
+
+| Critério | Como foi verificado |
+|---|---|
+| Preços verificados | tabela com fonte e data em [`docs/custo-e-infraestrutura.md`](docs/custo-e-infraestrutura.md) seção 2 |
+| Runtime confirmado | `dotnet10`, Amazon Linux 2023, depreciação em 14/11/2028 — documentação oficial da AWS |
+| Template válido | `sam validate --lint` limpo |
+| Artefatos existem | `sam build` empacotou as 4 funções em `arm64`; 4 zips gerados |
+| **Handlers conferidos** | reflexão sobre o assembly real em `HandlersDoTemplateTests` — a única ligação do projeto que o compilador não verifica |
+| `CodeUri` conferidos | teste confere cada caminho contra o disco |
+| **Despacho após commit** | `DespachoImediatoTests` lê a Outbox por conexão crua, de fora da transação |
+| Adaptador de fila | 9 testes em `FilaDoEventoLambdaTests`, incluindo a contagem de falha por subtração |
+| Falha não derruba resposta | 5 testes em `DespachanteImediatoTests` |
+| Tradução do evento SQS | 5 testes em `LoteDoSqsTests` |
+| Secrets fora do código | `ConfiguracaoDaNuvem` lê o Parameter Store; template não declara parâmetro |
+| Security Gate 14 | [`docs/security-gate-14.md`](docs/security-gate-14.md) — 14 asserções automatizadas |
+| Build backend | `dotnet build -c Release`, **0 erros e 0 avisos** |
+| Testes | 537 unitários + 49 arquitetura + 479 integração + 134 frontend = **1.199, todos verdes** |
+| Migration | nenhuma nesta fase |
+
+### O achado que decidiu a arquitetura
+
+O plano gratuito do Neon dá 100 CU-horas por mês e suspende o compute após 5
+minutos parado. O despachante em processo consulta a Outbox a cada 2 segundos —
+o que impede a suspensão para sempre e consumiria ~182 CU-horas, quase o dobro
+do gratuito.
+
+**Manter o banco acordado é o único jeito de esta arquitetura custar dinheiro.**
+
+A saída foi trocar o polling por dois acionamentos com papéis diferentes: a API
+invoca o despachante logo depois do commit (experiência), e um agendamento a
+cada 15 minutos varre a Outbox (garantia). Ver
+[ADR 0019](docs/adr/0019-deploy-serverless-e-despacho-imediato.md).
+
+### Decisões congeladas
+
+| Decisão | Registro |
+|---|---|
+| Publicação imediata + varredura de 15 min, no lugar do polling de 2 s | `docs/adr/0019-deploy-serverless-e-despacho-imediato.md` |
+| Consumidor da Fase 5 preservado, com adaptador para o modelo de ack do Lambda | `FilaDoEventoLambda.cs` |
+| Falha de fila contada por subtração, e não pela soma das devoluções | `FilaDoEventoLambda.RecibosComFalha` |
+| Segredos no Parameter Store, criados fora do template | `ConfiguracaoDaNuvem.cs` |
+| `dotnet10` em `arm64`, sem API Gateway e sem nenhum recurso de custo fixo | `infra/template.yaml` |
+
+### Defeitos encontrados e corrigidos nesta fase
+
+1. **Workers sem as variáveis de fila.** Sem `Mensageria__FilaOperacional`, a
+   composição escolhe a fila em PostgreSQL — o worker rodaria, sem erro, falando
+   com a fila errada. É a variável que decide qual implementação a injeção de
+   dependência entrega, e não um detalhe de endereço.
+2. **`OPTIONS` no CORS da Function URL.** Apontado pelo lint do SAM: a AWS não
+   aceita o valor, porque responde ao preflight sozinha.
+3. **Nenhum caminho para a string de conexão.** O template concedia permissão de
+   ler o SSM, mas nada lia. Faltava o provedor de configuração.
+4. **Parâmetro SSM sem consumidor.** A origem do frontend estava declarada no
+   Parameter Store *e* como variável de ambiente — duas fontes para a mesma
+   verdade. O recurso foi removido.
+
+### Débito técnico não bloqueante
+
+1. **Nada foi medido na nuvem.** Arranque frio do .NET em `arm64`, despertar do
+   Neon, comportamento real do gatilho de SQS sob concorrência reservada — todos
+   projetados, nenhum medido. A fronteira está escrita em
+   `docs/custo-e-infraestrutura.md` seção 9.
+2. **As roles IAM não foram exercidas.** O SAM as gera a partir de políticas
+   nomeadas, e uma política insuficiente só aparece na primeira chamada real.
+3. **O CI não roda `sam validate`.** O comando foi executado localmente; ligá-lo
+   ao workflow exige o SAM CLI no runner, e o workflow só roda depois do
+   primeiro `push`, que não foi autorizado.
 
 ---
 
@@ -4330,7 +4410,7 @@ A autorização de uma fase não autoriza automaticamente a fase seguinte.
 | 11 — Segurança Aplicacional | ✅ Concluída (2026-09-07) |
 | 12 — Observabilidade, Resiliência e Performance | ✅ Concluída (2026-09-07) |
 | 13 — Demo e UX Final | ✅ Concluída (2026-09-08) |
-| 14 — Infraestrutura e Deploy | ⬜ Não iniciada |
+| 14 — Infraestrutura e Deploy | 🟨 Preparação concluída (2026-09-08); deploy pendente de autorização |
 | 15 — Validação Final e Release | ⬜ Não iniciada |
 
 Legenda:

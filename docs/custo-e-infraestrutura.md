@@ -95,6 +95,13 @@ custo que só aparece no terceiro mês.
 Ordens de grandeza abaixo do gratuito: 2.900 invocações contra 14 milhões, um
 punhado de parâmetros padrão, e um site estático com trânsito de demonstração.
 
+Sobre o SSM, um detalhe que só apareceu na implementação: cada arranque frio de
+função faz **uma** chamada `GetParametersByPath`, e não uma por parâmetro — o
+provedor de configuração lê o caminho inteiro de uma vez. Com quatro funções e
+arranque frio esporádico, a ordem de grandeza é de centenas de chamadas por
+mês. Parâmetros **padrão** não cobram por chamada de API; os avançados cobram
+US$ 0,05 por parâmetro por mês, e é por isso que o projeto usa os padrões.
+
 ### Total esperado
 
 > **US$ 0,00 por mês**, com o item mais apertado em 16% da sua cota.
@@ -204,3 +211,75 @@ Nenhum deles foi criado — exigem autorização (`CLAUDE.md` seção 109):
   tarde.
 - **Alarme de fila de mortas** com limiar 1: qualquer mensagem morta merece
   aviso.
+
+---
+
+## 8. O que precisa existir antes do primeiro deploy
+
+Nada disto foi criado — todos exigem autorização (`CLAUDE.md` seção 109). A
+lista existe porque o template **não** cria nenhum deles de propósito.
+
+### 8.1 Os parâmetros no SSM
+
+O template não declara parâmetro nenhum, e a ausência é a decisão: o que
+precisa estar no Parameter Store é segredo, e segredo dentro de um arquivo de
+infraestrutura versionado é um segredo publicado (`CLAUDE.md` seção 59).
+
+As funções leem o caminho `/central-antifraude/{ambiente}/` no arranque, e cada
+parâmetro vira chave de configuração trocando `/` por `:`:
+
+| Parâmetro | Tipo | Vira a chave |
+|---|---|---|
+| `/central-antifraude/producao/ConnectionStrings/Postgres` | `SecureString` | `ConnectionStrings:Postgres` |
+| `/central-antifraude/producao/Autenticacao/ChaveDeAssinatura` | `SecureString` | `Autenticacao:ChaveDeAssinatura` |
+| `/central-antifraude/producao/Ingestao/ChaveDeFingerprint` | `SecureString` | `Ingestao:ChaveDeFingerprint` |
+
+Os dois últimos não são conveniência: a chave de assinatura é o que separa uma
+sessão legítima de uma forjada, e a de fingerprint é o segredo do HMAC que
+substitui o IP bruto (`CLAUDE.md` seção 57). Um valor previsível em qualquer um
+dos dois derruba a garantia que a fase correspondente construiu.
+
+O provedor está configurado como **obrigatório**: faltando o caminho, a função
+não sobe. É deliberado — uma função no ar que falha em toda avaliação de risco
+é pior do que uma que não subiu, porque o alarme de saúde não dispara.
+
+### 8.2 O que NÃO vai para o SSM
+
+A origem do frontend chega por variável de ambiente, declarada no template.
+Guardá-la também no Parameter Store criaria um segundo lugar para a mesma
+verdade — e é o segundo lugar que sai de sincronia no primeiro ajuste.
+
+### 8.3 O banco
+
+O Neon precisa existir antes da primeira invocação, com as migrations
+aplicadas. A string de conexão deve usar o endpoint **com pooling**: uma função
+Lambda por invocação abriria conexões diretas mais rápido do que o Postgres as
+libera.
+
+---
+
+## 9. O que a validação local provou, e o que ela não pode provar
+
+Vale registrar a fronteira, porque ela é a diferença entre "verificado" e
+"esperado".
+
+**Provado localmente:**
+
+- o template é um SAM válido, e passa no lint (`sam validate --lint`);
+- `sam build` empacota as quatro funções com o runtime `dotnet10` em `arm64`,
+  e os quatro artefatos foram gerados;
+- cada string de handler do template resolve a uma classe e a um método que
+  existem no assembly, conferido por reflexão num teste automatizado;
+- todo `CodeUri` aponta para uma pasta com projeto dentro;
+- o aviso ao despachante sai **depois** do commit, conferido por uma conexão de
+  fora da transação.
+
+**Não provado, e só verificável na nuvem:**
+
+- o tempo de arranque frio do .NET 10 em `arm64`, somado ao despertar do Neon;
+- o comportamento real do gatilho de SQS sob concorrência reservada;
+- se as permissões IAM que o SAM gera a partir das políticas são suficientes na
+  prática — o teste de permissão é o deploy;
+- a leitura efetiva do Parameter Store pela role de execução;
+- o CORS da Function URL contra a origem real da Vercel.
+
