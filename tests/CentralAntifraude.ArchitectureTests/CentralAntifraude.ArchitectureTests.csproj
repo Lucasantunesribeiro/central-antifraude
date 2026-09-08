@@ -9,6 +9,7 @@
     <ProjectReference Include="..\..\src\CentralAntifraude.Application\CentralAntifraude.Application.csproj" />
     <ProjectReference Include="..\..\src\CentralAntifraude.Domain\CentralAntifraude.Domain.csproj" />
     <ProjectReference Include="..\..\src\CentralAntifraude.Infrastructure\CentralAntifraude.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\CentralAntifraude.Lambdas\CentralAntifraude.Lambdas.csproj" />
   </ItemGroup>
 
   <ItemGroup>
