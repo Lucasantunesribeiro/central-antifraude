@@ -31,8 +31,9 @@ solução certificada de compliance.
 | 10 | Operação, Busca, Painel e Auditoria | ✅ concluída |
 | 11 | Hardening de Segurança Aplicacional | ✅ concluída |
 | 12 | Observabilidade, Resiliência e Performance | ✅ concluída |
-| **13** | **Dados de Demonstração e UX Final** | ✅ **concluída** |
-| 14–15 | — | ver [`ROADMAP.md`](ROADMAP.md) |
+| 13 | Dados de Demonstração e UX Final | ✅ concluída |
+| 14 | Infraestrutura, Custo e Deploy | ✅ concluída — **em produção** |
+| **15** | **Validação Final, Pentest e Release** | ✅ **concluída** |
 
 Hoje a plataforma recebe transações de sistemas externos autenticados por
 credencial própria, registra cada tentativa **exatamente uma vez** mesmo sob
@@ -67,10 +68,40 @@ que não se edita, e o veredito vira dado por transação.
 O Supervisor administra as regras que produzem tudo isso: escreve um rascunho,
 publica uma versão imutável e ajusta os limiares. Nada disso reescreve o
 passado — uma transação avaliada em março continua explicada pela regra que
-valia em março.
+valia em março. Antes de publicar, ele mede: um **backtest** reaplica a regra
+candidata sobre o histórico, no mesmo motor da avaliação real, sem tocar em
+produção. E acompanha a operação por um **painel** e por um **console** de
+transações, alertas e casos com filtros tipados.
 
-**Ainda não existe** backtest nem painel operacional. Isso é deliberado — cada
-capacidade chega na fase que o `ROADMAP.md` define.
+Tudo isso está **no ar**: a plataforma foi implantada em produção — API
+serverless na AWS, banco gerenciado no Neon, frontend na Vercel — com custo
+esperado de **US$ 0,00** para uso de portfólio. Ver [Demonstração ao vivo](#demonstração-ao-vivo).
+
+---
+
+## Demonstração ao vivo
+
+Capturas do ambiente publicado, como Analista de Fraude — a galeria completa em
+[`docs/screenshots/`](docs/screenshots/):
+
+| Painel | Transação explicável | Falso positivo |
+|---|---|---|
+| ![Painel](docs/screenshots/01-painel-operacional.jpg) | ![Transação](docs/screenshots/03-transacao-sinais-explicaveis.jpg) | ![Caso](docs/screenshots/05-caso-falso-positivo.jpg) |
+
+| | |
+|---|---|
+| **Aplicação** | https://central-antifraude.vercel.app |
+| **API** | Lambda Function URL (`us-east-1`), atrás do frontend |
+| **Perfis da demo** | Administrador · Analista de Fraude · Supervisor · Auditor |
+
+A demonstração tem uma narrativa: seis histórias plantadas no seed, incluindo
+**um falso positivo obrigatório** — uma transação que o motor marcou `Revisar`
+e a investigação humana concluiu `Legítima`. É o caso que justifica por que a
+investigação existe. O roteiro está em [`docs/demonstracao.md`](docs/demonstracao.md).
+
+> A infraestrutura suspende sozinha quando ociosa (é o que sustenta o custo
+> zero). A primeira visita depois de um tempo parado leva ~4 s para acordar
+> banco e função; as seguintes respondem em ~0,6 s.
 
 ---
 
@@ -622,6 +653,70 @@ Docker no ar. SQLite não é aceito como substituto: as fases seguintes dependem
 de `SERIALIZABLE`, `FOR UPDATE SKIP LOCKED` e constraints que só o PostgreSQL
 tem — um teste de concorrência verde no SQLite não provaria nada.
 
+A suíte tem **1.211 testes** — 546 unitários, 51 de arquitetura, 480 de
+integração, 134 de frontend. O número não é a meta; cobrir risco real é. Vários
+testes nasceram de defeitos concretos, e cada um prova que falha sem a correção:
+o `CorrelationId` que sumia num endpoint com tratador de exceção, a conexão
+morta que o Neon fechava, o CORS declarado em dois lugares, o handler do Lambda
+referenciado por string.
+
+---
+
+## Deploy e infraestrutura
+
+A plataforma roda **serverless**, sem nenhum recurso de custo fixo:
+
+```text
+Vercel (frontend estático)
+   │  HTTPS
+   ▼
+Lambda Function URL ──► API (.NET 10, arm64)
+   │                       │
+   │ commit               ▼
+   │                    Neon PostgreSQL 17  (scale-to-zero em 5 min)
+   ▼
+Lambda despachante ──► SQS ──► Lambda consumidor ──► efeitos (alertas)
+   ▲                    │
+   │ a cada 15 min       └─► DLQ após 5 tentativas
+EventBridge Scheduler
+```
+
+A infraestrutura é declarada em [`infra/template.yaml`](infra/template.yaml)
+(AWS SAM) e sobe com `sam deploy`. Os segredos **não** estão no template nem em
+variável de ambiente do Lambda: ficam no SSM Parameter Store como `SecureString`
+e são lidos no arranque. Ver [ADR 0019](docs/adr/0019-deploy-serverless-e-despacho-imediato.md)
+e [`docs/custo-e-infraestrutura.md`](docs/custo-e-infraestrutura.md).
+
+**O despachante é acordado, não fica perguntando.** Um polling constante
+manteria o Neon acordado 24/7 e estouraria o plano gratuito. Em vez disso, a API
+invoca o despachante logo após o commit (alerta em segundos), e uma varredura de
+15 minutos é a rede de segurança da Outbox. A garantia continua sendo a tabela;
+a invocação imediata é só latência.
+
+### Custo
+
+**US$ 0,00 esperado** para o envelope de portfólio (~10 mil avaliações/mês). O
+item mais apertado usa 16% da sua camada gratuita. Nenhum recurso cobra por
+estar parado: sem NAT Gateway, sem RDS, sem API Gateway, sem chave KMS própria.
+A conta inteira, com fontes de preço verificadas, está em
+[`docs/custo-e-infraestrutura.md`](docs/custo-e-infraestrutura.md).
+
+---
+
+## Segurança verificada em produção
+
+Além dos testes automatizados, a plataforma passou por um **pentest gray-box**
+contra o ambiente publicado: 19 vetores da lista do ROADMAP — JWT forjado e
+`alg=none`, replay de refresh com queda da família, tenant injection, mass
+assignment, IDOR, escalonamento de privilégio, SQL injection, XSS, CSRF, rate
+limiting e vazamento de segredo em erro. **Todos defendidos, nenhum achado de
+alta severidade.** O relatório, com escopo e limitações — e a afirmação
+explícita de que "100% seguro" não é uma alegação sustentável —, está em
+[`docs/pentest-v1.md`](docs/pentest-v1.md).
+
+Dependências: **zero vulnerabilidades** conhecidas nos dois ecossistemas, com
+Dependabot vigiando semanalmente.
+
 ---
 
 ## Decisões já congeladas
@@ -643,6 +738,10 @@ tem — um teste de concorrência verde no SQLite não provaria nada.
 | Regras: rascunho, versão imutável e sucessão do perfil | [ADR 0013](docs/adr/0013-gestao-e-versionamento-de-regras.md) |
 | Backtests: mesmo motor, candidato congelado e isolamento de produção | [ADR 0014](docs/adr/0014-backtests.md) |
 | Console, painel e auditoria: filtro tipado, contagem ao vivo e trilha só de leitura | [ADR 0015](docs/adr/0015-console-operacional.md) |
+| Observabilidade e resiliência: correlação ponta a ponta, métricas de baixa cardinalidade | [ADR 0016](docs/adr/0016-observabilidade-e-resiliencia.md) |
+| Sem Redis: PostgreSQL como fonte única de verdade | [ADR 0017](docs/adr/0017-sem-redis.md) |
+| Console operacional e narrativa da demonstração | [ADR 0018](docs/adr/0018-console-operacional-e-demonstracao.md) |
+| Deploy serverless e despacho imediato após o commit | [ADR 0019](docs/adr/0019-deploy-serverless-e-despacho-imediato.md) |
 
 Três decisões são reforçadas em tempo de compilação por
 `src/BannedSymbols.txt`: `DateTime.UtcNow`, `DateTime.Now` e `Guid.NewGuid()`
