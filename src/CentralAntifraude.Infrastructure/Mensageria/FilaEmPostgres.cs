@@ -1,7 +1,10 @@
+using System.Diagnostics.Metrics;
 using CentralAntifraude.Application.Mensageria;
+using CentralAntifraude.Application.Observabilidade;
 using CentralAntifraude.Infrastructure.Persistencia;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -35,15 +38,34 @@ namespace CentralAntifraude.Infrastructure.Mensageria;
 /// A Fase 14 troca esta classe por um adaptador do SDK. O contrato nao muda —
 /// e o conjunto de testes de contrato existe justamente para verificar isso.
 /// </summary>
-public sealed class FilaEmPostgres : IFilaDeMensagens
+public sealed partial class FilaEmPostgres : IFilaDeMensagens
 {
+    private static readonly Meter Medidor = new(Telemetria.MedidorDeMensageria);
+
+    /// <summary>
+    /// Mensagens que desistiram de ser processadas.
+    ///
+    /// Contador, e nao medidor de profundidade: o momento em que uma mensagem
+    /// vai para a fila de mortas e um EVENTO, e e ele que merece alarme. A
+    /// profundidade da DLQ e estado, medido a parte e com parcimonia — contar
+    /// linhas a cada ciclo seria polling de banco a cada 100 ms para responder
+    /// uma pergunta que muda de hora em hora (CLAUDE.md secao 78).
+    /// </summary>
+    private static readonly Counter<long> Mortas =
+        Medidor.CreateCounter<long>(Telemetria.Instrumentos.MensagensMortas);
+
     private readonly CentralAntifraudeDbContext _contexto;
     private readonly OpcoesDaFila _opcoes;
+    private readonly ILogger<FilaEmPostgres> _log;
 
-    public FilaEmPostgres(CentralAntifraudeDbContext contexto, OpcoesDaFila opcoes)
+    public FilaEmPostgres(
+        CentralAntifraudeDbContext contexto,
+        OpcoesDaFila opcoes,
+        ILogger<FilaEmPostgres> log)
     {
         _contexto = contexto;
         _opcoes = opcoes;
+        _log = log;
     }
 
     public async Task EnviarAsync(string fila, string corpo, CancellationToken cancellationToken)
@@ -86,7 +108,17 @@ public sealed class FilaEmPostgres : IFilaDeMensagens
         // recebimentos. E o redrive: uma mensagem que sempre falha nao pode
         // voltar para sempre, consumindo o worker e escondendo as boas atras
         // dela.
-        await MoverParaMortasAsync(fila, cancellationToken);
+        var mortas = await MoverParaMortasAsync(fila, cancellationToken);
+
+        if (mortas > 0)
+        {
+            // Aviso, e nao informacao: uma mensagem na DLQ e trabalho que o
+            // sistema aceitou e nao entregou. O corpo NAO entra no log — ele
+            // carrega score, decisao e identificador de cliente; ele fica na
+            // tabela, sob a mesma autorizacao do resto do dado.
+            Mortas.Add(mortas, new KeyValuePair<string, object?>("fila", fila));
+            RegistrarMortas(_log, mortas, fila, _opcoes.MaximoDeRecebimentos);
+        }
 
         var conexao = (NpgsqlConnection)_contexto.Database.GetDbConnection();
         await AbrirSeNecessarioAsync(conexao, cancellationToken);
@@ -177,7 +209,7 @@ public sealed class FilaEmPostgres : IFilaDeMensagens
     /// motivo do SQS: so na hora de entregar de novo e que se sabe que a
     /// entrega anterior nao foi confirmada.
     /// </summary>
-    private Task MoverParaMortasAsync(string fila, CancellationToken cancellationToken) =>
+    private Task<int> MoverParaMortasAsync(string fila, CancellationToken cancellationToken) =>
         ExecutarAsync(
             """
             WITH mortas AS (
@@ -210,7 +242,7 @@ public sealed class FilaEmPostgres : IFilaDeMensagens
         return (int)(await comando.ExecuteScalarAsync(cancellationToken) ?? 0);
     }
 
-    private async Task ExecutarAsync(
+    private async Task<int> ExecutarAsync(
         string sql,
         CancellationToken cancellationToken,
         params NpgsqlParameter[] parametros)
@@ -223,7 +255,7 @@ public sealed class FilaEmPostgres : IFilaDeMensagens
         comando.Transaction = TransacaoAtual();
         comando.Parameters.AddRange(parametros);
 
-        await comando.ExecuteNonQueryAsync(cancellationToken);
+        return await comando.ExecuteNonQueryAsync(cancellationToken);
     }
 
     /// <summary>
@@ -245,6 +277,17 @@ public sealed class FilaEmPostgres : IFilaDeMensagens
             await conexao.OpenAsync(cancellationToken);
         }
     }
+
+    [LoggerMessage(
+        EventId = 530,
+        Level = LogLevel.Warning,
+        Message = "{Quantidade} mensagem(ns) da fila {Fila} foram para a fila de mortas " +
+                  "apos {Maximo} entregas sem confirmacao.")]
+    private static partial void RegistrarMortas(
+        ILogger logger,
+        int quantidade,
+        string fila,
+        int maximo);
 
     private static NpgsqlParameter Texto(string nome, string valor) =>
         new(nome, NpgsqlDbType.Text) { Value = valor };

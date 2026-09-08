@@ -1,6 +1,7 @@
 using System.Diagnostics.Metrics;
 using CentralAntifraude.Application.Alertas;
 using CentralAntifraude.Application.Mensageria;
+using CentralAntifraude.Application.Observabilidade;
 using CentralAntifraude.Domain.Alertas;
 using CentralAntifraude.Domain.Eventos;
 using CentralAntifraude.Domain.Tempo;
@@ -104,8 +105,8 @@ public sealed partial class CriadorDeAlertas : IManipuladorDeEvento
     /// <summary>Nome deste consumidor na Inbox. Nunca renomear.</summary>
     public const string NomeDoConsumidor = "criador-de-alertas";
 
-    /// <summary>Nome do medidor, para quem for coletar metricas na Fase 12.</summary>
-    public const string NomeDoMedidor = "CentralAntifraude.Alertas";
+    /// <summary>Nome do medidor. O catalogo esta em <see cref="Telemetria"/>.</summary>
+    public const string NomeDoMedidor = Telemetria.MedidorDeAlertas;
 
     private static readonly Meter Medidor = new(NomeDoMedidor);
 
@@ -117,7 +118,7 @@ public sealed partial class CriadorDeAlertas : IManipuladorDeEvento
     /// cardinalidade, e o `CLAUDE.md` secao 71 proibe exatamente isso.
     /// </summary>
     private static readonly Counter<long> Criados =
-        Medidor.CreateCounter<long>("alertas_criados");
+        Medidor.CreateCounter<long>(Telemetria.Instrumentos.AlertasCriados);
 
     private readonly IRepositorioDeAlertas _alertas;
     private readonly IRelogio _relogio;

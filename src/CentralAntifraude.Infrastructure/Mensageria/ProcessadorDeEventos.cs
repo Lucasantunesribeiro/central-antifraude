@@ -1,7 +1,10 @@
 using System.Data;
+using System.Diagnostics.Metrics;
+using CentralAntifraude.Application.Correlacao;
 using CentralAntifraude.Application.Erros;
 using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Application.Mensageria;
+using CentralAntifraude.Application.Observabilidade;
 using CentralAntifraude.Domain.Eventos;
 using CentralAntifraude.Domain.Tempo;
 using CentralAntifraude.Infrastructure.Persistencia;
@@ -49,12 +52,26 @@ namespace CentralAntifraude.Infrastructure.Mensageria;
 /// </summary>
 public sealed partial class ProcessadorDeEventos
 {
+    private static readonly Meter Medidor = new(Telemetria.MedidorDeMensageria);
+
+    /// <summary>
+    /// Mensagens consumidas, por desfecho.
+    ///
+    /// As quatro series contam historias diferentes e nao podem virar uma so:
+    /// `repetido` subindo e a entrega ao-menos-uma-vez funcionando como
+    /// previsto, `recusado` e mensagem que nao deveria existir, e `falhou` e o
+    /// unico que significa que algo esta quebrado agora.
+    /// </summary>
+    private static readonly Counter<long> Consumidas =
+        Medidor.CreateCounter<long>(Telemetria.Instrumentos.MensagensConsumidas);
+
     private readonly CentralAntifraudeDbContext _contexto;
     private readonly IUnidadeDeTrabalho _unidadeDeTrabalho;
     private readonly IFilaDeMensagens _fila;
     private readonly IReadOnlyList<IManipuladorDeEvento> _manipuladores;
     private readonly OpcoesDaFila _opcoes;
     private readonly IRelogio _relogio;
+    private readonly ContextoDeCorrelacaoMutavel _correlacao;
     private readonly ILogger<ProcessadorDeEventos> _log;
 
     public ProcessadorDeEventos(
@@ -64,6 +81,7 @@ public sealed partial class ProcessadorDeEventos
         IEnumerable<IManipuladorDeEvento> manipuladores,
         OpcoesDaFila opcoes,
         IRelogio relogio,
+        ContextoDeCorrelacaoMutavel correlacao,
         ILogger<ProcessadorDeEventos> log)
     {
         ArgumentNullException.ThrowIfNull(manipuladores);
@@ -74,6 +92,7 @@ public sealed partial class ProcessadorDeEventos
         _manipuladores = [.. manipuladores];
         _opcoes = opcoes;
         _relogio = relogio;
+        _correlacao = correlacao;
         _log = log;
     }
 
@@ -95,7 +114,13 @@ public sealed partial class ProcessadorDeEventos
             // tem seu proprio destino: apagada, devolvida ou deixada para a
             // visibilidade expirar. Uma mensagem ruim no meio de nove boas nao
             // pode obrigar as nove a serem reprocessadas.
-            switch (await TratarAsync(mensagem, cancellationToken))
+            var desfecho = await TratarAsync(mensagem, cancellationToken);
+
+            Consumidas.Add(
+                1,
+                new KeyValuePair<string, object?>("resultado", desfecho.ToString()));
+
+            switch (desfecho)
             {
                 case Desfecho.Aplicado:
                     processados++;
@@ -136,6 +161,28 @@ public sealed partial class ProcessadorDeEventos
 
             return await DevolverParaRedriveAsync(mensagem, cancellationToken);
         }
+
+        // A partir daqui, tudo o que este worker fizer pertence a operacao que
+        // originou o evento — e nao ao ciclo do laco. Repor a correlacao aqui e
+        // o que impede o fio de arrebentar exatamente na fronteira entre o
+        // sincrono e o assincrono (CLAUDE.md secao 69): sem isto, o efeito
+        // gravado minutos depois nasceria com correlacao vazia, e a unica forma
+        // de liga-lo a requisicao do integrador seria procurar por horario.
+        if (!string.IsNullOrWhiteSpace(envelope.CorrelationId))
+        {
+            _correlacao.Definir(envelope.CorrelationId);
+        }
+
+        // O escopo faz o mesmo pelo log: nao so a linha final do efeito, mas
+        // TODA linha emitida enquanto esta mensagem e processada — inclusive as
+        // de erro, que sao as que alguem vai ler primeiro.
+        using var escopoDeLog = _log.BeginScope(
+            new Dictionary<string, object>(StringComparer.Ordinal)
+            {
+                ["CorrelationId"] = envelope.CorrelationId,
+                ["EventId"] = envelope.EventId,
+                ["EventType"] = envelope.TipoComposto,
+            });
 
         // O tenant do envelope e uma AFIRMACAO de quem enviou. Conferir contra
         // o banco e o que separa "evento nosso" de "mensagem forjada": uma

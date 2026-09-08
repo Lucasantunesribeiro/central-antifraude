@@ -3,6 +3,7 @@ using System.Diagnostics.Metrics;
 using System.Globalization;
 using CentralAntifraude.Application.Comum;
 using CentralAntifraude.Application.Erros;
+using CentralAntifraude.Application.Observabilidade;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -38,8 +39,8 @@ public sealed partial class ExecutorDeOperacaoCritica : IExecutorDeOperacaoCriti
     /// <summary>Deadlock detectado. Mesma resposta: abortar e refazer.</summary>
     private const string DeadlockDetectado = "40P01";
 
-    /// <summary>Nome do medidor, para quem for coletar metricas na Fase 12.</summary>
-    public const string NomeDoMedidor = "CentralAntifraude.Concorrencia";
+    /// <summary>Nome do medidor. O catalogo esta em <see cref="Telemetria"/>.</summary>
+    public const string NomeDoMedidor = Telemetria.MedidorDeConcorrencia;
 
     private static readonly Meter Medidor = new(NomeDoMedidor);
 
@@ -52,11 +53,11 @@ public sealed partial class ExecutorDeOperacaoCritica : IExecutorDeOperacaoCriti
     /// esta custando caro?
     /// </summary>
     private static readonly Counter<long> Retentativas =
-        Medidor.CreateCounter<long>("operacao_critica_retentativas");
+        Medidor.CreateCounter<long>(Telemetria.Instrumentos.Retentativas);
 
     /// <summary>Operacoes que esgotaram as tentativas e falharam.</summary>
     private static readonly Counter<long> Esgotadas =
-        Medidor.CreateCounter<long>("operacao_critica_tentativas_esgotadas");
+        Medidor.CreateCounter<long>(Telemetria.Instrumentos.TentativasEsgotadas);
 
     private readonly CentralAntifraudeDbContext _contexto;
     private readonly OpcoesDeConcorrencia _opcoes;

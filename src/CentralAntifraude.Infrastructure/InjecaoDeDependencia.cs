@@ -3,6 +3,7 @@ using CentralAntifraude.Application.Backtests;
 using CentralAntifraude.Application.Auditoria;
 using CentralAntifraude.Application.Operacao;
 using CentralAntifraude.Application.Comum;
+using CentralAntifraude.Application.Correlacao;
 using CentralAntifraude.Application.Eventos;
 using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Application.Integracoes;
@@ -15,6 +16,7 @@ using CentralAntifraude.Domain.Tempo;
 using CentralAntifraude.Infrastructure.Identidade;
 using CentralAntifraude.Infrastructure.Integracoes;
 using CentralAntifraude.Infrastructure.Mensageria;
+using CentralAntifraude.Infrastructure.Observabilidade;
 using CentralAntifraude.Infrastructure.Persistencia;
 using CentralAntifraude.Infrastructure.Persistencia.Repositorios;
 using CentralAntifraude.Infrastructure.Tempo;
@@ -75,6 +77,14 @@ public static class InjecaoDeDependencia
             opcoes => OpcoesDoDbContext.Configurar(opcoes, stringDeConexao));
 
         servicos.AddSingleton<IRelogio, RelogioSistema>();
+
+        // Correlacao com escopo, registrada aqui e nao na Api, porque o escopo
+        // nem sempre e uma requisicao: o consumidor de eventos tambem precisa
+        // definir a correlacao que veio no envelope, para que o efeito que ele
+        // produz minutos depois continue no mesmo fio (CLAUDE.md secao 69).
+        servicos.AddScoped<ContextoDeCorrelacaoMutavel>();
+        servicos.AddScoped<IContextoDeCorrelacao>(
+            provedor => provedor.GetRequiredService<ContextoDeCorrelacaoMutavel>());
 
         AdicionarIdentidade(servicos, configuracao);
         AdicionarConcorrencia(servicos, configuracao);
@@ -217,6 +227,7 @@ public static class InjecaoDeDependencia
         servicos.AddScoped<DespachanteDeEventos>();
         servicos.AddScoped<ProcessadorDeEventos>();
         servicos.AddScoped<ProcessadorDeBacktests>();
+        servicos.AddScoped<AmostradorDeIndicadores>();
 
         // Os efeitos de uma mensagem, na ordem em que serao aplicados.
         //

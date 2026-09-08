@@ -1,7 +1,11 @@
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using CentralAntifraude.Application.Backtests;
+using CentralAntifraude.Application.Correlacao;
 using CentralAntifraude.Application.Erros;
 using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Application.Mensageria;
+using CentralAntifraude.Application.Observabilidade;
 using CentralAntifraude.Domain.Backtests;
 using CentralAntifraude.Domain.Eventos;
 using CentralAntifraude.Domain.Tempo;
@@ -33,12 +37,27 @@ namespace CentralAntifraude.Infrastructure.Mensageria;
 /// </summary>
 public sealed partial class ProcessadorDeBacktests
 {
+    private static readonly Meter Medidor = new(Telemetria.MedidorDeMensageria);
+
+    /// <summary>
+    /// Quanto tempo uma execucao de backtest levou.
+    ///
+    /// Fica longe da distribuicao do caminho critico de proposito: sao ordens
+    /// de grandeza diferentes — milissegundos contra dezenas de segundos — e
+    /// misturar as duas produziria um percentil que nao descreve nenhum dos
+    /// dois. E tambem o numero que diz se a fila separada da Fase 9 continua
+    /// fazendo sentido.
+    /// </summary>
+    private static readonly Histogram<double> Duracao =
+        Medidor.CreateHistogram<double>(Telemetria.Instrumentos.BacktestDuracao);
+
     private readonly IRepositorioDeBacktests _backtests;
     private readonly ExecutorDeBacktest _executor;
     private readonly IUnidadeDeTrabalho _unidadeDeTrabalho;
     private readonly IFilaDeMensagens _fila;
     private readonly OpcoesDeBacktest _opcoes;
     private readonly IRelogio _relogio;
+    private readonly ContextoDeCorrelacaoMutavel _correlacao;
     private readonly ILogger<ProcessadorDeBacktests> _log;
 
     public ProcessadorDeBacktests(
@@ -48,6 +67,7 @@ public sealed partial class ProcessadorDeBacktests
         IFilaDeMensagens fila,
         OpcoesDeBacktest opcoes,
         IRelogio relogio,
+        ContextoDeCorrelacaoMutavel correlacao,
         ILogger<ProcessadorDeBacktests> log)
     {
         _backtests = backtests;
@@ -56,6 +76,7 @@ public sealed partial class ProcessadorDeBacktests
         _fila = fila;
         _opcoes = opcoes;
         _relogio = relogio;
+        _correlacao = correlacao;
         _log = log;
     }
 
@@ -117,6 +138,22 @@ public sealed partial class ProcessadorDeBacktests
 
             return await DevolverParaRedriveAsync(mensagem, cancellationToken);
         }
+
+        // Mesmo motivo do consumidor operacional: o backtest foi PEDIDO por
+        // alguem, em uma requisicao que tem correlacao, e o registro do que ele
+        // fez precisa continuar naquele fio.
+        if (!string.IsNullOrWhiteSpace(envelope.CorrelationId))
+        {
+            _correlacao.Definir(envelope.CorrelationId);
+        }
+
+        using var escopoDeLog = _log.BeginScope(
+            new Dictionary<string, object>(StringComparer.Ordinal)
+            {
+                ["CorrelationId"] = envelope.CorrelationId,
+                ["EventId"] = envelope.EventId,
+                ["EventType"] = envelope.TipoComposto,
+            });
 
         if (envelope.Conteudo is not BacktestSolicitadoV1 conteudo)
         {
@@ -209,6 +246,7 @@ public sealed partial class ProcessadorDeBacktests
         CancellationToken cancellationToken)
     {
         ResultadoDoBacktest resultado;
+        var inicio = Stopwatch.GetTimestamp();
 
         try
         {
@@ -230,6 +268,13 @@ public sealed partial class ProcessadorDeBacktests
 
             return Desfecho.Falhou;
         }
+
+        // Registrada aqui, e nao depois do commit: o que se quer medir e o
+        // custo de apurar o backtest, e nao o tempo de gravar uma linha. Uma
+        // execucao cancelada no meio nao entra na distribuicao — ela nao chegou
+        // ao fim, e incluir seu tempo parcial melhoraria o percentil por um
+        // motivo que ninguem comemoraria.
+        Duracao.Record(Stopwatch.GetElapsedTime(inicio).TotalMilliseconds);
 
         execucao.Concluir(resultado, _relogio.Agora);
 

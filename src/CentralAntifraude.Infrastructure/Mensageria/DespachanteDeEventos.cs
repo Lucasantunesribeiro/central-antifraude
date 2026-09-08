@@ -1,5 +1,7 @@
 using System.Data;
+using System.Diagnostics.Metrics;
 using CentralAntifraude.Application.Mensageria;
+using CentralAntifraude.Application.Observabilidade;
 using CentralAntifraude.Domain.Eventos;
 using CentralAntifraude.Domain.Tempo;
 using CentralAntifraude.Infrastructure.Persistencia;
@@ -41,6 +43,19 @@ public sealed partial class DespachanteDeEventos
     /// <summary>Quantos eventos saem por ciclo.</summary>
     public const int TamanhoDoLote = 20;
 
+    private static readonly Meter Medidor = new(Telemetria.MedidorDeMensageria);
+
+    private static readonly Counter<long> Publicados =
+        Medidor.CreateCounter<long>(Telemetria.Instrumentos.OutboxPublicados);
+
+    /// <summary>
+    /// Publicacoes que falharam. Sobe sem que nada quebre — o evento continua
+    /// pendente e volta no proximo ciclo —, e por isso precisa de metrica: e
+    /// uma falha que nao aparece em lugar nenhum como erro.
+    /// </summary>
+    private static readonly Counter<long> Falhas =
+        Medidor.CreateCounter<long>(Telemetria.Instrumentos.OutboxFalhas);
+
     private readonly CentralAntifraudeDbContext _contexto;
     private readonly IFilaDeMensagens _fila;
     private readonly IRelogio _relogio;
@@ -78,20 +93,41 @@ public sealed partial class DespachanteDeEventos
 
         foreach (var evento in pendentes)
         {
+            // O escopo repoe a correlacao da requisicao que originou o evento.
+            // O despachante roda fora de qualquer requisicao: sem isto, o unico
+            // trecho do fluxo sem `CorrelationId` no log seria justamente a
+            // fronteira entre o sincrono e o assincrono — o lugar onde uma
+            // investigacao mais precisa dele.
+            using var escopoDeLog = _log.BeginScope(
+                new Dictionary<string, object>(StringComparer.Ordinal)
+                {
+                    ["CorrelationId"] = evento.IdDeCorrelacao,
+                    ["EventId"] = evento.Id,
+                    ["EventType"] = evento.Tipo,
+                });
+
             try
             {
                 var envelope = EnvelopeDeEvento.De(evento);
+                var fila = RoteamentoDeFilas.Para(evento.Tipo);
 
                 // A fila e escolhida pelo TIPO do evento, e nao fixa: desde a
                 // Fase 9 o mesmo despachante alimenta a fila operacional e a
                 // de backtests (CLAUDE.md secao 30).
                 await _fila.EnviarAsync(
-                    RoteamentoDeFilas.Para(evento.Tipo),
+                    fila,
                     SerializadorDeEnvelope.Serializar(envelope),
                     cancellationToken);
 
                 evento.MarcarPublicado(agora);
                 publicados++;
+                Publicados.Add(1);
+
+                // Uma linha por evento, e nao so o resumo do ciclo. E ela que
+                // fecha o vao entre "a requisicao respondeu" e "o worker agiu":
+                // sem ela, seguir um `CorrelationId` no log leva ate a gravacao
+                // e recomeca do outro lado, sem nada explicando a travessia.
+                RegistrarPublicacao(_log, evento.Id, evento.Tipo, fila);
             }
             catch (Exception excecao) when (excecao is not OperationCanceledException)
             {
@@ -102,6 +138,7 @@ public sealed partial class DespachanteDeEventos
                 // outros.
                 evento.RegistrarTentativaFalha();
                 falhados++;
+                Falhas.Add(1);
 
                 RegistrarFalhaDePublicacao(_log, evento.Id, evento.Tipo, excecao);
             }
@@ -153,6 +190,16 @@ public sealed partial class DespachanteDeEventos
         Level = LogLevel.Information,
         Message = "Despacho da Outbox: {Publicados} publicado(s), {Falhados} com falha.")]
     private static partial void RegistrarCiclo(ILogger logger, int publicados, int falhados);
+
+    [LoggerMessage(
+        EventId = 502,
+        Level = LogLevel.Information,
+        Message = "Evento {EventoId} do tipo {Tipo} publicado na fila {Fila}.")]
+    private static partial void RegistrarPublicacao(
+        ILogger logger,
+        Guid eventoId,
+        string tipo,
+        string fila);
 
     // O conteudo do evento nao entra no log: ele carrega score, decisao e
     // identificadores de cliente (CLAUDE.md secao 70). O identificador e o

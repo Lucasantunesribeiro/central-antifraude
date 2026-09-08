@@ -1,4 +1,7 @@
+using System.Diagnostics.Metrics;
 using CentralAntifraude.Application.Mensageria;
+using CentralAntifraude.Application.Observabilidade;
+using CentralAntifraude.Infrastructure.Observabilidade;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -37,6 +40,15 @@ public sealed class OpcoesDeSegundoPlano
     /// </summary>
     public int IntervaloAtivoEmMs { get; set; } = 100;
 
+    /// <summary>
+    /// Intervalo minimo entre duas amostras de profundidade de fila.
+    ///
+    /// Nao acompanha o ritmo do laco de proposito. O laco roda a cada 100 ms
+    /// quando ha trabalho; medir profundidade nesse ritmo seriam dezenas de
+    /// consultas por segundo para responder uma pergunta que muda em minutos.
+    /// </summary>
+    public int IntervaloDeAmostragemEmMs { get; set; } = 15_000;
+
     public void Validar()
     {
         if (IntervaloOciosoEmMs is < 50 or > 300_000)
@@ -49,6 +61,12 @@ public sealed class OpcoesDeSegundoPlano
         {
             throw new InvalidOperationException(
                 $"{Secao}:IntervaloAtivoEmMs deve estar entre 0 e 60000.");
+        }
+
+        if (IntervaloDeAmostragemEmMs is < 0 or > 3_600_000)
+        {
+            throw new InvalidOperationException(
+                $"{Secao}:IntervaloDeAmostragemEmMs deve estar entre 0 e 3600000.");
         }
     }
 }
@@ -67,6 +85,19 @@ public sealed class OpcoesDeSegundoPlano
 /// </summary>
 public abstract partial class LacoDeSegundoPlano : BackgroundService
 {
+    private static readonly Meter Medidor = new(Telemetria.MedidorDeMensageria);
+
+    /// <summary>
+    /// Ciclos que terminaram em excecao, por laco.
+    ///
+    /// O laco continua rodando depois de uma falha — e justamente por isso ela
+    /// precisa de contador. Sem metrica, um despachante que falha em todo ciclo
+    /// se parece, de fora, com um despachante ocioso: nada quebra, nada alerta,
+    /// e os eventos simplesmente nao saem.
+    /// </summary>
+    private static readonly Counter<long> Falhas =
+        Medidor.CreateCounter<long>(Telemetria.Instrumentos.FalhasDeLaco);
+
     private readonly IServiceScopeFactory _escopos;
     private readonly OpcoesDeSegundoPlano _opcoes;
     private readonly ILogger _log;
@@ -109,6 +140,7 @@ public abstract partial class LacoDeSegundoPlano : BackgroundService
             }
             catch (Exception excecao)
             {
+                Falhas.Add(1, new KeyValuePair<string, object?>("laco", Nome));
                 RegistrarFalhaNoCiclo(_log, Nome, excecao);
             }
 
@@ -171,6 +203,18 @@ public sealed class LacoDoDespachante : LacoDeSegundoPlano
         var resultado = await servicos
             .GetRequiredService<DespachanteDeEventos>()
             .DespacharLoteAsync(cancellationToken);
+
+        // A amostragem de profundidade pega carona neste laco em vez de ter um
+        // laco proprio: ele ja abre escopo, ja tem conexao com o banco e ja
+        // roda no ritmo certo. Um quarto processo de fundo so para medir seria
+        // maquina a mais para o mesmo resultado.
+        //
+        // Depois do despacho, e nao antes: medir a Outbox um instante antes de
+        // esvazia-la produziria um numero que descreve o passado imediato e
+        // sugere um atraso que acabou de ser resolvido.
+        await servicos
+            .GetRequiredService<AmostradorDeIndicadores>()
+            .AmostrarSeVencidoAsync(cancellationToken);
 
         return resultado.Total > 0;
     }
