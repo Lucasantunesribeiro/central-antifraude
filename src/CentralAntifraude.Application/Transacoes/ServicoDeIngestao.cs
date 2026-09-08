@@ -1,5 +1,6 @@
 using CentralAntifraude.Application.Comum;
 using CentralAntifraude.Application.Correlacao;
+using CentralAntifraude.Application.Mensageria;
 using CentralAntifraude.Application.Erros;
 using CentralAntifraude.Application.Eventos;
 using CentralAntifraude.Application.Identidade;
@@ -69,6 +70,7 @@ public sealed class ServicoDeIngestao
     private readonly IRepositorioDeEventos _eventos;
     private readonly IContextoDeCorrelacao _correlacao;
     private readonly IRelogio _relogio;
+    private readonly IDespachanteImediato _despachanteImediato;
     private readonly OpcoesDeIngestao _opcoes;
 
     public ServicoDeIngestao(
@@ -82,6 +84,7 @@ public sealed class ServicoDeIngestao
         IRepositorioDeEventos eventos,
         IContextoDeCorrelacao correlacao,
         IRelogio relogio,
+        IDespachanteImediato despachanteImediato,
         OpcoesDeIngestao opcoes)
     {
         _transacoes = transacoes;
@@ -94,10 +97,11 @@ public sealed class ServicoDeIngestao
         _eventos = eventos;
         _correlacao = correlacao;
         _relogio = relogio;
+        _despachanteImediato = despachanteImediato;
         _opcoes = opcoes;
     }
 
-    public Task<ResultadoDaIngestao> RegistrarAsync(
+    public async Task<ResultadoDaIngestao> RegistrarAsync(
         ConteudoDaTransacao conteudo,
         string? chaveDeIdempotencia,
         CancellationToken cancellationToken)
@@ -113,9 +117,27 @@ public sealed class ServicoDeIngestao
         // e pode rodar mais de uma vez. Por isso nada e capturado de fora: o
         // relogio e relido, o contexto historico e relido e a avaliacao e
         // refeita a cada tentativa.
-        return _operacaoCritica.ExecutarAsync(
+        var resultado = await _operacaoCritica.ExecutarAsync(
             ct => ExecutarRegistroAsync(conteudo, chave, fingerprint, ct),
             cancellationToken);
+
+        // DEPOIS do commit, e fora do boundary transacional.
+        //
+        // A posicao e a decisao. Dentro da transacao, o despachante poderia ler
+        // a Outbox antes do commit e nao encontrar nada — ou pior, encontrar e
+        // publicar um evento cuja transacao ainda pode ser desfeita por uma
+        // falha de serializacao. Aqui, o evento existe e esta confirmado.
+        //
+        // Uma repeticao por retry de concorrencia tambem nao faz mal: acordar
+        // o despachante duas vezes publica o mesmo evento uma vez so, porque
+        // quem decide isso e o `FOR UPDATE SKIP LOCKED` da Fase 5.
+        //
+        // Nao ha `try` aqui: a propria implementacao engole a falha, e o
+        // contrato diz isso. Um `try` neste ponto sugeriria que existe algo a
+        // tratar, quando a decisao ja foi tomada uma camada abaixo.
+        await _despachanteImediato.AcordarAsync(cancellationToken);
+
+        return resultado;
     }
 
     private async Task<ResultadoDaIngestao> ExecutarRegistroAsync(

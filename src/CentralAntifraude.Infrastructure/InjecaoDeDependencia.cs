@@ -15,6 +15,8 @@ using CentralAntifraude.Domain.Risco;
 using CentralAntifraude.Domain.Tempo;
 using CentralAntifraude.Infrastructure.Identidade;
 using CentralAntifraude.Infrastructure.Integracoes;
+using Amazon.Lambda;
+using Amazon.SQS;
 using CentralAntifraude.Infrastructure.Mensageria;
 using CentralAntifraude.Infrastructure.Observabilidade;
 using CentralAntifraude.Infrastructure.Persistencia;
@@ -191,6 +193,17 @@ public static class InjecaoDeDependencia
         return opcoes;
     }
 
+    /// <summary>Le a configuracao de SQS. Ausencia significa "nao estamos na AWS".</summary>
+    public static OpcoesDaFilaSqs LerOpcoesDaFilaSqs(IConfiguration configuracao)
+    {
+        ArgumentNullException.ThrowIfNull(configuracao);
+
+        var opcoes = new OpcoesDaFilaSqs();
+        configuracao.GetSection(OpcoesDaFilaSqs.Secao).Bind(opcoes);
+
+        return opcoes;
+    }
+
     /// <summary>Le e valida as opcoes da fila.</summary>
     public static OpcoesDaFila LerOpcoesDaFila(IConfiguration configuracao)
     {
@@ -220,10 +233,35 @@ public static class InjecaoDeDependencia
         servicos.AddSingleton(LerOpcoesDaFila(configuracao));
         servicos.AddSingleton(LerOpcoesDeSegundoPlano(configuracao));
 
-        // Com escopo: os tres usam o DbContext da requisicao (ou do ciclo do
-        // laco de fundo, que abre o proprio escopo). Singleton aqui seria
-        // dependencia cativa.
-        servicos.AddScoped<IFilaDeMensagens, FilaEmPostgres>();
+        // ---------------------------------------------------------------
+        // Qual fila, e como o produto decide.
+        //
+        // O criterio e "existe uma URL de fila configurada?", e nao o nome do
+        // ambiente. A pergunta que importa e literalmente essa — um nome de
+        // ambiente e uma aproximacao que erra no dia em que alguem criar um
+        // quarto ambiente.
+        //
+        // Fora da AWS continua valendo a FilaEmPostgres da Fase 5, que imita o
+        // SQS Standard de proposito: entrega ao menos uma vez, sem ordem, com
+        // visibilidade e redrive. E o que permite provar idempotencia e
+        // concorrencia em teste, sem nuvem.
+        // ---------------------------------------------------------------
+        var opcoesDeSqs = LerOpcoesDaFilaSqs(configuracao);
+
+        servicos.AddSingleton(opcoesDeSqs);
+
+        if (opcoesDeSqs.UsaSqs)
+        {
+            servicos.AddSingleton<IAmazonSQS>(_ => new AmazonSQSClient());
+            servicos.AddSingleton<IAmazonLambda>(_ => new AmazonLambdaClient());
+            servicos.AddScoped<IFilaDeMensagens, FilaSqs>();
+            servicos.AddScoped<IDespachanteImediato, DespachanteImediatoEmLambda>();
+        }
+        else
+        {
+            servicos.AddScoped<IFilaDeMensagens, FilaEmPostgres>();
+            servicos.AddScoped<IDespachanteImediato, DespachanteImediatoInerte>();
+        }
         servicos.AddScoped<DespachanteDeEventos>();
         servicos.AddScoped<ProcessadorDeEventos>();
         servicos.AddScoped<ProcessadorDeBacktests>();
