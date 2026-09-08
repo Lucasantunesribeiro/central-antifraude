@@ -86,10 +86,6 @@ export function PaginaDeAlertas() {
   return (
     <section className="pagina pagina--larga">
       <h1>Alertas</h1>
-      <p className="pagina__resumo">
-        Avaliações que o motor recomendou revisar ou bloquear. A prioridade vem da
-        política de alertas — quem confirma fraude é a investigação humana.
-      </p>
 
       <form
         className="filtros"

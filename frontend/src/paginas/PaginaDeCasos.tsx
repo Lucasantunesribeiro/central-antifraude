@@ -53,10 +53,6 @@ export function PaginaDeCasos() {
   return (
     <section className="pagina pagina--larga">
       <h1>Casos</h1>
-      <p className="pagina__resumo">
-        Investigações abertas a partir de alertas. O resultado registrado aqui é a
-        conclusão humana — ela não altera a decisão que o motor tomou.
-      </p>
 
       <form
         className="filtros"

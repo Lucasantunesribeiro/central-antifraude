@@ -41,9 +41,6 @@ export function PaginaDoPainel() {
   return (
     <section className="pagina pagina--larga">
       <h1>Painel operacional</h1>
-      <p className="pagina__resumo">
-        O que aconteceu nesta organização no período, e o que ainda espera alguém.
-      </p>
 
       <div className="filtros" role="group" aria-label="Período do painel">
         {PERIODOS.map((periodo) => (
@@ -219,8 +216,6 @@ function Abas({
  * alguma coisa quando um item o tem e os outros nao.
  */
 function Volume({ painel }: { painel: Painel }) {
-  const casosResolvidos =
-    painel.casos.find((c) => c.chave === 'Resolvido')?.quantidade ?? 0;
   const casosEmAnalise =
     painel.casos.find((c) => c.chave === 'EmAnalise')?.quantidade ?? 0;
   const totalDeCasos = painel.casos.reduce((soma, c) => soma + c.quantidade, 0);
@@ -229,22 +224,16 @@ function Volume({ painel }: { painel: Painel }) {
 
   return (
     <div className="indicadores">
-      <Indicador
-        rotulo="Recebidas"
-        valor={painel.transacoesRecebidas}
-        nota="tentativas que chegaram"
-      />
+      <Indicador rotulo="Recebidas" valor={painel.transacoesRecebidas} />
       <Indicador
         rotulo="Avaliadas"
         valor={painel.transacoesAvaliadas}
-        nota={
-          semAvaliacao > 0 ? `${semAvaliacao} chegaram sem decisão` : 'todas decididas'
-        }
+        nota={semAvaliacao > 0 ? `${semAvaliacao} sem decisão` : undefined}
       />
       <Indicador
         rotulo="Investigações"
         valor={totalDeCasos}
-        nota={`${casosEmAnalise} em análise, ${casosResolvidos} resolvidas`}
+        nota={casosEmAnalise > 0 ? `${casosEmAnalise} em análise` : undefined}
       />
     </div>
   );
@@ -254,18 +243,17 @@ function Indicador({
   rotulo,
   valor,
   nota,
-  destaque = false,
 }: {
   rotulo: string;
   valor: number;
-  nota: string;
-  destaque?: boolean;
+  /** So aparece quando diz algo que o numero sozinho nao diz. */
+  nota?: string;
 }) {
   return (
-    <div className={destaque ? 'indicador indicador--destaque' : 'indicador'}>
+    <div className="indicador">
       <span className="indicador__rotulo">{rotulo}</span>
       <span className="indicador__valor numerico">{valor}</span>
-      <span className="indicador__nota">{nota}</span>
+      {nota ? <span className="indicador__nota">{nota}</span> : null}
     </div>
   );
 }
@@ -285,11 +273,8 @@ function SaudeDaFila({ painel }: { painel: Painel }) {
       </span>
       <span>
         {painel.eventosPendentes > 0
-          ? 'há eventos esperando publicação — alertas destas transações ainda não foram criados'
+          ? 'alertas destas transações ainda não foram criados'
           : 'o caminho assíncrono está em dia'}
-      </span>
-      <span className="rodape-tecnico__fim">
-        recebidas conta pela chegada; avaliadas, pela decisão
       </span>
     </p>
   );
@@ -326,11 +311,6 @@ function Decisoes({ painel }: { painel: Painel }) {
           })}
         </tbody>
       </table>
-
-      <p className="pagina__resumo">
-        Recomendações de risco, não resultado financeiro: a Central Antifraude não
-        autoriza, não captura e não liquida.
-      </p>
     </div>
   );
 }

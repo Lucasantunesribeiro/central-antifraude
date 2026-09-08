@@ -93,11 +93,6 @@ export function PaginaDeTransacoes() {
   return (
     <section className="pagina pagina--larga">
       <h1>Transações</h1>
-      <p className="pagina__resumo">
-        Tentativas de pagamento recebidas das integrações desta organização, com o
-        resultado do motor de risco. A decisão é uma recomendação — quem confirma fraude
-        é a investigação humana.
-      </p>
 
       <Filtros filtro={filtro} aoAlterar={alterar} />
 

@@ -1368,7 +1368,6 @@ h1 code {
 /* Destaque so significa alguma coisa quando UM item o tem e os outros nao. */
 .indicador--destaque {
   border-color: var(--cor-atencao-borda);
-  background: linear-gradient(0deg, var(--cor-painel) 60%, var(--cor-atencao-fundo));
 }
 
 .indicador__rotulo {
@@ -1513,9 +1512,16 @@ h1 code {
   background: var(--cor-painel);
 }
 
+/*
+  Destaque pela BORDA e pelo numero, nao pelo fundo.
+
+  Gradiente esta proibido pelo `CLAUDE.md` secao 79 — e e a assinatura visual
+  de interface gerada sem criterio. Mas fundo colorido inteiro tambem nao
+  servia: uma faixa ambar de ponta a ponta vira banner de aviso, e banner e o
+  que as pessoas aprendem a ignorar. A borda marca sem gritar.
+*/
 .chamada--urgente {
   border-color: var(--cor-atencao-borda);
-  background: linear-gradient(90deg, var(--cor-atencao-fundo), var(--cor-painel) 55%);
 }
 
 .chamada__numero {
