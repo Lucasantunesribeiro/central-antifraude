@@ -3863,7 +3863,7 @@ Configurar:
 
 ## 14.12 Resultado da Fase 14 — implantação real
 
-**Implantado em 2026-09-08.** Conta AWS `632404567709`, região `us-east-1`,
+**Implantado em 2026-09-08.** Conta AWS `‹conta-aws›`, região `us-east-1`,
 projeto Neon `central-antifraude`. Nenhum `git push`, nenhuma tag, nenhuma
 release.
 

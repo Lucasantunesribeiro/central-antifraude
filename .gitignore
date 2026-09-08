@@ -61,3 +61,7 @@ Desktop.ini
 
 # agent skills config (local, seeded from ~/.agents/mattpocock-config)
 docs/agents/
+
+# Artefato do hook de sessao (copia adaptada do CLAUDE.md, gerada automaticamente).
+# A governanca versionada e o CLAUDE.md; duas copias criariam duas fontes de verdade.
+AGENTS.md

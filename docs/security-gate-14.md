@@ -191,7 +191,7 @@ que existia.
 
 ## 9. Segunda rodada: o gate contra o ambiente publicado
 
-Conta `632404567709`, região `us-east-1`, stack `central-antifraude-producao`.
+Conta `‹conta-aws›`, região `us-east-1`, stack `central-antifraude-producao`.
 
 ### 9.1 Segredos nos logs de produção
 

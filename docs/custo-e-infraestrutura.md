@@ -260,7 +260,7 @@ libera.
 
 ## 9. O que foi implantado, e o que a nuvem ensinou
 
-**Implantado em 2026-09-08.** Conta AWS `632404567709`, região `us-east-1`,
+**Implantado em 2026-09-08.** Conta AWS `‹conta-aws›`, região `us-east-1`,
 stack `central-antifraude-producao`.
 
 ### 9.1 Inventário real
