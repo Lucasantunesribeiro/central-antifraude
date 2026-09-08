@@ -43,6 +43,30 @@ Parameters:
       acordado cerca de um terço do tempo. Ver docs/custo-e-infraestrutura.md
       seção 4.
 
+# NENHUMA função declara `ReservedConcurrentExecutions`, e a ausência é
+# obrigatória, não preferência.
+#
+# A intenção original era um teto por função — contenção de acidente, para que
+# um laço de retry mal resolvido não consumisse a cota mensal numa tarde. O
+# primeiro deploy real recusou: "Specified ReservedConcurrentExecutions for
+# function decreases account's UnreservedConcurrentExecution below its minimum
+# value of [10]".
+#
+# A causa é que esta conta tem limite de concorrência de **10**, e não os 1.000
+# do padrão — contas novas começam baixo e sobem com o uso. A AWS exige deixar
+# ao menos 10 execuções não reservadas, então com um teto de 10 QUALQUER reserva
+# é impossível.
+#
+# O efeito prático é melhor do que o plano original: o limite de 10 da conta já
+# é o teto, e é um teto GLOBAL — mais apertado do que os tetos por função que
+# somariam os mesmos 10. O que se perde é isolamento entre funções: um backtest
+# longo pode ocupar concorrência que a API usaria. No envelope de portfólio
+# (~10.000 avaliações/mês) isso é improvável, e a alternativa — pedir aumento
+# de limite — resolveria um problema que não existe.
+#
+# `ProvisionedConcurrency` NÃO é a saída: ela cobra por hora, sempre, e é
+# exatamente o tipo de custo fixo que a seção 76 do CLAUDE.md proíbe.
+
 Globals:
   Function:
     Runtime: dotnet10
@@ -151,22 +175,21 @@ Resources:
       # alocados. A folga de duas ordens de grandeza na cota permite isso.
       MemorySize: 1024
       Timeout: 29
-      # Teto, e não reserva: impede que um laço acidental consuma a cota mensal
-      # numa tarde. Não é economia — é contenção de acidente.
-      ReservedConcurrentExecutions: 5
       FunctionUrlConfig:
         AuthType: NONE
-        # O CORS do próprio produto continua sendo o da aplicação (Fase 11).
-        # Este aqui é a camada da Function URL, e as duas precisam concordar.
-        Cors:
-          AllowOrigins: [!Ref OrigemDoFrontend]
-          # Sem OPTIONS: a Function URL responde ao preflight sozinha, e a
-          # AWS recusa o valor na lista. Declará-lo seria pedir permissão para
-          # um método que nunca chega à aplicação.
-          AllowMethods: [GET, POST, PUT, DELETE]
-          AllowHeaders: [Authorization, Content-Type, Accept, X-Correlation-Id, Idempotency-Key]
-          AllowCredentials: true
-          MaxAge: 600
+        # SEM bloco `Cors`, e a ausência foi aprendida em produção.
+        #
+        # Com ele, o CORS existia em DOIS lugares: a Function URL punha os
+        # cabeçalhos dela, e a aplicação punha os dela por cima. O preflight
+        # saía correto — a Function URL o responde sozinha, sem invocar a
+        # função —, mas toda resposta simples voltava com
+        # `Access-Control-Allow-Origin` DUAS vezes. O navegador trata header
+        # CORS duplicado como falha, então a API respondia 200 e o front via
+        # erro de CORS.
+        #
+        # A autoridade é a aplicação (Fase 11): ela já decide origem permitida
+        # e já verifica `Origin` como defesa de CSRF, com testes. Duplicar essa
+        # decisão aqui não a tornava mais segura — tornava as duas inúteis.
       Environment:
         Variables:
           Autenticacao__OrigensPermitidas__0: !Ref OrigemDoFrontend
@@ -188,8 +211,21 @@ Resources:
         # em vez de numa invocação inesperada.
         - LambdaInvokePolicy:
             FunctionName: !Ref FuncaoDoDespachante
+        # DUAS entradas, e a segunda parece redundante mas não é.
+        #
+        # O provedor de configuração lê o caminho inteiro de uma vez, com
+        # `GetParametersByPath`, e a AWS avalia essa chamada contra o ARN do
+        # CAMINHO pedido — `.../producao` — enquanto os parâmetros de dentro
+        # vivem em `.../producao/*`. Um ARN não cobre o outro.
+        #
+        # Só com a primeira linha, o primeiro deploy real subiu e toda invocação
+        # morria com "is not authorized to perform: ssm:GetParametersByPath".
+        # O template estava válido, a stack estava CREATE_COMPLETE, e a API
+        # devolvia 502 — o tipo de falha que nenhum lint pega.
         - SSMParameterReadPolicy:
-            ParameterName: !Sub 'central-antifraude/${Ambiente}/*'
+            ParameterName: !Sub 'portfolio/central-antifraude/${Ambiente}/*'
+        - SSMParameterReadPolicy:
+            ParameterName: !Sub 'portfolio/central-antifraude/${Ambiente}'
 
   # ========================================================== despachante ==
 
@@ -200,10 +236,6 @@ Resources:
       CodeUri: ../src/CentralAntifraude.Lambdas/
       Handler: CentralAntifraude.Lambdas::CentralAntifraude.Lambdas.DespachanteHandler::TratarAsync
       Timeout: 60
-      # Um de cada vez. Vários despachantes são seguros — o SKIP LOCKED cuida
-      # disso desde a Fase 5 —, mas cada um acorda o banco, e acordar o banco é
-      # o que custa dinheiro aqui.
-      ReservedConcurrentExecutions: 1
       Environment:
         Variables:
           Mensageria__FilaOperacional: !Ref FilaOperacional
@@ -213,8 +245,21 @@ Resources:
             QueueName: !GetAtt FilaOperacional.QueueName
         - SQSSendMessagePolicy:
             QueueName: !GetAtt FilaDeBacktests.QueueName
+        # DUAS entradas, e a segunda parece redundante mas não é.
+        #
+        # O provedor de configuração lê o caminho inteiro de uma vez, com
+        # `GetParametersByPath`, e a AWS avalia essa chamada contra o ARN do
+        # CAMINHO pedido — `.../producao` — enquanto os parâmetros de dentro
+        # vivem em `.../producao/*`. Um ARN não cobre o outro.
+        #
+        # Só com a primeira linha, o primeiro deploy real subiu e toda invocação
+        # morria com "is not authorized to perform: ssm:GetParametersByPath".
+        # O template estava válido, a stack estava CREATE_COMPLETE, e a API
+        # devolvia 502 — o tipo de falha que nenhum lint pega.
         - SSMParameterReadPolicy:
-            ParameterName: !Sub 'central-antifraude/${Ambiente}/*'
+            ParameterName: !Sub 'portfolio/central-antifraude/${Ambiente}/*'
+        - SSMParameterReadPolicy:
+            ParameterName: !Sub 'portfolio/central-antifraude/${Ambiente}'
       Events:
         Varredura:
           Type: ScheduleV2
@@ -234,7 +279,6 @@ Resources:
       CodeUri: ../src/CentralAntifraude.Lambdas/
       Handler: CentralAntifraude.Lambdas::CentralAntifraude.Lambdas.ConsumidorHandler::TratarAsync
       Timeout: 30
-      ReservedConcurrentExecutions: 2
       Environment:
         Variables:
           # Sem estas duas, `OpcoesDaFilaSqs.UsaSqs` é falso e a composição
@@ -251,8 +295,21 @@ Resources:
             QueueName: !GetAtt FilaOperacional.QueueName
         - SQSSendMessagePolicy:
             QueueName: !GetAtt FilaDeBacktests.QueueName
+        # DUAS entradas, e a segunda parece redundante mas não é.
+        #
+        # O provedor de configuração lê o caminho inteiro de uma vez, com
+        # `GetParametersByPath`, e a AWS avalia essa chamada contra o ARN do
+        # CAMINHO pedido — `.../producao` — enquanto os parâmetros de dentro
+        # vivem em `.../producao/*`. Um ARN não cobre o outro.
+        #
+        # Só com a primeira linha, o primeiro deploy real subiu e toda invocação
+        # morria com "is not authorized to perform: ssm:GetParametersByPath".
+        # O template estava válido, a stack estava CREATE_COMPLETE, e a API
+        # devolvia 502 — o tipo de falha que nenhum lint pega.
         - SSMParameterReadPolicy:
-            ParameterName: !Sub 'central-antifraude/${Ambiente}/*'
+            ParameterName: !Sub 'portfolio/central-antifraude/${Ambiente}/*'
+        - SSMParameterReadPolicy:
+            ParameterName: !Sub 'portfolio/central-antifraude/${Ambiente}'
       Events:
         Fila:
           Type: SQS
@@ -274,7 +331,6 @@ Resources:
       # Bem mais longo, e ainda assim menor que a visibilidade da fila.
       Timeout: 900
       MemorySize: 1024
-      ReservedConcurrentExecutions: 2
       Environment:
         Variables:
           Mensageria__FilaOperacional: !Ref FilaOperacional
@@ -284,8 +340,21 @@ Resources:
             QueueName: !GetAtt FilaOperacional.QueueName
         - SQSSendMessagePolicy:
             QueueName: !GetAtt FilaDeBacktests.QueueName
+        # DUAS entradas, e a segunda parece redundante mas não é.
+        #
+        # O provedor de configuração lê o caminho inteiro de uma vez, com
+        # `GetParametersByPath`, e a AWS avalia essa chamada contra o ARN do
+        # CAMINHO pedido — `.../producao` — enquanto os parâmetros de dentro
+        # vivem em `.../producao/*`. Um ARN não cobre o outro.
+        #
+        # Só com a primeira linha, o primeiro deploy real subiu e toda invocação
+        # morria com "is not authorized to perform: ssm:GetParametersByPath".
+        # O template estava válido, a stack estava CREATE_COMPLETE, e a API
+        # devolvia 502 — o tipo de falha que nenhum lint pega.
         - SSMParameterReadPolicy:
-            ParameterName: !Sub 'central-antifraude/${Ambiente}/*'
+            ParameterName: !Sub 'portfolio/central-antifraude/${Ambiente}/*'
+        - SSMParameterReadPolicy:
+            ParameterName: !Sub 'portfolio/central-antifraude/${Ambiente}'
       Events:
         Fila:
           Type: SQS

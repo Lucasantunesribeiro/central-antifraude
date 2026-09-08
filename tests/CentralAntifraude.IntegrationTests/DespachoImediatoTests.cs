@@ -1,4 +1,7 @@
 using System.Globalization;
+using System.Net;
+using System.Net.Http.Json;
+using CentralAntifraude.Domain.Identidade;
 using CentralAntifraude.Application.Mensageria;
 using CentralAntifraude.IntegrationTests.Infra;
 using Microsoft.AspNetCore.TestHost;
@@ -96,6 +99,51 @@ public sealed class DespachoImediatoTests : IAsyncLifetime
             espiao.EventosVisiveisNoPrimeiroAviso >= 1,
             "O despachante foi acordado antes do commit: uma conexao de fora nao " +
             $"enxergou o evento na Outbox (viu {espiao.EventosVisiveisNoPrimeiroAviso}).");
+    }
+
+    /// <summary>
+    /// Solicitar um backtest também acorda o despachante.
+    ///
+    /// **Este teste nasceu de um defeito em produção.** O aviso ao despachante
+    /// tinha sido ligado só no caminho de ingestão, e o evento
+    /// `BacktestSolicitado.v1` ficava na Outbox com zero tentativas até a
+    /// varredura de quinze minutos passar. Não havia erro em lugar nenhum: o
+    /// backtest ficava "Pendente", e quem pediu concluía que travou.
+    ///
+    /// A lição é mais ampla que o caso: enquanto o despacho imediato for
+    /// chamada explícita, **todo produtor de evento** precisa lembrar dela. Um
+    /// produtor novo que esquecer passa a falhar aqui, e não no ambiente
+    /// publicado.
+    /// </summary>
+    [Fact]
+    public async Task Solicitar_backtest_tambem_acorda_o_despachante()
+    {
+        var espiao = new EspiaoDoDespachante(_banco.StringDeConexao);
+
+        using var fabrica = _fabrica.WithWebHostBuilder(construtor =>
+            construtor.ConfigureTestServices(servicos =>
+                servicos.AddSingleton<IDespachanteImediato>(espiao)));
+
+        using var cliente = fabrica.CreateClient();
+
+        var token = await CenarioDeIngestao.TokenDeAsync(
+            cliente, _tenant, PerfilDeUsuario.SupervisorDeFraude, Cancelamento);
+
+        using var requisicao = CenarioDeIdentidade.Autenticada(
+            HttpMethod.Post, "/api/backtests", token);
+
+        requisicao.Content = JsonContent.Create(new
+        {
+            limiarDeRevisao = 30,
+            limiarDeBloqueio = 60,
+            inicio = DateTimeOffset.UtcNow.AddDays(-30),
+            fim = DateTimeOffset.UtcNow,
+        });
+
+        var resposta = await cliente.SendAsync(requisicao, Cancelamento);
+
+        Assert.Equal(HttpStatusCode.Accepted, resposta.StatusCode);
+        Assert.Equal(1, espiao.Avisos);
     }
 
     /// <summary>

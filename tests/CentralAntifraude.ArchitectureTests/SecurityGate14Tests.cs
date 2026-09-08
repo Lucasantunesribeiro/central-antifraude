@@ -21,6 +21,23 @@ public sealed class SecurityGate14Tests
     private static string Template =>
         File.ReadAllText(Path.Combine(RaizDoRepositorio.Caminho.FullName, "infra", "template.yaml"));
 
+    /// <summary>
+    /// O template sem os comentários.
+    ///
+    /// Existe porque metade das asserções aqui é "esta palavra não aparece", e
+    /// o template explica em prosa justamente as palavras que proíbe — a
+    /// explicação de por que não há reserva de concorrência contém a palavra
+    /// `ReservedConcurrentExecutions`. Sem esta separação, a única forma de
+    /// passar no teste seria não documentar a decisão, que é o oposto do que
+    /// se quer.
+    /// </summary>
+    private static string TemplateSemComentarios =>
+        string.Join(
+            '\n',
+            Template
+                .Split('\n')
+                .Where(linha => !linha.TrimStart().StartsWith('#')));
+
     private static IEnumerable<string> ArquivosDeInfra() =>
         Directory.EnumerateFiles(
             Path.Combine(RaizDoRepositorio.Caminho.FullName, "infra"),
@@ -63,7 +80,7 @@ public sealed class SecurityGate14Tests
     [Fact]
     public void A_string_de_conexao_nao_vem_por_variavel_de_ambiente()
     {
-        Assert.DoesNotContain("ConnectionStrings", Template, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ConnectionStrings", TemplateSemComentarios, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -75,7 +92,7 @@ public sealed class SecurityGate14Tests
     [Fact]
     public void O_template_nao_declara_parametro_no_SSM()
     {
-        Assert.DoesNotContain("AWS::SSM::Parameter", Template, StringComparison.Ordinal);
+        Assert.DoesNotContain("AWS::SSM::Parameter", TemplateSemComentarios, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -106,6 +123,40 @@ public sealed class SecurityGate14Tests
     }
 
     /// <summary>
+    /// Cada função pode ler o CAMINHO do SSM, além dos parâmetros nele.
+    ///
+    /// **Este teste nasceu de um 502 em produção.** A política tinha só
+    /// `.../${Ambiente}/*`, que cobre os parâmetros mas não o caminho. O
+    /// provedor de configuração lê tudo de uma vez com `GetParametersByPath`,
+    /// e a AWS avalia essa chamada contra o ARN do caminho — `.../${Ambiente}`,
+    /// sem a barra. Um ARN não cobre o outro.
+    ///
+    /// O resultado foi a pior combinação possível: template válido no lint,
+    /// stack em CREATE_COMPLETE, e toda invocação morrendo com
+    /// "is not authorized to perform: ssm:GetParametersByPath". Nada antes do
+    /// deploy apontava para o defeito.
+    /// </summary>
+    [Fact]
+    public void Cada_funcao_le_o_caminho_do_SSM_e_os_parametros_nele()
+    {
+        var funcoes = Regex.Count(
+            TemplateSemComentarios, "AWS::Serverless::Function", RegexOptions.CultureInvariant);
+
+        var comCuringa = Regex.Count(
+            TemplateSemComentarios,
+            @"ParameterName: !Sub 'portfolio/central-antifraude/\$\{Ambiente\}/\*'",
+            RegexOptions.CultureInvariant);
+
+        var semCuringa = Regex.Count(
+            TemplateSemComentarios,
+            @"ParameterName: !Sub 'portfolio/central-antifraude/\$\{Ambiente\}'",
+            RegexOptions.CultureInvariant);
+
+        Assert.Equal(funcoes, comCuringa);
+        Assert.Equal(funcoes, semCuringa);
+    }
+
+    /// <summary>
     /// Nenhuma política com curinga em ação ou recurso.
     ///
     /// O SAM gera IAM a partir de políticas nomeadas justamente para evitar
@@ -120,7 +171,7 @@ public sealed class SecurityGate14Tests
     [InlineData("PolicyDocument")]
     public void Nenhuma_politica_crua_e_declarada(string proibido)
     {
-        Assert.DoesNotContain(proibido, Template, StringComparison.Ordinal);
+        Assert.DoesNotContain(proibido, TemplateSemComentarios, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -138,16 +189,33 @@ public sealed class SecurityGate14Tests
     }
 
     /// <summary>
-    /// O CORS da Function URL não abre para qualquer origem.
+    /// O CORS é declarado num lugar só, e esse lugar é a aplicação.
     ///
-    /// Com credenciais permitidas, uma origem curinga deixaria qualquer site do
-    /// mundo fazer requisição autenticada em nome do usuário logado.
+    /// **Aprendido em produção.** O template declarava CORS na Function URL
+    /// *e* a aplicação declarava o dela. O preflight saía certo — a Function
+    /// URL o responde sozinha, sem invocar a função —, mas toda resposta
+    /// simples voltava com `Access-Control-Allow-Origin` duas vezes, e o
+    /// navegador trata header CORS duplicado como falha.
+    ///
+    /// O sintoma era perverso: `curl` recebia 200, os health checks passavam, e
+    /// só o navegador reprovava. Nenhum teste de servidor pegaria isso.
+    ///
+    /// A autoridade tem que ser uma. É a aplicação, porque ela já decide origem
+    /// permitida e já verifica `Origin` como defesa de CSRF, com testes desde a
+    /// Fase 11.
     /// </summary>
     [Fact]
-    public void O_CORS_nao_aceita_qualquer_origem()
+    public void O_CORS_e_declarado_em_um_lugar_so()
     {
-        Assert.Contains("AllowOrigins: [!Ref OrigemDoFrontend]", Template, StringComparison.Ordinal);
-        Assert.DoesNotContain("AllowOrigins: [*", Template, StringComparison.Ordinal);
+        Assert.DoesNotContain("Cors:", TemplateSemComentarios, StringComparison.Ordinal);
+        Assert.DoesNotContain("AllowOrigins", TemplateSemComentarios, StringComparison.Ordinal);
+
+        // A origem continua entrando na aplicação por variável de ambiente — é
+        // assim que ela sabe qual origem permitir.
+        Assert.Contains(
+            "Autenticacao__OrigensPermitidas__0: !Ref OrigemDoFrontend",
+            TemplateSemComentarios,
+            StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -184,18 +252,44 @@ public sealed class SecurityGate14Tests
     }
 
     /// <summary>
-    /// Toda função tem teto de concorrência.
+    /// Nenhuma função reserva concorrência.
     ///
-    /// Não é economia: é contenção de acidente. Sem teto, um laço de retry mal
-    /// resolvido consome a cota mensal — e o orçamento — numa tarde.
+    /// **Esta asserção já foi o contrário, e o primeiro deploy real a inverteu.**
+    /// A intenção era um teto por função, como contenção de acidente. O
+    /// CloudFormation recusou: "Specified ReservedConcurrentExecutions for
+    /// function decreases account's UnreservedConcurrentExecution below its
+    /// minimum value of [10]".
+    ///
+    /// A conta tem limite de concorrência de 10, e não os 1.000 do padrão —
+    /// contas novas começam baixo. Como a AWS exige deixar 10 não reservados,
+    /// com um teto de 10 qualquer reserva é impossível. O limite da conta passa
+    /// a ser o teto, e é global: mais apertado do que os tetos por função.
+    ///
+    /// O teste existe para que ninguém reintroduza a reserva "consertando" o
+    /// template sem ter contexto — o deploy falharia de novo, com uma mensagem
+    /// que não menciona o template.
     /// </summary>
     [Fact]
-    public void Toda_funcao_tem_teto_de_concorrencia()
+    public void Nenhuma_funcao_reserva_concorrencia()
     {
-        var funcoes = Regex.Count(Template, "AWS::Serverless::Function", RegexOptions.CultureInvariant);
-        var tetos = Regex.Count(Template, "ReservedConcurrentExecutions", RegexOptions.CultureInvariant);
+        Assert.DoesNotContain(
+            "ReservedConcurrentExecutions", TemplateSemComentarios, StringComparison.Ordinal);
+    }
 
-        Assert.True(funcoes > 0);
-        Assert.Equal(funcoes, tetos);
+    /// <summary>
+    /// E ninguém provisiona concorrência.
+    ///
+    /// `ProvisionedConcurrency` seria a resposta óbvia para o arranque frio, e
+    /// é justamente o que a meta de custo proíbe: ela cobra por hora, sempre,
+    /// esteja a função sendo invocada ou não. É o único custo fixo que caberia
+    /// por engano neste template (CLAUDE.md seção 76).
+    /// </summary>
+    [Fact]
+    public void Nenhuma_funcao_provisiona_concorrencia()
+    {
+        Assert.DoesNotContain(
+            "ProvisionedConcurrency", TemplateSemComentarios, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "AutoPublishAlias", TemplateSemComentarios, StringComparison.Ordinal);
     }
 }

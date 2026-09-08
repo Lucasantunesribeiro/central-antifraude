@@ -26,10 +26,15 @@ public static class ConfiguracaoDaNuvem
 {
     /// <summary>
     /// Prefixo dos parâmetros. Tudo abaixo dele vira chave de configuração:
-    /// `/central-antifraude/producao/ConnectionStrings/Postgres` chega ao
-    /// aplicativo como `ConnectionStrings:Postgres`.
+    /// `/portfolio/central-antifraude/producao/ConnectionStrings/Postgres`
+    /// chega ao aplicativo como `ConnectionStrings:Postgres`.
+    ///
+    /// **O `/portfolio` na frente não é enfeite.** A conta AWS hospeda mais de
+    /// um projeto de portfólio, e o outro já usa `/portfolio/&lt;projeto&gt;/`.
+    /// Dois padrões na mesma conta significam duas convenções para procurar,
+    /// e uma política IAM que precisa listar as duas.
     /// </summary>
-    public const string Prefixo = "/central-antifraude";
+    public const string Prefixo = "/portfolio/central-antifraude";
 
     /// <summary>
     /// A variável que a AWS define em toda função Lambda, e ninguém mais.

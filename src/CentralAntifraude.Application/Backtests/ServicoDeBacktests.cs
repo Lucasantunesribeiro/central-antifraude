@@ -5,6 +5,7 @@ using CentralAntifraude.Application.Correlacao;
 using CentralAntifraude.Application.Erros;
 using CentralAntifraude.Application.Eventos;
 using CentralAntifraude.Application.Identidade;
+using CentralAntifraude.Application.Mensageria;
 using CentralAntifraude.Application.Risco;
 using CentralAntifraude.Domain;
 using CentralAntifraude.Domain.Auditoria;
@@ -40,6 +41,7 @@ public sealed class ServicoDeBacktests
     private readonly IContextoDoUsuarioAtual _contextoAtual;
     private readonly IContextoDeCorrelacao _correlacao;
     private readonly IUnidadeDeTrabalho _unidadeDeTrabalho;
+    private readonly IDespachanteImediato _despachanteImediato;
     private readonly OpcoesDeBacktest _opcoes;
     private readonly IRelogio _relogio;
 
@@ -52,6 +54,7 @@ public sealed class ServicoDeBacktests
         IContextoDoUsuarioAtual contextoAtual,
         IContextoDeCorrelacao correlacao,
         IUnidadeDeTrabalho unidadeDeTrabalho,
+        IDespachanteImediato despachanteImediato,
         OpcoesDeBacktest opcoes,
         IRelogio relogio)
     {
@@ -63,6 +66,7 @@ public sealed class ServicoDeBacktests
         _contextoAtual = contextoAtual;
         _correlacao = correlacao;
         _unidadeDeTrabalho = unidadeDeTrabalho;
+        _despachanteImediato = despachanteImediato;
         _opcoes = opcoes;
         _relogio = relogio;
     }
@@ -151,6 +155,20 @@ public sealed class ServicoDeBacktests
             cancellationToken);
 
         await _unidadeDeTrabalho.SalvarAsync(cancellationToken);
+
+        // DEPOIS do commit, como na ingestao.
+        //
+        // **Esta linha faltava, e o defeito so apareceu em producao.** O evento
+        // `BacktestSolicitado.v1` ficava na Outbox com zero tentativas ate a
+        // varredura de quinze minutos passar. Nao havia erro em lugar nenhum:
+        // o backtest ficava "Pendente", e quem pediu concluia que travou.
+        //
+        // A licao e que o despacho imediato e uma responsabilidade de TODO
+        // produtor de evento, e nao um detalhe do caminho de ingestao. Enquanto
+        // ele for chamada explicita, cada produtor novo precisa lembrar — e o
+        // teste `SolicitarBacktestAcordaODespachante` existe para que o
+        // esquecimento apareca no CI, e nao no ambiente publicado.
+        await _despachanteImediato.AcordarAsync(cancellationToken);
 
         return execucao;
     }

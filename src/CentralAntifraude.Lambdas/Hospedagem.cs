@@ -1,5 +1,7 @@
 using CentralAntifraude.Infrastructure;
+using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Infrastructure.Configuracao;
+using CentralAntifraude.Infrastructure.Identidade;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -30,6 +32,44 @@ internal static class Hospedagem
 
     public static IServiceScope AbrirEscopo() => Provedor.Value.CreateScope();
 
+    /// <summary>
+    /// A montagem, separada do `Lazy` estático para que um teste possa
+    /// exercitá-la com configuração própria.
+    ///
+    /// Sem esta separação, a única forma de descobrir que falta um registro é
+    /// invocar a função na AWS — foi assim que a ausência de
+    /// `IContextoDoUsuarioAtual` chegou a produção.
+    /// </summary>
+    internal static ServiceProvider MontarCom(IConfiguration configuracao)
+    {
+        ArgumentNullException.ThrowIfNull(configuracao);
+
+        var servicos = new ServiceCollection();
+
+        servicos.AddLogging(log =>
+        {
+            log.ClearProviders();
+            log.AddJsonConsole(opcoes => opcoes.IncludeScopes = true);
+            log.SetMinimumLevel(LogLevel.Information);
+        });
+
+        // **Sem este registro nada funciona, e o erro só aparece na invocação.**
+        //
+        // O `CentralAntifraudeDbContext` exige `IContextoDoUsuarioAtual` para o
+        // filtro global de tenant. Na API quem o fornece é a camada web, a
+        // partir do token da requisição — e num worker não há requisição.
+        //
+        // O contexto anônimo é o correto AQUI, e não uma gambiarra: despachante
+        // e consumidor atravessam tenants por natureza, e ambos já desligam o
+        // filtro pelo nome nas consultas em que isso importa. Um contexto com
+        // organização fixa é que seria errado — escolheria um tenant.
+        servicos.AddScoped<IContextoDoUsuarioAtual>(_ => ContextoDeUsuarioFixo.Anonimo);
+
+        servicos.AdicionarInfraestrutura(configuracao);
+
+        return servicos.BuildServiceProvider(validateScopes: true);
+    }
+
     private static ServiceProvider Montar()
     {
         // Num Lambda não há appsettings: a configuração chega por variável de
@@ -43,21 +83,9 @@ internal static class Hospedagem
                 Environment.GetEnvironmentVariable("Ambiente") ?? "producao")
             .Build();
 
-        var servicos = new ServiceCollection();
-
-        servicos.AddLogging(log =>
-        {
-            log.ClearProviders();
-
-            // JSON, como na API. É o formato que o CloudWatch indexa por
-            // propriedade — e é o que faz o `CorrelationId` da Fase 12 virar
-            // campo consultável em vez de texto dentro da mensagem.
-            log.AddJsonConsole(opcoes => opcoes.IncludeScopes = true);
-            log.SetMinimumLevel(LogLevel.Information);
-        });
-
-        servicos.AdicionarInfraestrutura(configuracao);
-
-        return servicos.BuildServiceProvider();
+        // JSON no console, como na API: é o formato que o CloudWatch indexa
+        // por propriedade, e é o que faz o `CorrelationId` da Fase 12 virar
+        // campo consultável em vez de texto dentro da mensagem.
+        return MontarCom(configuracao);
     }
 }
