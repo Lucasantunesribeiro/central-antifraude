@@ -45,13 +45,17 @@ Parameters:
 
 Globals:
   Function:
-    Runtime: dotnet8
+    Runtime: dotnet10
     Architectures: [arm64]
     MemorySize: 512
     Timeout: 30
     Environment:
       Variables:
         ASPNETCORE_ENVIRONMENT: Production
+        # Diz a cada função sob qual caminho do Parameter Store procurar os
+        # segredos: `/central-antifraude/${Ambiente}/`. Sem isto a função
+        # cairia no padrão `producao` e homologação leria os segredos errados.
+        Ambiente: !Ref Ambiente
         # A cultura invariante é obrigatória: sem ela, o runtime do Lambda
         # depende do ICU da imagem base, e formatação de decimal muda de
         # comportamento entre a máquina de desenvolvimento e a nuvem — num
@@ -65,19 +69,21 @@ Globals:
 Resources:
   # =========================================================== parâmetros ==
   #
-  # Parâmetros PADRÃO, e não avançados: os padrões não têm custo de
-  # armazenamento nem de chamada; os avançados custam US$ 0,05 por mês cada.
+  # Este template NÃO cria parâmetro nenhum, e a ausência é a decisão.
   #
-  # Os segredos NÃO vivem neste template. Eles são criados fora dele, à mão ou
-  # por script, e referenciados por nome — um valor secreto dentro de um
-  # arquivo de infraestrutura versionado é um segredo publicado.
-
-  ParametroDaOrigem:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: !Sub '/central-antifraude/${Ambiente}/origem-do-frontend'
-      Type: String
-      Value: !Ref OrigemDoFrontend
+  # O que precisa ficar no Parameter Store é segredo — a string de conexão do
+  # Neon —, e segredo dentro de um arquivo de infraestrutura versionado é um
+  # segredo publicado (CLAUDE.md seção 59). Os parâmetros são criados FORA
+  # daqui, como `SecureString`, e as funções os leem no arranque pela permissão
+  # concedida abaixo. Ver docs/custo-e-infraestrutura.md.
+  #
+  # Parâmetros PADRÃO, e não avançados: os padrões não têm custo de
+  # armazenamento nem de chamada; os avançados custam US$ 0,05 por mês cada,
+  # para sempre.
+  #
+  # O que NÃO é segredo — a origem do frontend — chega por variável de
+  # ambiente. Guardá-la também no SSM seria um segundo lugar para a mesma
+  # verdade, e o segundo lugar é o que sai de sincronia.
 
   # ================================================================ filas ==
   #
@@ -154,7 +160,10 @@ Resources:
         # Este aqui é a camada da Function URL, e as duas precisam concordar.
         Cors:
           AllowOrigins: [!Ref OrigemDoFrontend]
-          AllowMethods: [GET, POST, PUT, DELETE, OPTIONS]
+          # Sem OPTIONS: a Function URL responde ao preflight sozinha, e a
+          # AWS recusa o valor na lista. Declará-lo seria pedir permissão para
+          # um método que nunca chega à aplicação.
+          AllowMethods: [GET, POST, PUT, DELETE]
           AllowHeaders: [Authorization, Content-Type, Accept, X-Correlation-Id, Idempotency-Key]
           AllowCredentials: true
           MaxAge: 600
@@ -226,7 +235,22 @@ Resources:
       Handler: CentralAntifraude.Lambdas::CentralAntifraude.Lambdas.ConsumidorHandler::TratarAsync
       Timeout: 30
       ReservedConcurrentExecutions: 2
+      Environment:
+        Variables:
+          # Sem estas duas, `OpcoesDaFilaSqs.UsaSqs` é falso e a composição
+          # entrega a fila em PostgreSQL — o worker rodaria, sem erro, falando
+          # com a fila errada. É a variável que decide qual implementação a
+          # injeção de dependência escolhe, e não um detalhe de endereço.
+          Mensageria__FilaOperacional: !Ref FilaOperacional
+          Mensageria__FilaDeBacktests: !Ref FilaDeBacktests
       Policies:
+        # Receber e apagar vêm do gatilho, que o SAM configura sozinho. Enviar
+        # não: um efeito pode publicar um evento novo, e sem esta permissão ele
+        # falharia só na hora em que isso acontecesse pela primeira vez.
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt FilaOperacional.QueueName
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt FilaDeBacktests.QueueName
         - SSMParameterReadPolicy:
             ParameterName: !Sub 'central-antifraude/${Ambiente}/*'
       Events:
@@ -251,7 +275,15 @@ Resources:
       Timeout: 900
       MemorySize: 1024
       ReservedConcurrentExecutions: 2
+      Environment:
+        Variables:
+          Mensageria__FilaOperacional: !Ref FilaOperacional
+          Mensageria__FilaDeBacktests: !Ref FilaDeBacktests
       Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt FilaOperacional.QueueName
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt FilaDeBacktests.QueueName
         - SSMParameterReadPolicy:
             ParameterName: !Sub 'central-antifraude/${Ambiente}/*'
       Events:
