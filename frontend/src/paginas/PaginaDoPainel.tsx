@@ -71,6 +71,7 @@ export function PaginaDoPainel() {
       {painel.isSuccess ? (
         <>
           <Volume painel={painel.data} />
+          <SaudeDaFila painel={painel.data} />
           <Decisoes painel={painel.data} />
           <Tendencia painel={painel.data} />
           <FilaHumana painel={painel.data} />
@@ -82,35 +83,100 @@ export function PaginaDoPainel() {
   );
 }
 
+/**
+ * Os quatro numeros que respondem "como estamos agora".
+ *
+ * Caixas separadas, e nao uma lista dentro de um painel: cada indicador tem
+ * moldura propria porque sao QUATRO perguntas diferentes, e o olho precisa
+ * poder pular direto para a que interessa. Numa lista corrida, os quatro se
+ * leem como um paragrafo de numeros.
+ *
+ * O terceiro e destacado de proposito. Volume e contexto; alerta sem dono e o
+ * unico dos quatro que pede uma acao de alguem hoje — e destaque so significa
+ * alguma coisa quando um item o tem e os outros nao.
+ */
 function Volume({ painel }: { painel: Painel }) {
+  const casosResolvidos =
+    painel.casos.find((c) => c.chave === 'Resolvido')?.quantidade ?? 0;
+  const casosEmAnalise =
+    painel.casos.find((c) => c.chave === 'EmAnalise')?.quantidade ?? 0;
+  const totalDeCasos = painel.casos.reduce((soma, c) => soma + c.quantidade, 0);
+
+  const semAvaliacao = painel.transacoesRecebidas - painel.transacoesAvaliadas;
+
   return (
-    <div className="cartao">
-      <h2>Volume</h2>
-
-      <dl className="descricao">
-        <div>
-          <dt>Transações recebidas</dt>
-          <dd className="numerico">{painel.transacoesRecebidas}</dd>
-        </div>
-        <div>
-          <dt>Transações avaliadas</dt>
-          <dd className="numerico">{painel.transacoesAvaliadas}</dd>
-        </div>
-        <div>
-          <dt>Eventos pendentes na fila</dt>
-          <dd className="numerico">{painel.eventosPendentes}</dd>
-        </div>
-      </dl>
-
-      <p className="pagina__resumo">
-        <strong>Recebidas</strong> conta pela chegada; <strong>avaliadas</strong>, pela
-        decisão. Uma transação atrasada chega hoje sobre um fato de ontem, então os dois
-        números são diferentes por natureza.{' '}
-        {painel.eventosPendentes > 0
-          ? 'Há eventos esperando publicação: alertas destas transações ainda não foram criados.'
-          : 'Nenhum evento esperando publicação — o caminho assíncrono está em dia.'}
-      </p>
+    <div className="indicadores">
+      <Indicador
+        rotulo="Recebidas"
+        valor={painel.transacoesRecebidas}
+        nota="tentativas que chegaram"
+      />
+      <Indicador
+        rotulo="Avaliadas"
+        valor={painel.transacoesAvaliadas}
+        nota={
+          semAvaliacao > 0 ? `${semAvaliacao} chegaram sem decisão` : 'todas decididas'
+        }
+      />
+      <Indicador
+        rotulo="Esperando alguém"
+        valor={painel.alertasAbertos}
+        nota={
+          painel.alertasAbertos > 0 ? 'alerta sem dono na fila' : 'nenhum alerta parado'
+        }
+        destaque={painel.alertasAbertos > 0}
+      />
+      <Indicador
+        rotulo="Investigações"
+        valor={totalDeCasos}
+        nota={`${casosEmAnalise} em análise, ${casosResolvidos} resolvidas`}
+      />
     </div>
+  );
+}
+
+function Indicador({
+  rotulo,
+  valor,
+  nota,
+  destaque = false,
+}: {
+  rotulo: string;
+  valor: number;
+  nota: string;
+  destaque?: boolean;
+}) {
+  return (
+    <div className={destaque ? 'indicador indicador--destaque' : 'indicador'}>
+      <span className="indicador__rotulo">{rotulo}</span>
+      <span className="indicador__valor numerico">{valor}</span>
+      <span className="indicador__nota">{nota}</span>
+    </div>
+  );
+}
+
+/**
+ * A saude do caminho assincrono, numa linha so.
+ *
+ * Saiu do bloco de volume porque nao e volume: e o unico numero da tela que
+ * fala do SISTEMA, e nao do movimento. Zero e o estado saudavel — e quando
+ * deixa de ser zero, alertas destas transacoes ainda nao existem.
+ */
+function SaudeDaFila({ painel }: { painel: Painel }) {
+  return (
+    <p className="rodape-tecnico">
+      <span>
+        Outbox: <strong>{painel.eventosPendentes} pendente(s)</strong>
+      </span>
+      <span>
+        {painel.eventosPendentes > 0
+          ? 'há eventos esperando publicação — alertas destas transações ainda não foram criados'
+          : 'o caminho assíncrono está em dia'}
+      </span>
+      <span className="rodape-tecnico__fim">
+        recebidas conta pela chegada; avaliadas, pela decisão
+      </span>
+    </p>
   );
 }
 

@@ -109,15 +109,21 @@ describe('painel operacional', () => {
     // dois números esconderia isso.
     montar();
 
-    expect(await screen.findByText('Volume')).toBeInTheDocument();
+    // Os dois numeros vivem em indicadores SEPARADOS, e o teste procura cada
+    // um dentro do seu: um `getByText('12')` solto passaria mesmo que os dois
+    // estivessem na mesma caixa, que e exatamente o que nao pode acontecer.
+    const recebidas = (await screen.findByText('Recebidas')).closest(
+      '.indicador',
+    ) as HTMLElement;
+    const avaliadas = screen
+      .getByText('Avaliadas')
+      .closest('.indicador') as HTMLElement;
 
-    const volume = screen.getByText('Volume').closest('.cartao') as HTMLElement;
+    expect(within(recebidas).getByText('12')).toBeInTheDocument();
+    expect(within(avaliadas).getByText('10')).toBeInTheDocument();
+    expect(recebidas).not.toBe(avaliadas);
 
-    expect(within(volume).getByText('12')).toBeInTheDocument();
-    expect(within(volume).getByText('10')).toBeInTheDocument();
-    expect(
-      within(volume).getByText(/caminho assíncrono está em dia/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/caminho assíncrono está em dia/)).toBeInTheDocument();
   });
 
   it('avisa quando há evento esperando publicação', async () => {
@@ -182,7 +188,7 @@ describe('painel operacional', () => {
   it('troca o período e pergunta de novo', async () => {
     const urls = montar();
 
-    await screen.findByText('Volume');
+    await screen.findByText('Recebidas');
 
     await userEvent.click(screen.getByRole('button', { name: '30 dias' }));
 

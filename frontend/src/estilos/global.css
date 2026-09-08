@@ -1,110 +1,118 @@
 /*
-  Sistema visual do console operacional — Fase 13.
+  Sistema visual do console operacional — "Modern Enterprise Craft".
 
-  Direcao do CLAUDE.md secao 79: parecer software que um analista de fraude usa
-  durante o expediente. Densidade, tabelas e leitura rapida; sem gradiente
-  decorativo, sem cartao enfeitado, sem animacao inutil.
+  Os tokens vem de `DESIGN.md`, o sistema gerado no Stitch e aprovado pelo
+  Lucas. Nada aqui foi escolhido a olho: cor, tamanho, altura de linha e raio
+  sao os valores daquele documento.
 
-  O que mudou nesta fase, e por que:
+  As tres ideias que o sistema carrega, e que a versao anterior nao tinha:
 
-  1. LARGURA. O conteudo era limitado a 60rem. Numa tela de 1568 px isso
-     desperdicava mais de um terco do espaco, e uma tabela de fila — que e o
-     que o analista olha o dia inteiro — cabia menos linhas do que poderia.
-     Agora o conteudo e fluido, com teto so onde o texto precisa de medida de
-     leitura.
+  1. QUATRO PLANOS DE PROFUNDIDADE, e nao dois. Piso do canvas (#080b10),
+     estrutura fixa (#0d1117), painel de dados (#131822) e sobreposicao
+     (#1a2230). A profundidade vem de tom e de borda de 1px — nunca de sombra
+     difusa, que e o que faz uma interface densa parecer inchada.
 
-  2. NAVEGACAO. Dez telas numa barra horizontal viravam uma fila de links sem
-     agrupamento. Viraram barra lateral com tres grupos — Operacao, Risco,
-     Governanca — que e como o produto e realmente dividido.
+  2. RAIO ZERO NO QUE E ESTRUTURA. Painel, cabecalho de tabela e divisor tem
+     canto reto; so controle tem 4px. Canto arredondado em painel desperdica o
+     canto da tela e desalinha grade com grade.
 
-  3. HIERARQUIA. Titulo, rotulo e numero tinham quase o mesmo peso, entao nada
-     chamava atencao primeiro. Agora ha uma escala de verdade, e o numero de um
-     indicador e a coisa maior da tela.
+  3. DUAS FAMILIAS COM PAPEIS SEPARADOS. Inter para o que e linguagem — titulo,
+     rotulo, frase. JetBrains Mono para o que e maquina — identificador, score,
+     valor, horario. A separacao nao e estetica: numero em fonte proporcional
+     muda de largura a cada digito, e uma coluna de valores passa a "dancar" a
+     cada linha.
 
-  4. ESTADO NUNCA SO POR COR. Permitir, Revisar e Bloquear ganharam FORMA —
-     circulo, losango, triangulo — alem de cor e texto. Um daltonico
-     (deuteranopia atinge cerca de 1 em 12 homens) distingue os tres sem
-     depender do matiz, e o mesmo vale para uma captura de tela em preto e
-     branco (ROADMAP 13.6).
-
-  Os nomes de classe sao os mesmos de antes de proposito: a mudanca e de
-  aparencia, e uma renomeacao em massa faria o diff esconder o que de fato
-  mudou.
+  Os nomes de classe continuam os das fases anteriores. A mudanca e de
+  aparencia, e renomear em massa faria o diff esconder o que de fato mudou.
 */
 
 :root {
-  /* ---- superficie: quatro niveis, do fundo ao realce ---- */
-  --cor-fundo: #0d1117;
-  --cor-superficie: #141a22;
-  --cor-superficie-2: #10161e;
-  --cor-realce: #171f29;
+  /* ---- quatro planos, do piso a sobreposicao ---- */
+  --cor-canvas: #080b10;
+  --cor-estrutura: #0d1117;
+  --cor-painel: #131822;
+  --cor-elevado: #1a2230;
 
-  /* ---- linhas: duas forcas, porque borda de painel e borda de campo
-         resolvem problemas diferentes ---- */
-  --cor-borda: #232d3a;
-  --cor-borda-forte: #31404f;
+  /* Herdados: o resto do CSS ainda fala nestes nomes. */
+  --cor-fundo: var(--cor-canvas);
+  --cor-superficie: var(--cor-painel);
+  --cor-superficie-2: var(--cor-estrutura);
+  --cor-realce: var(--cor-elevado);
 
-  /* ---- texto: tres niveis ---- */
-  --cor-texto: #e6ebf2;
-  --cor-texto-suave: #93a1b3;
+  /* ---- duas forcas de linha: estrutural e interativa ---- */
+  --cor-borda: #1f2937;
+  --cor-borda-forte: #263342;
 
-  /*
-    Medido, e nao escolhido a olho. O tom anterior (#6b7a8d) dava 4,15:1 contra
-    a superficie — abaixo dos 4,5:1 que a WCAG 2.1 exige para texto pequeno, e
-    ele e usado justamente nos textos MENORES da interface: rotulo de filtro e
-    cabecalho de tabela, ambos com 9,5 px. Este tom fica entre 4,96 e 5,65:1
-    nas quatro superficies do sistema.
-  */
-  --cor-texto-fraco: #7d8ea3;
+  /* ---- tres luminancias de texto ---- */
+  --cor-texto: #f3f4f6;
+  --cor-texto-suave: #9ca3af;
+  --cor-texto-fraco: #6b7280;
 
-  --cor-acento: #4c8dff;
-  --cor-acento-suave: #9cc0ff;
-  --cor-acento-fundo: #16273f;
+  --cor-acento: #3b82f6;
+  --cor-acento-forte: #2563eb;
+  --cor-acento-suave: #93b4fc;
+  --cor-acento-fundo: #0f1d33;
 
-  /* ---- semantica de risco ---- */
-  --cor-ok: #5fd3a3;
-  --cor-ok-borda: #2c5f4a;
-  --cor-ok-fundo: #12211c;
-  --cor-atencao: #e8b95e;
-  --cor-atencao-borda: #6b5326;
-  --cor-atencao-fundo: #211c12;
-  --cor-falha: #f07070;
-  --cor-falha-borda: #6b3434;
-  --cor-falha-fundo: #211414;
+  /* ---- semantica de risco: cor e tonalidade de fundo ---- */
+  --cor-ok: #10b981;
+  --cor-ok-fundo: #092e20;
+  --cor-atencao: #f59e0b;
+  --cor-atencao-fundo: #332104;
+  --cor-falha: #ef4444;
+  --cor-falha-fundo: #361114;
 
-  --espaco-1: 0.25rem;
-  --espaco-2: 0.5rem;
-  --espaco-3: 0.75rem;
-  --espaco-4: 1rem;
-  --espaco-6: 1.5rem;
-  --espaco-8: 2rem;
+  /* Borda dos selos: a propria cor a 25% de opacidade. */
+  --cor-ok-borda: #10b98140;
+  --cor-atencao-borda: #f59e0b40;
+  --cor-falha-borda: #ef444440;
+
+  /* ---- escala de 4px ---- */
+  --espaco-1: 4px;
+  --espaco-2: 8px;
+  --espaco-3: 12px;
+  --espaco-4: 16px;
+  --espaco-5: 20px;
+  --espaco-6: 24px;
+  --espaco-8: 32px;
 
   --raio: 4px;
-  --raio-painel: 5px;
+  --raio-painel: 0;
 
-  --largura-lateral: 13.25rem;
+  --largura-lateral: 240px;
+  --altura-linha: 32px;
+  --altura-campo: 28px;
 
   /* Medida de leitura para texto corrido. Tabela e painel NAO usam isto. */
   --medida: 46rem;
 
+  --fonte-sistema:
+    'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --fonte-mono:
+    'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, 'Cascadia Mono',
+    Consolas, monospace;
+
   color-scheme: dark;
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    sans-serif;
-  font-size: 14px;
-  line-height: 1.45;
+  font-family: var(--fonte-sistema);
+  font-size: 13px;
+  line-height: 18px;
 }
 
-/* Numero em tabela precisa de largura fixa por digito: sem isto, uma coluna
-   de valores "dança" a cada linha e comparar de relance fica impossivel. */
+/*
+  Tudo o que e MAQUINA vai em monoespacada, com digito de largura fixa.
+
+  Sem `tabular-nums` uma coluna de valores muda de largura a cada linha e
+  comparar de relance deixa de funcionar — o olho perde a referencia vertical.
+*/
 .numerico,
 .score__numero,
 .chave,
-code {
+code,
+kbd,
+.sinal__pontos,
+.sinal__par dd {
+  font-family: var(--fonte-mono);
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 *,
@@ -115,43 +123,54 @@ code {
 
 body {
   margin: 0;
-  background: var(--cor-fundo);
+  background: var(--cor-canvas);
   color: var(--cor-texto);
+  -webkit-font-smoothing: antialiased;
 }
 
 h1 {
-  font-size: 1.15rem;
+  font-size: 20px;
+  line-height: 28px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
   margin: 0;
 }
 
 h2 {
-  font-size: 0.9rem;
+  font-size: 14px;
+  line-height: 20px;
   font-weight: 600;
+  letter-spacing: -0.005em;
   margin: 0;
 }
 
 h3 {
-  font-size: 0.85rem;
+  font-size: 13px;
+  line-height: 18px;
   font-weight: 600;
   margin: 0;
 }
 
 code,
 .chave {
-  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
-  font-size: 0.9em;
+  font-size: 12px;
 }
 
-/* Foco sempre visivel: navegacao por teclado e requisito, nao enfeite. */
+/* Um identificador que E o titulo da pagina herda o tamanho do titulo. Sem
+   isto o `code` puxava 12px e a pagina abria sem manchete. */
+h1 code {
+  font-size: inherit;
+  letter-spacing: -0.01em;
+}
+
+/* Foco: anel de 1px, sem difusao. Halo borrado em interface densa cobre a
+   linha vizinha e atrapalha justamente quem depende dele. */
 :focus-visible {
-  outline: 2px solid var(--cor-acento);
-  outline-offset: 2px;
+  outline: 1px solid var(--cor-acento);
+  outline-offset: 1px;
   border-radius: 2px;
 }
 
-/* Conteudo lido por leitor de tela, invisivel na tela. */
 .visualmente-oculto {
   position: absolute;
   width: 1px;
@@ -171,17 +190,14 @@ code,
   grid-template-columns: var(--largura-lateral) minmax(0, 1fr);
 }
 
-/* Em tela estreita a lateral vira uma faixa no topo: o console nao e feito
-   para telefone, mas nao pode quebrar em um notebook pequeno ou numa janela
-   dividida ao meio (ROADMAP 13.5, "responsive minimo"). */
-@media (max-width: 60rem) {
+@media (max-width: 64rem) {
   .app {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
 .app__cabecalho {
-  background: var(--cor-superficie-2);
+  background: var(--cor-estrutura);
   border-right: 1px solid var(--cor-borda);
   display: flex;
   flex-direction: column;
@@ -190,7 +206,7 @@ code,
   height: 100vh;
 }
 
-@media (max-width: 60rem) {
+@media (max-width: 64rem) {
   .app__cabecalho {
     position: static;
     height: auto;
@@ -202,33 +218,50 @@ code,
 .app__marca {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
   padding: var(--espaco-3) var(--espaco-4);
   border-bottom: 1px solid var(--cor-borda);
 }
 
 .app__marca-nome {
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-2);
+}
+
+/* O quadrado azul antes da marca: um pip geometrico, nao um logotipo. */
+.app__marca-nome::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: var(--cor-acento);
+  border-radius: 2px;
+  flex-shrink: 0;
 }
 
 .app__marca-ambiente {
-  font-size: 0.68rem;
+  font-family: var(--fonte-mono);
+  font-size: 10px;
+  line-height: 12px;
+  letter-spacing: 0.04em;
   color: var(--cor-texto-fraco);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  padding-left: 16px;
 }
 
 .app__navegacao {
   display: flex;
   flex-direction: column;
-  gap: var(--espaco-4);
-  padding: var(--espaco-3) var(--espaco-2);
+  gap: var(--espaco-5);
+  padding: var(--espaco-4) var(--espaco-2);
   flex: 1;
   overflow-y: auto;
 }
 
-@media (max-width: 60rem) {
+@media (max-width: 64rem) {
   .app__navegacao {
     flex-direction: row;
     flex-wrap: wrap;
@@ -243,55 +276,61 @@ code,
 }
 
 .app__grupo-titulo {
-  font-size: 0.65rem;
+  font-size: 10px;
+  line-height: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   color: var(--cor-texto-fraco);
-  padding: 0 var(--espaco-2) var(--espaco-1);
+  padding: 0 var(--espaco-2) var(--espaco-2);
 }
 
 .app__navegacao a {
   display: flex;
   align-items: center;
-  gap: var(--espaco-2);
+  gap: var(--espaco-3);
+  height: var(--altura-linha);
+  padding: 0 var(--espaco-2);
   color: var(--cor-texto-suave);
   text-decoration: none;
-  padding: var(--espaco-1) var(--espaco-2);
   border-radius: var(--raio);
-  font-size: 0.95rem;
+  font-size: 13px;
 }
 
 .app__navegacao a:hover {
-  background: var(--cor-superficie);
+  background: var(--cor-painel);
   color: var(--cor-texto);
 }
 
+/* Item ativo: fundo elevado e barra de 2px. A barra e o que sobrevive a uma
+   captura em preto e branco. */
 .app__navegacao a.active {
-  background: #1b2534;
+  background: var(--cor-elevado);
   color: var(--cor-texto);
   box-shadow: inset 2px 0 0 var(--cor-acento);
 }
 
 .app__sessao {
   border-top: 1px solid var(--cor-borda);
-  padding: var(--espaco-2) var(--espaco-3);
+  padding: var(--espaco-3);
   display: flex;
   align-items: center;
-  gap: var(--espaco-2);
-  font-size: 0.85rem;
+  gap: var(--espaco-3);
 }
 
 .app__sessao-usuario {
   display: flex;
   flex-direction: column;
-  line-height: 1.25;
+  line-height: 16px;
   min-width: 0;
   flex: 1;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .app__sessao-perfil {
   color: var(--cor-texto-fraco);
-  font-size: 0.72rem;
+  font-size: 11px;
+  font-weight: 400;
 }
 
 .app__sessao-anonima {
@@ -299,7 +338,7 @@ code,
 }
 
 .app__conteudo {
-  padding: var(--espaco-4) var(--espaco-6) var(--espaco-8);
+  padding: var(--espaco-5) var(--espaco-6) var(--espaco-8);
   min-width: 0;
 }
 
@@ -319,24 +358,26 @@ code,
   margin-top: calc(var(--espaco-4) * -1 + 2px);
 }
 
-/* O resumo e texto corrido: ele ganha medida de leitura mesmo quando a
-   pagina e larga. Linha de 200 caracteres nao se le, se varre. */
 .pagina__resumo {
   color: var(--cor-texto-suave);
   margin: 0;
   max-width: var(--medida);
-  font-size: 0.92rem;
+  font-size: 13px;
 }
 
 .pagina__migalha {
-  font-size: 0.82rem;
+  font-family: var(--fonte-mono);
+  font-size: 12px;
   color: var(--cor-texto-fraco);
   margin: 0;
 }
 
+/*
+  Painel: canto reto, borda interativa, fundo do plano 2.
+*/
 .cartao {
-  background: var(--cor-superficie);
-  border: 1px solid var(--cor-borda);
+  background: var(--cor-painel);
+  border: 1px solid var(--cor-borda-forte);
   border-radius: var(--raio-painel);
   padding: var(--espaco-4);
   display: flex;
@@ -350,12 +391,12 @@ code,
 }
 
 .cartao--destaque {
-  border-color: var(--cor-borda-forte);
+  border-color: var(--cor-atencao-borda);
 }
 
 .colunas {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(21rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
   gap: var(--espaco-4);
   align-items: start;
 }
@@ -370,39 +411,36 @@ code,
 
 .tabela__legenda {
   text-align: left;
-  color: var(--cor-texto-suave);
-  font-size: 0.85rem;
+  color: var(--cor-texto-fraco);
+  font-family: var(--fonte-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
   padding-bottom: var(--espaco-2);
 }
 
 .tabela th,
 .tabela td {
-  padding: var(--espaco-2) var(--espaco-3);
-  border-bottom: 1px solid #1c2530;
+  height: var(--altura-linha);
+  padding: 0 var(--espaco-2);
+  border-bottom: 1px solid var(--cor-borda);
   vertical-align: middle;
 }
 
 .tabela thead th {
-  font-size: 0.68rem;
+  height: 30px;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.02em;
   color: var(--cor-texto-fraco);
   font-weight: 500;
-  background: var(--cor-superficie-2);
+  background: var(--cor-estrutura);
   position: sticky;
   top: 0;
   z-index: 1;
   white-space: nowrap;
 }
 
-/*
-  Cabecalho que ordena continua PARECENDO cabecalho.
-
-  Antes o botao herdava a moldura de `.botao` e as colunas ordenaveis viravam
-  uma fileira de caixas, como se fossem campos de formulario no meio do
-  cabecalho da tabela. O unico sinal de que ali se clica precisa ser o
-  ponteiro, o sublinhado no hover e a seta de direcao.
-*/
+/* Cabecalho que ordena continua parecendo cabecalho: sem moldura de botao. */
 .tabela thead button {
   font: inherit;
   font-size: inherit;
@@ -415,7 +453,7 @@ code,
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--espaco-1);
 }
 
 .tabela thead button:hover {
@@ -433,21 +471,15 @@ code,
   border-bottom: 0;
 }
 
-/* A linha inteira reage ao ponteiro: em tabela densa, e o que evita ler a
-   coluna de uma linha e o valor da linha de baixo. */
 .tabela tbody tr:hover td,
 .tabela tbody tr:hover th {
-  background: var(--cor-realce);
+  background: var(--cor-elevado);
 }
 
 /*
-  Numero em celula alinha a direita — a unidade fica sob a unidade, e a
-  comparacao entre linhas vira leitura de silhueta.
-
   `width: 1%` nao significa 1%: numa tabela de layout automatico e o jeito de
   dizer "encolha ate o conteudo". Sem isso o navegador reparte a largura
-  igualmente e uma coluna com o numero 20 fica com 200 px, jogando o valor
-  para longe do rotulo que ele explica.
+  igualmente e uma coluna com o numero 20 fica com 200 px.
 */
 .tabela td.numerico,
 .tabela th.numerico {
@@ -456,8 +488,6 @@ code,
   white-space: nowrap;
 }
 
-/* Mesma razao para colunas curtas e previsiveis: selo, score e data nao
-   precisam crescer, e o espaco livre pertence ao texto. */
 .tabela td:has(> .selo),
 .tabela td:has(> .score),
 .tabela td:has(> .botao) {
@@ -465,10 +495,15 @@ code,
   white-space: nowrap;
 }
 
-/* Caixa de selecao em tabela: alvo confortavel sem inchar a linha. */
+/* Barra solta numa celula: sem largura declarada a coluna estica e a barra fica
+   perdida a meio metro do numero que ela representa. */
+.tabela td:has(> .score__barra) {
+  width: 5rem;
+}
+
 .tabela input[type='checkbox'] {
-  width: 0.95rem;
-  height: 0.95rem;
+  width: 14px;
+  height: 14px;
   accent-color: var(--cor-acento);
   margin: 0;
   vertical-align: middle;
@@ -481,9 +516,8 @@ code,
   flex-direction: column;
   gap: var(--espaco-2);
   padding: var(--espaco-6);
-  border: 1px solid var(--cor-borda);
-  border-radius: var(--raio-painel);
-  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda-forte);
+  background: var(--cor-painel);
   align-items: flex-start;
 }
 
@@ -515,12 +549,12 @@ code,
 .estado__descricao {
   margin: 0;
   color: var(--cor-texto-suave);
-  font-size: 0.9rem;
+  font-size: 12px;
 }
 
 .estado__indicador {
-  width: 0.75rem;
-  height: 0.75rem;
+  width: 12px;
+  height: 12px;
   border: 2px solid var(--cor-borda-forte);
   border-top-color: var(--cor-acento);
   border-radius: 50%;
@@ -533,7 +567,6 @@ code,
   }
 }
 
-/* Respeita quem pediu menos movimento no sistema operacional. */
 @media (prefers-reduced-motion: reduce) {
   .estado__indicador {
     animation: none;
@@ -547,7 +580,7 @@ code,
 /* ================================================================== selo == */
 
 /*
-  Um selo carrega tres codificacoes ao mesmo tempo: TEXTO, COR e FORMA.
+  Um selo carrega TRES codificacoes ao mesmo tempo: texto, cor e FORMA.
 
   A forma e a que costuma faltar, e e a que salva a leitura quando a cor nao
   chega — daltonismo, captura em preto e branco, projetor ruim. Circulo para
@@ -557,20 +590,24 @@ code,
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.8rem;
-  font-weight: 500;
-  line-height: 1.6;
-  padding: 0 var(--espaco-2) 0 6px;
+  height: 20px;
+  padding: 0 6px;
+  font-family: var(--fonte-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   border-radius: 3px;
   border: 1px solid var(--cor-borda-forte);
   color: var(--cor-texto-suave);
+  background: var(--cor-painel);
   white-space: nowrap;
 }
 
 .selo::before {
   content: '';
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   flex-shrink: 0;
   background: currentcolor;
   border-radius: 50%;
@@ -604,7 +641,6 @@ code,
   background: var(--cor-falha-fundo);
 }
 
-/* As tres formas das tres decisoes de risco. */
 .selo--revisar::before {
   border-radius: 0;
   transform: rotate(45deg);
@@ -627,7 +663,7 @@ code,
 
 .selo--caso-novo {
   color: var(--cor-acento-suave);
-  border-color: #2f5aa8;
+  border-color: #3b82f640;
   background: var(--cor-acento-fundo);
 }
 
@@ -640,17 +676,18 @@ code,
 }
 
 .score__numero {
-  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
-  font-size: 0.95rem;
-  min-width: 1.6rem;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 18px;
+  min-width: 22px;
   text-align: right;
 }
 
 .score__barra {
-  width: 4rem;
-  height: 5px;
-  background: #1f2833;
-  border-radius: 3px;
+  width: 64px;
+  height: 4px;
+  background: var(--cor-elevado);
+  border-radius: 2px;
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -658,12 +695,13 @@ code,
 .score__preenchimento {
   display: block;
   height: 100%;
-  border-radius: 3px;
+  border-radius: 2px;
   background: var(--cor-acento);
 }
 
 .score--ausente .score__numero {
   color: var(--cor-texto-fraco);
+  font-weight: 400;
 }
 
 /* ============================================================= avaliacao == */
@@ -675,43 +713,37 @@ code,
   flex-wrap: wrap;
 }
 
+/* O score da tela de detalhe e a maior coisa da pagina: e a resposta que a
+   pessoa veio buscar. */
 .avaliacao__resultado .score__numero {
-  font-size: 2.4rem;
-  font-weight: 500;
+  font-size: 48px;
+  line-height: 1;
+  font-weight: 700;
   letter-spacing: -0.03em;
   min-width: auto;
 }
 
 .avaliacao__resultado .score__barra {
-  width: 12rem;
+  width: 14rem;
   height: 8px;
 }
 
 .avaliacao__aviso {
   margin: 0;
   color: var(--cor-texto-suave);
-  font-size: 0.85rem;
+  font-size: 12px;
   max-width: var(--medida);
 }
 
 /*
-  Lista de definicao como FAIXA DE INDICADORES, e nao como duas colunas.
-
-  Antes o rotulo ficava a esquerda e o numero encostado na borda direita, com
-  um vao no meio — os dois pertencem um ao outro e liam-se como coisas
-  separadas. Rotulo pequeno em cima, numero grande embaixo: o olho encontra o
-  numero primeiro, que e o que se veio buscar.
-*/
-/*
-  Colunas com TETO, e nao fracoes do espaco livre. Com `1fr`, tres indicadores
-  numa tela larga viravam tres colunas de 400 px e o rotulo ficava a meio metro
-  do numero que ele nomeia — os dois pertencem um ao outro e precisam ser
-  lidos como um bloco so.
+  Lista de definicao como FAIXA DE INDICADORES: rotulo pequeno em cima, valor
+  embaixo. Antes o rotulo ficava a esquerda e o valor encostado na borda
+  direita, com um vao no meio — os dois pertencem um ao outro.
 */
 .avaliacao__procedencia,
 .descricao {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 13rem));
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 13rem));
   justify-content: start;
   gap: var(--espaco-4) var(--espaco-8);
   margin: 0;
@@ -719,25 +751,25 @@ code,
 
 .avaliacao__procedencia dt,
 .descricao dt {
-  font-size: 0.65rem;
+  font-size: 11px;
+  line-height: 14px;
   text-transform: uppercase;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.02em;
   color: var(--cor-texto-fraco);
-  margin-bottom: 1px;
+  margin-bottom: 2px;
 }
 
 .avaliacao__procedencia dd,
 .descricao dd {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 13px;
 }
 
 .descricao dd.numerico {
-  font-size: 1.7rem;
-  font-weight: 500;
+  font-size: 28px;
+  line-height: 32px;
+  font-weight: 700;
   letter-spacing: -0.02em;
-  line-height: 1.15;
-  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
 }
 
 /* ================================================================ sinais == */
@@ -745,44 +777,69 @@ code,
 .sinais {
   display: flex;
   flex-direction: column;
-  gap: var(--espaco-2);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/*
+  Cada sinal e uma LINHA de grade, e nao um cartao. Tres cartoes empilhados com
+  borda e respiro proprio somariam mais moldura do que conteudo; a linha deixa
+  os pontos alinhados em coluna, e a soma pode ser conferida a olho — que e o
+  que esta tela precisa provar.
+*/
 .sinal {
-  border: 1px solid var(--cor-borda);
-  border-left: 2px solid var(--cor-atencao-borda);
-  border-radius: 0 var(--raio) var(--raio) 0;
-  padding: var(--espaco-2) var(--espaco-3);
-  background: var(--cor-superficie-2);
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: var(--espaco-3);
+  align-items: baseline;
+  padding: var(--espaco-3) 0;
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.sinais > li:last-child .sinal,
+.sinal:last-child {
+  border-bottom: 0;
 }
 
 .sinal__cabecalho {
+  grid-column: 2;
   display: flex;
   align-items: baseline;
   gap: var(--espaco-2);
+  flex-wrap: wrap;
 }
 
 .sinal__tipo {
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .sinal__pontos {
-  margin-left: auto;
-  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
-  font-size: 1rem;
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--cor-atencao);
+  background: var(--cor-atencao-fundo);
+  border: 1px solid var(--cor-atencao-borda);
+  border-radius: 3px;
 }
 
 .sinal__explicacao {
+  grid-column: 2;
   margin: 2px 0 0;
   color: var(--cor-texto-suave);
-  font-size: 0.88rem;
+  font-size: 12px;
 }
 
 .sinal__evidencia {
+  grid-column: 2;
   margin: var(--espaco-2) 0 0;
   display: flex;
   flex-wrap: wrap;
@@ -792,7 +849,7 @@ code,
 .sinal__par {
   display: flex;
   gap: var(--espaco-1);
-  font-size: 0.8rem;
+  font-size: 11px;
 }
 
 .sinal__par dt {
@@ -805,17 +862,32 @@ code,
 
 .sinal__par dd {
   margin: 0;
-  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
   color: var(--cor-texto-suave);
 }
 
+/*
+  O tipo da regra como etiqueta de maquina — e o codigo real do catalogo, e nao
+  um identificador inventado.
+
+  `grid-column: 2` nao e detalhe: sem isso ela caia na primeira coluna da
+  grade, junto dos pontos, e virava uma caixinha vertical solta embaixo do
+  texto. A etiqueta pertence ao cabecalho do sinal, ao lado do nome da regra.
+*/
 .sinal__origem {
-  font-size: 0.75rem;
+  grid-column: 2;
+  justify-self: start;
+  margin-top: var(--espaco-1);
+  font-family: var(--fonte-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--cor-texto-fraco);
+  border: 1px solid var(--cor-borda);
+  border-radius: 3px;
+  padding: 1px 5px;
 }
 
-/* Lista sem marcador: os itens ja sao etiquetas visuais, e o ponto do
-   navegador aparecia solto na frente da primeira. */
+/* Etiquetas de sinal dentro de uma linha de tabela. */
 .sinais-resumidos {
   display: flex;
   flex-wrap: wrap;
@@ -826,17 +898,18 @@ code,
 }
 
 .sinais-resumidos > * {
-  font-size: 0.78rem;
+  font-size: 11px;
   color: var(--cor-texto-suave);
-  background: #182029;
+  background: var(--cor-estrutura);
   border: 1px solid var(--cor-borda);
   border-radius: 3px;
-  padding: 0 6px;
+  padding: 1px 6px;
   white-space: nowrap;
 }
 
 .sinais-resumidos__resto {
   color: var(--cor-texto-fraco);
+  border-style: dashed;
 }
 
 /* ================================================================ faixas == */
@@ -854,11 +927,11 @@ code,
   display: flex;
   align-items: center;
   gap: var(--espaco-3);
-  font-size: 0.88rem;
+  font-size: 12px;
 }
 
 .faixa__intervalo {
-  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-family: var(--fonte-mono);
   color: var(--cor-texto-suave);
 }
 
@@ -876,36 +949,27 @@ code,
 
 /* =============================================================== filtros == */
 
-/*
-  Uma faixa de filtros, e nao uma grade solta.
-
-  Todos os campos alinham pela BASE: rotulos tem alturas diferentes e, sem
-  isso, uma linha de filtros vira uma escada. A acao fica na ponta direita,
-  separada por margem automatica.
-*/
 .filtros {
   display: flex;
   align-items: flex-end;
   flex-wrap: wrap;
   gap: var(--espaco-2) var(--espaco-3);
   padding: var(--espaco-3);
-  border: 1px solid var(--cor-borda);
-  border-radius: var(--raio-painel);
-  background: var(--cor-superficie-2);
+  border: 1px solid var(--cor-borda-forte);
+  background: var(--cor-painel);
 }
 
 .filtros .campo {
-  gap: 3px;
+  gap: var(--espaco-1);
 }
 
 .filtros select,
 .filtros input {
-  height: 1.85rem;
-  padding: 0 var(--espaco-2);
+  height: var(--altura-campo);
 }
 
 .filtros .botao {
-  height: 1.85rem;
+  height: var(--altura-campo);
 }
 
 /* ================================================================= campo == */
@@ -917,14 +981,16 @@ code,
 }
 
 .campo__rotulo {
-  font-size: 0.68rem;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.02em;
   color: var(--cor-texto-fraco);
 }
 
 .campo__ajuda {
-  font-size: 0.8rem;
+  font-size: 11px;
   color: var(--cor-texto-fraco);
 }
 
@@ -932,22 +998,38 @@ code,
 .campo select,
 .campo textarea {
   font: inherit;
+  font-size: 12px;
   color: var(--cor-texto);
-  background: var(--cor-fundo);
-  border: 1px solid var(--cor-borda-forte);
+  background: var(--cor-estrutura);
+  border: 1px solid var(--cor-borda);
   border-radius: var(--raio);
-  padding: var(--espaco-1) var(--espaco-2);
+  padding: 0 var(--espaco-2);
+  height: var(--altura-campo);
+}
+
+.campo input:hover,
+.campo select:hover,
+.campo textarea:hover {
+  border-color: var(--cor-borda-forte);
+}
+
+.campo input::placeholder,
+.campo textarea::placeholder {
+  color: var(--cor-texto-fraco);
 }
 
 .campo textarea {
   resize: vertical;
-  min-height: 4rem;
+  min-height: 72px;
+  height: auto;
+  padding: var(--espaco-2);
+  line-height: 18px;
 }
 
 .campo input:disabled,
 .campo select:disabled,
 .campo textarea:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
 .campo input[aria-invalid='true'] {
@@ -957,30 +1039,30 @@ code,
 /*
   Caixa de marcar: a caixa e o texto na MESMA linha.
 
-  Antes o campo herdava `flex-direction: column` do `.campo`, entao a caixa
-  ficava sozinha em cima e o rotulo quebrava em tres linhas embaixo — a
-  aparencia era de dois controles diferentes, e o alvo de clique do texto
-  ficava longe da caixa.
+  Antes o campo herdava `flex-direction: column` do `.campo`, a caixa ficava
+  sozinha em cima e o rotulo quebrava em tres linhas embaixo — parecia dois
+  controles diferentes, e o alvo de clique do texto ficava longe da caixa.
 */
 .campo--caixa {
   flex-direction: row;
   align-items: center;
   gap: var(--espaco-2);
-  height: 1.85rem;
+  height: var(--altura-campo);
   cursor: pointer;
   white-space: nowrap;
 }
 
 .campo--caixa input {
-  width: 0.95rem;
-  height: 0.95rem;
+  width: 14px;
+  height: 14px;
   accent-color: var(--cor-acento);
   margin: 0;
+  padding: 0;
   flex-shrink: 0;
 }
 
 .campo--caixa span {
-  font-size: 0.9rem;
+  font-size: 12px;
   color: var(--cor-texto-suave);
 }
 
@@ -1003,47 +1085,45 @@ code,
   justify-content: center;
   gap: var(--espaco-2);
   align-self: flex-start;
-  font: inherit;
-  font-size: 0.9rem;
-  color: var(--cor-texto-suave);
-  background: transparent;
+  height: var(--altura-campo);
+  padding: 0 var(--espaco-3);
+  font-family: var(--fonte-sistema);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cor-texto);
+  background: var(--cor-painel);
   border: 1px solid var(--cor-borda-forte);
   border-radius: var(--raio);
-  padding: var(--espaco-1) var(--espaco-3);
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
 }
 
 .botao:hover {
-  border-color: var(--cor-acento);
-  color: var(--cor-texto);
+  background: var(--cor-elevado);
+  border-color: #374151;
 }
 
 .botao--principal {
-  border-color: #2f5aa8;
-  background: var(--cor-acento-fundo);
-  color: var(--cor-acento-suave);
+  background: var(--cor-acento);
+  border-color: var(--cor-acento-forte);
+  color: #ffffff;
 }
 
 .botao--principal:hover {
-  border-color: var(--cor-acento);
-  color: var(--cor-texto);
+  background: var(--cor-acento-forte);
+  border-color: var(--cor-acento-forte);
 }
 
 .botao:disabled,
 .botao--principal:disabled {
-  opacity: 0.55;
+  opacity: 0.5;
   cursor: default;
 }
 
 .botao:disabled:hover {
+  background: var(--cor-painel);
   border-color: var(--cor-borda-forte);
-  color: var(--cor-texto-suave);
-}
-
-a.botao {
-  line-height: 1.45;
 }
 
 .acoes {
@@ -1071,16 +1151,15 @@ a.botao {
   flex-direction: column;
   gap: var(--espaco-4);
   width: min(23rem, 100%);
-  background: var(--cor-superficie);
-  border: 1px solid var(--cor-borda);
-  border-radius: var(--raio-painel);
+  background: var(--cor-painel);
+  border: 1px solid var(--cor-borda-forte);
   padding: var(--espaco-6);
 }
 
 .entrada__resumo {
-  margin: -0.75rem 0 0;
+  margin: -12px 0 0;
   color: var(--cor-texto-suave);
-  font-size: 0.9rem;
+  font-size: 12px;
 }
 
 .entrada__erro {
@@ -1090,18 +1169,19 @@ a.botao {
   background: var(--cor-falha-fundo);
   border-radius: var(--raio);
   color: var(--cor-falha);
-  font-size: 0.9rem;
+  font-size: 12px;
 }
 
 .entrada__correlacao {
   display: block;
   margin-top: var(--espaco-1);
+  font-family: var(--fonte-mono);
   color: var(--cor-texto-suave);
 }
 
 .entrada .botao--principal {
   align-self: stretch;
-  padding: var(--espaco-2) var(--espaco-3);
+  height: 32px;
 }
 
 /* ============================================================== timeline == */
@@ -1115,16 +1195,14 @@ a.botao {
 }
 
 /*
-  Um eixo continuo desenhado com borda, e nao com elemento proprio.
-
-  A borda esquerda do item faz a linha; o marcador redondo e um ::before
-  posicionado sobre ela. Um item vazio para "a linha" seria conteudo sem
-  significado para um leitor de tela.
+  O eixo e a borda esquerda do item, e o marcador e um ::before sobre ela. Um
+  elemento vazio so para desenhar a linha seria conteudo sem significado para
+  um leitor de tela.
 */
 .timeline__item {
   position: relative;
   padding: 0 0 var(--espaco-4) var(--espaco-4);
-  border-left: 1px solid var(--cor-borda);
+  border-left: 1px solid var(--cor-borda-forte);
   margin-left: 4px;
 }
 
@@ -1136,7 +1214,8 @@ a.botao {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--cor-borda-forte);
+  background: var(--cor-estrutura);
+  border: 2px solid var(--cor-borda-forte);
 }
 
 .timeline__item:last-child {
@@ -1145,16 +1224,18 @@ a.botao {
 }
 
 .timeline__item--Resolvido::before {
-  background: var(--cor-ok);
+  border-color: var(--cor-ok);
 }
 
 .timeline__origem {
-  font-size: 0.78rem;
+  font-family: var(--fonte-mono);
+  font-size: 11px;
   color: var(--cor-texto-fraco);
 }
 
 .timeline__descricao {
   margin: 2px 0 0;
+  font-size: 13px;
 }
 
 /* ================================================================= notas == */
@@ -1171,16 +1252,16 @@ a.botao {
 .nota {
   border: 1px solid var(--cor-borda);
   border-left: 2px solid var(--cor-borda-forte);
-  border-radius: 0 var(--raio) var(--raio) 0;
   padding: var(--espaco-2) var(--espaco-3);
-  background: var(--cor-superficie-2);
+  background: var(--cor-estrutura);
 }
 
 .nota__cabecalho {
   display: flex;
   gap: var(--espaco-2);
   align-items: baseline;
-  font-size: 0.78rem;
+  font-family: var(--fonte-mono);
+  font-size: 11px;
   color: var(--cor-texto-fraco);
 }
 
@@ -1191,6 +1272,7 @@ a.botao {
 .nota__conteudo {
   margin: var(--espaco-1) 0 0;
   white-space: pre-wrap;
+  font-size: 13px;
 }
 
 .nota__formulario {
@@ -1208,7 +1290,8 @@ a.botao {
 }
 
 .paginacao__posicao {
-  font-size: 0.85rem;
+  font-family: var(--fonte-mono);
+  font-size: 11px;
   color: var(--cor-texto-suave);
 }
 
@@ -1219,13 +1302,13 @@ a.botao {
   align-items: center;
   gap: var(--espaco-3);
   padding: var(--espaco-2) var(--espaco-3);
-  border: 1px solid #2f5aa8;
-  border-radius: var(--raio-painel);
+  border: 1px solid #3b82f640;
   background: var(--cor-acento-fundo);
 }
 
 .barra-de-selecao__contagem {
-  font-size: 0.9rem;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 /* ============================================================ integracoes = */
@@ -1233,9 +1316,163 @@ a.botao {
 .chave {
   display: block;
   padding: var(--espaco-2) var(--espaco-3);
-  background: var(--cor-fundo);
+  background: var(--cor-canvas);
   border: 1px solid var(--cor-borda-forte);
   border-radius: var(--raio);
   word-break: break-all;
   color: var(--cor-atencao);
+}
+
+/* ========================================================== indicadores == */
+
+/*
+  Quatro caixas, e nao uma lista dentro de um painel.
+
+  Cada indicador tem moldura propria porque sao quatro perguntas diferentes, e
+  o olho precisa poder pular direto para a que interessa. Numa lista corrida,
+  os quatro se leem como um paragrafo de numeros.
+*/
+.indicadores {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--espaco-3);
+}
+
+.indicador {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-1);
+  padding: var(--espaco-3) var(--espaco-4);
+  background: var(--cor-painel);
+  border: 1px solid var(--cor-borda-forte);
+}
+
+/* Destaque so significa alguma coisa quando UM item o tem e os outros nao. */
+.indicador--destaque {
+  border-color: var(--cor-atencao-borda);
+  background: linear-gradient(0deg, var(--cor-painel) 60%, var(--cor-atencao-fundo));
+}
+
+.indicador__rotulo {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--cor-texto-fraco);
+}
+
+.indicador__valor {
+  font-size: 28px;
+  line-height: 32px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.indicador--destaque .indicador__valor {
+  color: var(--cor-atencao);
+}
+
+.indicador__nota {
+  font-size: 11px;
+  color: var(--cor-texto-fraco);
+}
+
+/* Uma linha tecnica, com a saude do caminho assincrono. */
+.rodape-tecnico {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2) var(--espaco-4);
+  align-items: baseline;
+  margin: 0;
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 1px solid var(--cor-borda);
+  background: var(--cor-estrutura);
+  font-family: var(--fonte-mono);
+  font-size: 11px;
+  color: var(--cor-texto-fraco);
+}
+
+.rodape-tecnico strong {
+  color: var(--cor-texto-suave);
+  font-weight: 500;
+}
+
+.rodape-tecnico__fim {
+  margin-left: auto;
+}
+
+/* ============================================================== detalhe == */
+
+/*
+  Faixa de identificacao: rotulo pequeno em cima, valor embaixo, tudo numa
+  linha so acima das colunas.
+
+  Quem chega nesta tela quer confirmar que esta olhando a transacao certa
+  antes de ler qualquer analise — por isso ela vem antes, e nao dentro de uma
+  das colunas.
+*/
+.faixa-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--espaco-3) var(--espaco-4);
+  margin: 0;
+  padding: var(--espaco-3) var(--espaco-4);
+  border: 1px solid var(--cor-borda-forte);
+  background: var(--cor-painel);
+}
+
+.faixa-meta dt {
+  font-size: 11px;
+  line-height: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--cor-texto-fraco);
+  margin-bottom: 2px;
+}
+
+.faixa-meta dd {
+  margin: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+/* Analise a esquerda, o que a operacao fez a direita. */
+.detalhe {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 27rem;
+  gap: var(--espaco-4);
+  align-items: start;
+}
+
+@media (max-width: 75rem) {
+  .detalhe {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.detalhe__principal,
+.detalhe__inspetor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+  min-width: 0;
+}
+
+/*
+  Uma tabela larga dentro de uma coluna estreita rola DENTRO dela, e nao empurra
+  a pagina inteira. Sem isto a janela ganhava barra horizontal e a tela toda
+  deslizava de lado para mostrar uma coluna de tabela.
+*/
+.detalhe__inspetor .cartao {
+  overflow-x: auto;
+}
+
+/* A coluna da direita acompanha a rolagem: numa investigacao longa, o estado
+   do alerta e a referencia que a pessoa consulta o tempo todo. */
+@media (min-width: 75.01rem) {
+  .detalhe__inspetor {
+    position: sticky;
+    top: var(--espaco-5);
+  }
 }

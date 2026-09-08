@@ -59,76 +59,100 @@ export function PaginaDeTransacao() {
             <code>{consulta.data.identificadorExterno}</code>
           </h1>
 
-          <div className="cartao">
-            <dl className="descricao">
-              <div>
-                <dt>Cliente</dt>
-                <dd>{consulta.data.clienteExternoId}</dd>
-              </div>
-              <div>
-                <dt>Valor</dt>
-                <dd className="numerico">
-                  {consulta.data.valor.toLocaleString('pt-BR', {
-                    style: 'currency',
-                    currency: consulta.data.moeda,
-                  })}
-                </dd>
-              </div>
-              <div>
-                <dt>Ocorrida em</dt>
-                <dd>{new Date(consulta.data.ocorridaEm).toLocaleString('pt-BR')}</dd>
-              </div>
-              <div>
-                <dt>Recebida em</dt>
-                <dd>{new Date(consulta.data.recebidaEm).toLocaleString('pt-BR')}</dd>
-              </div>
-              <div>
-                <dt>País</dt>
-                <dd>{consulta.data.paisDeOrigem ?? '—'}</dd>
-              </div>
-              <div>
-                <dt>Dispositivo</dt>
-                <dd>
-                  <code>{consulta.data.fingerprintDoDispositivo ?? '—'}</code>
-                </dd>
-              </div>
-              <div>
-                {/* Referência tokenizada, nunca o cartão: a Central
-                    Antifraude não armazena dado completo de pagamento
-                    (CLAUDE.md seção 58). */}
-                <dt>Instrumento</dt>
-                <dd>
-                  <code>{consulta.data.referenciaDoInstrumento}</code>
-                </dd>
-              </div>
-              <div>
-                {/* Número de protocolo da requisição que registrou esta
-                    transação. É com ele que o suporte encontra a linha exata
-                    no log do servidor (CLAUDE.md seção 69). */}
-                <dt>Correlação</dt>
-                <dd>
-                  <code>{consulta.data.idDeCorrelacao ?? '—'}</code>
-                </dd>
-              </div>
-            </dl>
+          {/*
+            A faixa de metadados fica ACIMA das colunas, e nao dentro de uma
+            delas: sao os dados de identificacao da transacao, e quem chega
+            aqui quer confirmar que esta olhando a transacao certa antes de
+            ler qualquer analise.
+
+            Todo campo aqui e o que o produto REALMENTE guarda. Nao ha endereco
+            IP, provedor nem confianca de dispositivo: o `CLAUDE.md` secao 57
+            decidiu guardar apenas uma derivacao do IP, e a secao 58 proibe
+            dado completo de pagamento. Mostrar o que nao se guarda seria
+            anunciar uma capacidade que o produto nao tem.
+          */}
+          <dl className="faixa-meta">
+            <div>
+              <dt>Cliente</dt>
+              <dd>{consulta.data.clienteExternoId}</dd>
+            </div>
+            <div>
+              <dt>Valor</dt>
+              <dd className="numerico">
+                {consulta.data.valor.toLocaleString('pt-BR', {
+                  style: 'currency',
+                  currency: consulta.data.moeda,
+                })}
+              </dd>
+            </div>
+            <div>
+              <dt>Ocorrida em</dt>
+              <dd>{new Date(consulta.data.ocorridaEm).toLocaleString('pt-BR')}</dd>
+            </div>
+            <div>
+              <dt>Recebida em</dt>
+              <dd>{new Date(consulta.data.recebidaEm).toLocaleString('pt-BR')}</dd>
+            </div>
+            <div>
+              <dt>País</dt>
+              <dd>{consulta.data.paisDeOrigem ?? '—'}</dd>
+            </div>
+            <div>
+              <dt>Dispositivo</dt>
+              <dd>
+                <code>{consulta.data.fingerprintDoDispositivo ?? '—'}</code>
+              </dd>
+            </div>
+            <div>
+              {/* Referência tokenizada, nunca o cartão: a Central
+                  Antifraude não armazena dado completo de pagamento
+                  (CLAUDE.md seção 58). */}
+              <dt>Instrumento</dt>
+              <dd>
+                <code>{consulta.data.referenciaDoInstrumento}</code>
+              </dd>
+            </div>
+            <div>
+              {/* Número de protocolo da requisição que registrou esta
+                  transação. É com ele que o suporte encontra a linha exata
+                  no log do servidor (CLAUDE.md seção 69). */}
+              <dt>Correlação</dt>
+              <dd>
+                <code>{consulta.data.idDeCorrelacao ?? '—'}</code>
+              </dd>
+            </div>
+          </dl>
+
+          {/*
+            Duas colunas: a analise a esquerda, o que a operacao fez a direita.
+
+            Sao perguntas diferentes — *por que esta decisao* e *alguem ja
+            olhou isto* — e quem investiga precisa das duas na mesma tela, sem
+            rolar de uma ate a outra.
+          */}
+          <div className="detalhe">
+            <div className="detalhe__principal">
+              {consulta.data.avaliacao ? (
+                <>
+                  <h2>
+                    Por que esta transação recebeu {consulta.data.avaliacao.score}
+                  </h2>
+                  <ResumoDaAvaliacao avaliacao={consulta.data.avaliacao} />
+                  <h2>Sinais</h2>
+                  <ListaDeSinais sinais={consulta.data.avaliacao.sinais} />
+                </>
+              ) : (
+                <EstadoVazio
+                  titulo="Esta transação não tem avaliação."
+                  descricao="Ela foi registrada antes de o motor de risco existir. Avaliações não são recalculadas retroativamente: isso mudaria decisões históricas já congeladas."
+                />
+              )}
+            </div>
+
+            <aside className="detalhe__inspetor">
+              <ContextoOperacional transacao={consulta.data} />
+            </aside>
           </div>
-
-          <h2>Avaliação de risco</h2>
-
-          {consulta.data.avaliacao ? (
-            <>
-              <ResumoDaAvaliacao avaliacao={consulta.data.avaliacao} />
-              <h2>Sinais</h2>
-              <ListaDeSinais sinais={consulta.data.avaliacao.sinais} />
-            </>
-          ) : (
-            <EstadoVazio
-              titulo="Esta transação não tem avaliação."
-              descricao="Ela foi registrada antes de o motor de risco existir. Avaliações não são recalculadas retroativamente: isso mudaria decisões históricas já congeladas."
-            />
-          )}
-
-          <ContextoOperacional transacao={consulta.data} />
         </>
       ) : null}
     </section>
