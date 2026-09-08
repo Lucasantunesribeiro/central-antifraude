@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AWSProjectType>Lambda</AWSProjectType>
+
+    <!--
+      Repetido aqui de proposito, embora o Directory.Build.props ja o defina.
+      O `Amazon.Lambda.Tools`, que e quem o `sam build` chama, le o
+      TargetFramework parseando ESTE arquivo — ele nao avalia o MSBuild inteiro.
+      Sem a linha, o build falha pedindo o parametro `framework`.
+    -->
+    <TargetFramework>net10.0</TargetFramework>
+
+    <!--
+      Biblioteca de classes, e nao executavel: o handler e referenciado como
+      "Assembly::Tipo::Metodo" e quem hospeda o processo e o runtime gerenciado
+      da AWS. Por isso o projeto precisa gerar o runtimeconfig.json na saida,
+      o que num executavel viria de graca.
+    -->
+    <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+
+    <!--
+      O pacote sobe montado. Deixar a AWS resolver dependencia em tempo de
+      arranque custaria latencia no arranque frio, que e justamente o momento
+      em que ela mais aparece.
+    -->
+    <PublishReadyToRun>false</PublishReadyToRun>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      A traducao do evento do SQS tem decisoes de fallback que merecem teste, e
+      ela nao precisa ser publica para isso: o pacote de deploy nao ganha
+      superficie so para o teste alcancar um metodo.
+    -->
+    <InternalsVisibleTo Include="CentralAntifraude.UnitTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Amazon.Lambda.Core" />
+    <PackageReference Include="Amazon.Lambda.Serialization.SystemTextJson" />
+    <PackageReference Include="Amazon.Lambda.SQSEvents" />
+
+    <!-- Num Lambda nao ha appsettings: a configuracao chega por variavel. -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
+
+    <!-- Console em JSON e o que o CloudWatch indexa por propriedade. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      A infraestrutura arrasta Application e Domain junto. A composicao dos
+      workers e a MESMA da API por decisao: divergir aqui significaria um
+      worker com regra diferente da que a API aplicou.
+    -->
+    <ProjectReference Include="../CentralAntifraude.Infrastructure/CentralAntifraude.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

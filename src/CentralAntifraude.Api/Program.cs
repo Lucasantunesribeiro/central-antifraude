@@ -17,14 +17,38 @@ using CentralAntifraude.Application.Correlacao;
 using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Application.Integracoes;
 using CentralAntifraude.Infrastructure;
+using CentralAntifraude.Infrastructure.Configuracao;
 using CentralAntifraude.Infrastructure.Identidade;
 using CentralAntifraude.Infrastructure.Persistencia;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Amazon.Lambda.AspNetCoreServer.Hosting;
 using Microsoft.AspNetCore.RateLimiting;
 
 var construtor = WebApplication.CreateBuilder(args);
+
+// ---------------------------------------------------------------------------
+// Hospedagem em AWS Lambda.
+//
+// Esta linha e inerte fora do Lambda: o pacote so entra no caminho quando a
+// variavel AWS_LAMBDA_FUNCTION_NAME existe, entao `dotnet run` continua
+// subindo o Kestrel de sempre e os testes de integracao continuam usando o
+// host de teste. Uma unica composicao serve aos tres ambientes, que e o que
+// mantem "o que roda em producao e o que os testes exercitam" sendo a mesma
+// coisa.
+//
+// `HttpApi` e o formato de evento da Function URL — payload 2.0. O formato
+// `RestApi` (1.0) pertence ao API Gateway, que este projeto nao usa
+// (CLAUDE.md secao 74).
+construtor.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
+
+// Os segredos vem do SSM Parameter Store, e so quando a aplicacao esta mesmo
+// dentro de um Lambda — fora dele o metodo nao faz nada. Ver
+// `ConfiguracaoDaNuvem`: string de conexao em variavel de ambiente do Lambda
+// aparece em texto puro no console (CLAUDE.md secao 59).
+construtor.Configuration.AdicionarParametrosDaNuvem(
+    construtor.Configuration["Ambiente"] ?? "producao");
 
 // ---------------------------------------------------------------------------
 // Logs estruturados (CLAUDE.md secao 70).

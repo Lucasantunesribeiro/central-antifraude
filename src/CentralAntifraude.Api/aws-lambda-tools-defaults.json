@@ -1,0 +1,12 @@
+{
+  "_comentario": [
+    "Defaults do Amazon.Lambda.Tools, que e a ferramenta chamada por 'sam build'.",
+    "Ela nao avalia o MSBuild inteiro, entao nao enxerga o TargetFramework que",
+    "vem do Directory.Build.props — sem 'framework' aqui, o build para antes de",
+    "comecar. Nada neste arquivo aponta para conta, regiao ou credencial: o",
+    "deploy e feito pelo template do SAM, e nao por esta ferramenta."
+  ],
+  "framework": "net10.0",
+  "function-architecture": "arm64",
+  "configuration": "Release"
+}

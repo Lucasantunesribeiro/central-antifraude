@@ -1,6 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
+    <!--
+      Repetido aqui de proposito, embora o Directory.Build.props ja o defina.
+      O `Amazon.Lambda.Tools`, que e quem o `sam build` chama, le o
+      TargetFramework parseando ESTE arquivo — ele nao avalia o MSBuild inteiro.
+      Sem a linha, o build falha pedindo o parametro `framework`.
+    -->
+    <TargetFramework>net10.0</TargetFramework>
+
     <RootNamespace>CentralAntifraude.Api</RootNamespace>
     <UserSecretsId>central-antifraude-api</UserSecretsId>
   </PropertyGroup>
@@ -11,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Amazon.Lambda.AspNetCoreServer.Hosting" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
   </ItemGroup>

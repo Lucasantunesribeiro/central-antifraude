@@ -4,6 +4,7 @@
     <Project Path="src/CentralAntifraude.Application/CentralAntifraude.Application.csproj" />
     <Project Path="src/CentralAntifraude.Domain/CentralAntifraude.Domain.csproj" />
     <Project Path="src/CentralAntifraude.Infrastructure/CentralAntifraude.Infrastructure.csproj" />
+    <Project Path="src/CentralAntifraude.Lambdas/CentralAntifraude.Lambdas.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/CentralAntifraude.ArchitectureTests/CentralAntifraude.ArchitectureTests.csproj" />
