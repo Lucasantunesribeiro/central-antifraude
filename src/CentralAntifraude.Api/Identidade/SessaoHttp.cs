@@ -67,7 +67,13 @@ public static class SessaoHttp
         contexto.Response.Cookies.Delete(NomeDoCookie, opcoes);
     }
 
-    private static CookieOptions MontarOpcoes(HttpContext contexto, DateTimeOffset expiraEm)
+    /// <summary>
+    /// Interna, e nao privada, para que um teste possa afirmar a decisao mais
+    /// delicada deste arquivo: `SameSite` em conexao segura. Essa escolha so se
+    /// manifesta num deploy cross-site real, longe do alcance dos testes de
+    /// integracao que rodam em HTTP.
+    /// </summary>
+    internal static CookieOptions MontarOpcoes(HttpContext contexto, DateTimeOffset expiraEm)
     {
         var conexaoSegura = contexto.Request.IsHttps;
 
@@ -82,12 +88,29 @@ public static class SessaoHttp
             // erro nenhum. Em qualquer conexao HTTPS o cookie e Secure.
             Secure = conexaoSegura,
 
-            // Lax basta enquanto frontend e API compartilham origem (o proxy
-            // do `vite dev`). O deploy cross-site planejado — Vercel + Lambda,
-            // Fase 14 — vai exigir SameSite=None com CORS credenciado, e essa
-            // decisao pertence a Fase 11, junto do resto do desenho de browser
-            // security. A defesa de CSRF abaixo vale nos dois modelos.
-            SameSite = SameSiteMode.Lax,
+            // O ponto mais sutil de todo o desenho de sessao, e o que so
+            // apareceu no deploy real.
+            //
+            // Em desenvolvimento, frontend e API compartilham origem pelo proxy
+            // do `vite dev`, e `Lax` basta. Em producao eles estao em SITES
+            // DIFERENTES — o front em `vercel.app`, a API numa Function URL em
+            // `on.aws` —, e o navegador NAO envia um cookie `Lax` numa
+            // requisicao `fetch` cross-site. O efeito: o login funciona na
+            // sessao corrente (o access token fica em memoria), mas o `refresh`
+            // que o app dispara ao montar nao recebe o cookie, e um F5 desloga.
+            //
+            // `None` e o unico valor que faz o cookie viajar cross-site, e ele
+            // EXIGE `Secure` — por isso a escolha e amarrada a conexao segura.
+            // Em HTTP local, `None` sem `Secure` seria descartado em silencio,
+            // entao ali continua `Lax`.
+            //
+            // `None` abre a porta que `Lax` fechava contra CSRF. Quem a fecha de
+            // volta e a verificacao de `Origin` em `OrigemEhConfiavel`, logo
+            // abaixo — e e por isso que o comentario dela diz que vale "nos dois
+            // modelos". O desenho cross-site nao afrouxa a seguranca; ele move a
+            // defesa do cookie para o cabecalho, que e onde ela precisa estar
+            // quando o cookie tem de cruzar sites.
+            SameSite = conexaoSegura ? SameSiteMode.None : SameSiteMode.Lax,
 
             Path = CaminhoDaSessao,
             Expires = expiraEm,

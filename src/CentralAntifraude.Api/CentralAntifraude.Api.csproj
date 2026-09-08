@@ -14,6 +14,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- O teste do desenho de cookie de sessao (SameSite em cross-site) alcanca
+         MontarOpcoes sem torna-lo publico: a superficie do pacote nao cresce
+         para um detalhe que so um teste precisa ver. -->
+    <InternalsVisibleTo Include="CentralAntifraude.UnitTests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\CentralAntifraude.Application\CentralAntifraude.Application.csproj" />
     <ProjectReference Include="..\CentralAntifraude.Infrastructure\CentralAntifraude.Infrastructure.csproj" />
   </ItemGroup>
