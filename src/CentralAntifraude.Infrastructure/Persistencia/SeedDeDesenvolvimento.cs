@@ -26,8 +26,9 @@ namespace CentralAntifraude.Infrastructure.Persistencia;
 /// 3. **E idempotente.** Rodar de novo nao duplica nem sobrescreve senha de
 ///    usuario existente.
 ///
-/// O seed narrativo da demonstracao — com historias de fraude — e a Fase 13.
-/// Este aqui existe apenas para que haja com quem entrar no sistema.
+/// A partir da Fase 13 ele tambem chama o <see cref="SeedNarrativo"/>, que
+/// cria as historias da demonstracao. A ordem importa: nao ha como abrir um
+/// caso sem um analista a quem atribui-lo.
 /// </summary>
 public static partial class SeedDeDesenvolvimento
 {
@@ -92,6 +93,7 @@ public static partial class SeedDeDesenvolvimento
         }
 
         var criados = 0;
+        var identidades = new Dictionary<PerfilDeUsuario, (Guid Id, string Nome)>();
 
         foreach (var (email, nome, perfil) in Usuarios)
         {
@@ -99,22 +101,26 @@ public static partial class SeedDeDesenvolvimento
 
             // Ignora o filtro de tenant: o seed roda fora de uma requisicao,
             // entao nao ha identidade e o filtro devolveria vazio para tudo.
-            var jaExiste = await contexto.Usuarios
+            var existente = await contexto.Usuarios
                 .IgnoreQueryFilters([CentralAntifraudeDbContext.FiltroDeTenant])
-                .AnyAsync(u => u.Email == enderecoNormalizado, cancellationToken);
+                .FirstOrDefaultAsync(u => u.Email == enderecoNormalizado, cancellationToken);
 
-            if (jaExiste)
+            if (existente is not null)
             {
+                identidades[perfil] = (existente.Id, existente.NomeCompleto);
                 continue;
             }
 
-            contexto.Usuarios.Add(Usuario.Criar(
+            var usuario = Usuario.Criar(
                 organizacao.Id,
                 enderecoNormalizado,
                 nome,
                 hash.Gerar(senha),
                 perfil,
-                agora));
+                agora);
+
+            contexto.Usuarios.Add(usuario);
+            identidades[perfil] = (usuario.Id, usuario.NomeCompleto);
 
             criados++;
         }
@@ -126,7 +132,29 @@ public static partial class SeedDeDesenvolvimento
             // A senha nao entra no log. Quem rodou o seed a definiu e ja a tem.
             RegistrarUsuariosCriados(log, criados);
         }
+
+        // As historias da demonstracao. Idempotente por conta propria, entao
+        // roda sempre: uma base criada antes da Fase 13 ganha a narrativa na
+        // primeira subida depois dela.
+        var transacoes = await SeedNarrativo.ExecutarAsync(
+            contexto,
+            organizacao.Id,
+            identidades,
+            provedor.GetRequiredService<MotorDeRisco>(),
+            agora,
+            cancellationToken);
+
+        if (transacoes > 0)
+        {
+            RegistrarNarrativaCriada(log, transacoes);
+        }
     }
+
+    [LoggerMessage(
+        EventId = 104,
+        Level = LogLevel.Information,
+        Message = "Seed narrativo: {Transacoes} transacoes de demonstracao criadas.")]
+    private static partial void RegistrarNarrativaCriada(ILogger logger, int transacoes);
 
     [LoggerMessage(
         EventId = 100,
