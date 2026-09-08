@@ -3,25 +3,50 @@ import { LimiteDeErro } from '../componentes/LimiteDeErro';
 import { ROTULO_DO_PERFIL, type PerfilDeUsuario } from '../api/tipos';
 import { useSessao } from '../sessao/contextoDeSessao';
 
-/** Itens de navegacao e quais perfis os enxergam. */
-const NAVEGACAO: readonly {
+/** Um item de navegacao e quais perfis o enxergam. */
+type ItemDeNavegacao = {
   para: string;
   rotulo: string;
   perfis?: readonly PerfilDeUsuario[];
-}[] = [
-  { para: '/painel', rotulo: 'Painel' },
-  { para: '/alertas', rotulo: 'Alertas' },
-  { para: '/casos', rotulo: 'Casos' },
-  { para: '/transacoes', rotulo: 'Transações' },
-  { para: '/regras', rotulo: 'Regras' },
+};
+
+/**
+ * A navegacao agrupada por FUNCAO, e nao por ordem de construcao.
+ *
+ * Dez telas numa fila horizontal viravam uma lista sem hierarquia: nada
+ * separava "trabalhar a fila do dia" de "publicar uma versao de regra". Os
+ * tres grupos abaixo sao a divisao real do produto, e sao tambem a ordem em
+ * que um analista percorre o trabalho.
+ */
+const GRUPOS: readonly { titulo: string; itens: readonly ItemDeNavegacao[] }[] = [
   {
-    para: '/backtests',
-    rotulo: 'Backtests',
-    perfis: ['Administrador', 'SupervisorDeFraude'],
+    titulo: 'Operação',
+    itens: [
+      { para: '/painel', rotulo: 'Painel' },
+      { para: '/alertas', rotulo: 'Alertas' },
+      { para: '/casos', rotulo: 'Casos' },
+      { para: '/transacoes', rotulo: 'Transações' },
+    ],
   },
-  { para: '/auditoria', rotulo: 'Auditoria', perfis: ['Administrador', 'Auditor'] },
-  { para: '/integracoes', rotulo: 'Integrações', perfis: ['Administrador'] },
-  { para: '/usuarios', rotulo: 'Usuários', perfis: ['Administrador'] },
+  {
+    titulo: 'Risco',
+    itens: [
+      { para: '/regras', rotulo: 'Regras' },
+      {
+        para: '/backtests',
+        rotulo: 'Backtests',
+        perfis: ['Administrador', 'SupervisorDeFraude'],
+      },
+    ],
+  },
+  {
+    titulo: 'Governança',
+    itens: [
+      { para: '/auditoria', rotulo: 'Auditoria', perfis: ['Administrador', 'Auditor'] },
+      { para: '/integracoes', rotulo: 'Integrações', perfis: ['Administrador'] },
+      { para: '/usuarios', rotulo: 'Usuários', perfis: ['Administrador'] },
+    ],
+  },
 ];
 
 /**
@@ -37,10 +62,13 @@ export function LayoutDoApp() {
   const sessao = useSessao();
   const navegar = useNavigate();
 
-  const itensVisiveis = sessao.autenticado
-    ? NAVEGACAO.filter(
-        (item) => !item.perfis || item.perfis.includes(sessao.usuario!.perfil),
-      )
+  const gruposVisiveis = sessao.autenticado
+    ? GRUPOS.map((grupo) => ({
+        ...grupo,
+        itens: grupo.itens.filter(
+          (item) => !item.perfis || item.perfis.includes(sessao.usuario!.perfil),
+        ),
+      })).filter((grupo) => grupo.itens.length > 0)
     : [];
 
   async function sair() {
@@ -53,17 +81,35 @@ export function LayoutDoApp() {
       <header className="app__cabecalho">
         <div className="app__marca">
           <span className="app__marca-nome">Central Antifraude</span>
+          <span className="app__marca-ambiente">Console operacional</span>
         </div>
 
-        <nav className="app__navegacao" aria-label="Navegacao principal">
-          <NavLink to="/" end>
-            Inicio
-          </NavLink>
-          {itensVisiveis.map((item) => (
-            <NavLink key={item.para} to={item.para}>
-              {item.rotulo}
-            </NavLink>
+        <nav className="app__navegacao" aria-label="Navegação principal">
+          {gruposVisiveis.map((grupo) => (
+            <div className="app__grupo" key={grupo.titulo}>
+              {/*
+                O titulo do grupo e apresentacao, e nao um destino: um leitor de
+                tela ja anuncia "navegação principal" pela regiao, e repetir a
+                estrutura como cabecalho so alongaria a travessia.
+              */}
+              <span className="app__grupo-titulo" aria-hidden="true">
+                {grupo.titulo}
+              </span>
+              {grupo.itens.map((item) => (
+                <NavLink key={item.para} to={item.para}>
+                  {item.rotulo}
+                </NavLink>
+              ))}
+            </div>
           ))}
+
+          {!sessao.autenticado ? (
+            <div className="app__grupo">
+              <NavLink to="/" end>
+                Início
+              </NavLink>
+            </div>
+          ) : null}
         </nav>
 
         <div className="app__sessao">

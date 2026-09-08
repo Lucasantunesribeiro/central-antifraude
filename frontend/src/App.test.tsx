@@ -63,7 +63,7 @@ describe('App', () => {
       screen.getByRole('heading', { name: 'Central Antifraude', level: 1 }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('navigation', { name: 'Navegacao principal' }),
+      screen.getByRole('navigation', { name: 'Navegação principal' }),
     ).toBeInTheDocument();
 
     // Sem sessao, o menu nao mostra area autenticada - so o convite a entrar.
