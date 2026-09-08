@@ -3912,9 +3912,11 @@ Todos passaram por template válido, lint limpo, 1.073 testes verdes e stack
    configurada, o CORS do backend já aponta para
    `https://central-antifraude.vercel.app`, e o `vercel.json` está pronto.
    Falta um comando.
-2. **Cold start de longo prazo não medido.** A varredura de quinze minutos acorda
-   o banco, então a janela suspensa dura no máximo dez minutos por ciclo — o que
-   confirma o cálculo, mas impede medir o pior caso (dias sem acesso).
+2. **Cold start de longo prazo não medido.** O medido está documentado —
+   2,74 s para a função fria, 4,02 s incluindo o despertar do Neon, 0,50–0,78 s
+   quente. O que não dá para medir é o pior caso absoluto: a varredura de quinze
+   minutos acorda o banco, então a janela suspensa dura no máximo dez minutos por
+   ciclo.
 3. **`ssm:DescribeParameters` com `Resource: "*"`** na política gerada pelo SAM. A
    ação lista nomes e não lê valores, e a API do SSM não aceita recurso
    específico para ela. Registrado como concessão da política gerenciada.

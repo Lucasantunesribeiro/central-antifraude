@@ -331,9 +331,38 @@ sobem com o uso. As quatro reservas somavam exatamente 10, e a AWS exige deixar
 10 não reservados. O efeito de removê-las é melhor do que o plano original: o
 limite da conta já é um teto, e é global.
 
-### 9.4 O que continua não medido
+### 9.4 Cold start, medido
 
-- Cold start em condição realmente fria de longo prazo (dias sem acesso).
+A incerteza que a seção 6 nomeava como "a maior desta fase" tem número. Medição
+feita doze minutos depois da última varredura — dentro da janela em que o Neon
+está suspenso — sem tocar em nada nesse intervalo:
+
+| Chamada | Tempo | O que inclui |
+|---|---|---|
+| `/health/live` (1ª) | **2,74 s** | arranque frio do .NET 10 em `arm64`, sem banco |
+| `/health/ready` (1ª) | **4,02 s** | o mesmo, mais despertar do Neon e conexão |
+| `/health/ready` (2ª em diante) | **0,50–0,78 s** | tudo quente |
+
+A separação entre os dois health checks foi desenhada para isto: `live` não abre
+conexão, então a diferença de **~1,3 s** entre eles é o custo de acordar o banco,
+isolado do custo de acordar a função.
+
+**Cinco vezes mais lento na primeira visita, e é o caso comum numa demonstração**
+— ninguém abre o sistema por dias, e então alguém clica no link. Quatro segundos
+é aceitável para isso; a alternativa seria `ProvisionedConcurrency`, que cobra
+por hora, sempre, e destruiria a meta de custo para resolver um problema que
+aparece uma vez por visita.
+
+Um detalhe que a medição custou a produzir: **a varredura de quinze minutos
+acorda o banco**, então a janela suspensa dura no máximo dez minutos por ciclo.
+É a confirmação prática do cálculo da seção 4 — o banco fica acordado cerca de um
+terço do tempo — e foi o que tornou a medição trabalhosa, porque qualquer
+chamada nossa reiniciava o contador.
+
+### 9.5 O que continua não medido
+
+- Cold start após dias sem acesso: a varredura impede que isso ocorra em
+  produção, mas também impede medir o pior caso absoluto.
 - Comportamento sob carga: o envelope de portfólio nunca foi exercido de perto.
 - Custo ao longo de um mês inteiro — o deploy tem horas de vida.
 
