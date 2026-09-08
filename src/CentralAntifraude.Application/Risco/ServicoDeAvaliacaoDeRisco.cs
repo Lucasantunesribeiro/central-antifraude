@@ -1,4 +1,7 @@
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using CentralAntifraude.Application.Erros;
+using CentralAntifraude.Application.Observabilidade;
 using CentralAntifraude.Domain.Risco;
 using CentralAntifraude.Domain.Tempo;
 using CentralAntifraude.Domain.Transacoes;
@@ -21,6 +24,30 @@ namespace CentralAntifraude.Application.Risco;
 /// </summary>
 public sealed class ServicoDeAvaliacaoDeRisco
 {
+    private static readonly Meter Medidor = new(Telemetria.MedidorDeRisco);
+
+    /// <summary>Quantas avaliacoes o motor produziu. Sem dimensao nenhuma.</summary>
+    private static readonly Counter<long> Avaliacoes =
+        Medidor.CreateCounter<long>(Telemetria.Instrumentos.AvaliacoesTotal);
+
+    /// <summary>
+    /// Quanto tempo a avaliacao levou — contexto historico incluido.
+    ///
+    /// Este e o numero do caminho critico: e ele que o integrador espera na
+    /// propria requisicao. Medido com <see cref="Stopwatch"/>, e nao com o
+    /// relogio do dominio: duracao pede um relogio monotonico, que nao anda
+    /// para tras quando o sistema operacional ajusta a hora.
+    /// </summary>
+    private static readonly Histogram<double> Duracao =
+        Medidor.CreateHistogram<double>(Telemetria.Instrumentos.AvaliacaoDuracao);
+
+    /// <summary>
+    /// Decisoes por categoria. Tres valores possiveis, entao serve como
+    /// dimensao — e e a serie que responde "o perfil novo mudou o mix?".
+    /// </summary>
+    private static readonly Counter<long> Decisoes =
+        Medidor.CreateCounter<long>(Telemetria.Instrumentos.DecisoesTotal);
+
     private readonly IRepositorioDeRisco _risco;
     private readonly IProvedorDeContextoDeRisco _contexto;
     private readonly MotorDeRisco _motor;
@@ -48,6 +75,8 @@ public sealed class ServicoDeAvaliacaoDeRisco
     {
         ArgumentNullException.ThrowIfNull(transacao);
 
+        var inicio = Stopwatch.GetTimestamp();
+
         var versaoDoPerfil = await _risco.BuscarVersaoAtivaDoPerfilAsync(cancellationToken)
             ?? throw new PerfilDeRiscoAusente();
 
@@ -56,6 +85,19 @@ public sealed class ServicoDeAvaliacaoDeRisco
         var avaliacao = _motor.Avaliar(transacao, versaoDoPerfil, contexto, _relogio.Agora);
 
         _risco.AdicionarAvaliacao(avaliacao);
+
+        // A medicao cobre a carga do contexto, e nao so a execucao das regras.
+        // O motor e uma funcao pura e rapida; o que cresce com o historico do
+        // cliente e a consulta que alimenta ele. Medir so a parte pura daria um
+        // numero bonito e inutil.
+        //
+        // Uma falha antes daqui — perfil ausente, banco fora — nao entra na
+        // distribuicao. Latencia de erro misturada com latencia de sucesso
+        // produz o pior tipo de percentil: o que melhora quando o sistema
+        // quebra rapido.
+        Duracao.Record(Stopwatch.GetElapsedTime(inicio).TotalMilliseconds);
+        Avaliacoes.Add(1);
+        Decisoes.Add(1, new KeyValuePair<string, object?>("decisao", avaliacao.Decisao.ToString()));
 
         return avaliacao;
     }

@@ -9,6 +9,7 @@ using CentralAntifraude.Api.Erros;
 using CentralAntifraude.Api.Identidade;
 using CentralAntifraude.Api.Integracoes;
 using CentralAntifraude.Api.Investigacao;
+using CentralAntifraude.Api.Observabilidade;
 using CentralAntifraude.Api.Operacao;
 using CentralAntifraude.Api.Seguranca;
 using CentralAntifraude.Api.Risco;
@@ -97,13 +98,6 @@ construtor.Services.AddProblemDetails(opcoes =>
     };
 });
 construtor.Services.AddExceptionHandler<TratadorDeExcecoes>();
-
-// ---------------------------------------------------------------------------
-// Correlacao por requisicao.
-// ---------------------------------------------------------------------------
-construtor.Services.AddScoped<ContextoDeCorrelacao>();
-construtor.Services.AddScoped<IContextoDeCorrelacao>(
-    provedor => provedor.GetRequiredService<ContextoDeCorrelacao>());
 
 // ---------------------------------------------------------------------------
 // Infraestrutura: PostgreSQL, relogio e health check de banco.
@@ -282,6 +276,13 @@ if (aplicacao.Environment.IsDevelopment())
 // antes. Invertida, a linha de log da falha sairia sem CorrelationId - que e
 // justamente a linha que alguem vai procurar durante um incidente.
 aplicacao.UseMiddleware<MiddlewareDeCorrelacao>();
+
+// Dentro do escopo da correlacao e por fora de todo o resto: a linha que
+// registra "esta operacao respondeu isto em tanto tempo" precisa sair mesmo
+// quando a requisicao termina em excecao, e precisa medir o tempo que o
+// cliente esperou de verdade — o que inclui autenticacao, limite de tentativas
+// e a escrita da resposta de erro.
+aplicacao.UseMiddleware<MiddlewareDeTelemetria>();
 
 // Logo depois da correlacao e antes de tudo o mais: os cabecalhos precisam
 // valer inclusive nas respostas de erro, que sao escritas por um middleware

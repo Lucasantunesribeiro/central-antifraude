@@ -1,3 +1,4 @@
+using CentralAntifraude.Application.Correlacao;
 using CentralAntifraude.Domain.Primitivos;
 
 namespace CentralAntifraude.Api.Correlacao;
@@ -27,7 +28,7 @@ public sealed class MiddlewareDeCorrelacao
         _log = log;
     }
 
-    public async Task InvokeAsync(HttpContext contexto, ContextoDeCorrelacao correlacao)
+    public async Task InvokeAsync(HttpContext contexto, ContextoDeCorrelacaoMutavel correlacao)
     {
         ArgumentNullException.ThrowIfNull(contexto);
         ArgumentNullException.ThrowIfNull(correlacao);
