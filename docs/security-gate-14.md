@@ -236,7 +236,50 @@ e a décima devolveu **429**.
 HTTPS, e HSTS é instrução para o navegador sobre um *site*. Quem serve HTML é a
 Vercel, e é lá que ele está declarado.
 
-### 9.4 IAM efetivo
+### 9.4 Sessão, rotação e CSRF, na aplicação publicada
+
+O ciclo inteiro, exercitado contra a API real com um cookie jar — que é como o
+navegador se comporta:
+
+| Passo | Esperado | Obtido |
+|---|---|---|
+| Login | 200 + cookie `secure; httponly; samesite=lax; path=/api/auth` | **200** |
+| Refresh | 200 com access token **novo** | **200**, token diferente |
+| O cookie rotacionou | valor diferente do anterior | **sim** |
+| Reuso do cookie **antigo** | 401 | **401 `sessao_invalida`** |
+| O cookie **novo** depois do reuso | 401 — a família inteira cai | **401** |
+| Refresh **sem** `Origin` | recusa | **401** |
+| Refresh com `Origin` de outro site | recusa | **403** |
+| Logout | 204 | **204** |
+| Refresh **depois** do logout | 401 | **401** |
+| Cookie após o logout | apagado | **apagado** |
+
+A quinta linha é a que vale mais: detectar reuso e derrubar **toda a família** de
+tokens é o que transforma um refresh vazado num incidente que termina, em vez de
+num acesso permanente. Funciona em produção.
+
+A sétima linha é a defesa de CSRF da Fase 11: o cookie é `SameSite=Lax`, mas a
+verificação de `Origin` é a segunda tranca — e ela responde 403, não 401, porque
+a credencial era válida e o que faltou foi procedência.
+
+### 9.5 No navegador de verdade
+
+Página aberta em `https://central-antifraude.vercel.app`:
+
+- a aplicação chamou `/health/ready` na Function URL e renderizou
+  **"API: Operacional"** e **"postgresql: Operacional"** — o CORS funciona do
+  navegador, que é onde o header duplicado teria quebrado;
+- a CSP permitiu a chamada (`connect-src` inclui `*.lambda-url.us-east-1.on.aws`);
+- console sem erro de CORS, CSP ou rede;
+- `/alertas` por URL direta devolveu 200 (rewrite de SPA) e **redirecionou para
+  `/entrar`** por não haver sessão;
+- os cinco cabeçalhos de segurança chegaram ao navegador.
+
+**O que não foi exercido na interface:** o preenchimento do formulário de login e
+o F5 subsequente. Não é limitação do produto — o ambiente deste agente proíbe
+inserir senha em campo, e a verificação ficou pelo mecanismo, na tabela 9.4.
+
+### 9.6 IAM efetivo
 
 Políticas geradas pelo SAM, lidas da role real da API:
 
@@ -253,14 +296,14 @@ registrada como o que é: uma concessão da política gerenciada, não uma decis
 Receber e apagar mensagem não aparecem em política nenhuma: vêm do gatilho de
 SQS, que o SAM anexa à role da função que consome aquela fila.
 
-### 9.5 Superfície pública
+### 9.7 Superfície pública
 
 Um único endpoint alcançável da internet: a Function URL da API, com
 `AuthType: NONE` — deliberado, porque a autenticação é da aplicação. As quatro
 filas, as três funções de trabalho e os parâmetros do SSM não têm endpoint
 público. Os três parâmetros são `SecureString` com `alias/aws/ssm`.
 
-### 9.6 O defeito de segurança que o deploy revelou
+### 9.8 O defeito de segurança que o deploy revelou
 
 O CORS estava declarado em **dois** lugares — Function URL e aplicação — e a
 resposta simples voltava com `Access-Control-Allow-Origin` duplicado. Navegador
@@ -283,9 +326,9 @@ Nomeado para não ser confundido com cobertura:
 - **Não houve pentest.** É a Fase 15, e nada aqui substitui um.
 - **Não houve teste de carga.** O rate limiting foi verificado num caminho; o
   comportamento sob volume não.
-- **O CORS não foi validado num navegador de verdade** — foi validado no
-  protocolo, contando cabeçalhos. É melhor do que a rodada anterior, que apenas
-  presumia, e ainda assim é menos do que abrir a página.
+- **O formulário de login não foi preenchido na interface.** O mecanismo de
+  sessão foi verificado ponta a ponta (tabela 9.4) e o CORS foi verificado no
+  navegador, mas ninguém clicou em "Entrar" e apertou F5.
 - **Isolamento entre tenants foi testado com um tenant só.** O 404 no recurso
   alheio prova o comportamento, mas a demo tem uma organização apenas; a
   cobertura multi-tenant de verdade continua sendo a da suíte de integração.

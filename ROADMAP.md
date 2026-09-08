@@ -3853,7 +3853,7 @@ Configurar:
 - [x] Secrets fora do código, no Parameter Store como `SecureString`.
 - [x] Budget/alerta configurado — `central-antifraude-meta-zero`, US$ 1,00/mês.
 - [x] Produção deployada com autorização explícita de 2026-09-08.
-- [ ] Browser flows validados. — *frontend não publicado: a CLI da Vercel perdeu a sessão na atualização e o login é interativo*
+- [x] Browser flows validados — CORS, CSP, rewrite de SPA e proteção de rota no navegador; sessão, rotação, reuso, CSRF e logout pelo mecanismo. Ver débito 1.
 - [x] Async flows validados em AWS — Outbox, SQS, worker, DLQ e scheduler.
 - [x] Runtime real reproduzido em testes quando necessário.
 - [x] Custo esperado dentro da meta — nenhuma linha nova de custo.
@@ -3875,7 +3875,7 @@ release.
 | Migrations | 11 aplicadas; 26 tabelas conferidas |
 | AWS | stack `central-antifraude-producao`, 26 recursos, nenhum de custo fixo |
 | API | `https://45xjudga7f5htauszrnldapspe0ceavu.lambda-url.us-east-1.on.aws/` |
-| Frontend | **não publicado** — ver débito 1 |
+| Frontend | `https://central-antifraude.vercel.app` |
 
 ### O que foi provado no ambiente real
 
@@ -3888,7 +3888,9 @@ release.
 | Backtest | fila e função próprias; 34 analisadas, 2 mudanças; produção intacta |
 | DLQ | mensagem recusada foi reentregue 5× e chegou à DLQ em ~150 s; removida depois |
 | **Recovery pelo scheduler** | evento órfão pendente às 18:57 publicado às **19:08:33**, dentro da janela de 15 min |
-| Segurança | 401/403/404 corretos; token adulterado 401; rate limit 429 na 10ª tentativa; logs sem segredo |
+| Segurança | 401/403/404 corretos; token adulterado 401; rate limit 429 na 10ª; logs sem segredo |
+| Sessão | login 200 → refresh rotaciona → reuso do antigo 401 e **derruba a família** → sem `Origin` 401, `Origin` alheio 403 → logout 204 e refresh seguinte 401 |
+| Navegador | a página chamou a Function URL e renderizou "API: Operacional"; CSP permitiu; console limpo; `/alertas` direto redirecionou para `/entrar` |
 | Custo | nenhuma linha nova; budget de US$ 1,00 com alertas |
 
 ### Os cinco defeitos que só a nuvem revelou
@@ -3905,13 +3907,12 @@ Todos passaram por template válido, lint limpo, 1.073 testes verdes e stack
 
 ### Débito técnico não bloqueante
 
-1. **Frontend não publicado.** A CLI da Vercel instalada (46.0.2) já não consegue
-   fazer deploy — o endpoint exige 47.2.2+ — e a atualização para a 59 descartou
-   a sessão, porque o formato de credencial mudou. `vercel login` é interativo e
-   depende do usuário. O projeto está criado, a variável `VITE_API_BASE_URL`
-   configurada, o CORS do backend já aponta para
-   `https://central-antifraude.vercel.app`, e o `vercel.json` está pronto.
-   Falta um comando.
+1. **O formulário de login não foi preenchido na interface.** Todo o mecanismo
+   de sessão foi verificado contra a API real — login, rotação de refresh,
+   detecção de reuso derrubando a família, `Origin` ausente e alheio, logout — e
+   o CORS foi verificado no navegador. O que ninguém fez foi digitar a senha e
+   apertar F5: o ambiente deste agente proíbe inserir senha em campo. É a única
+   verificação da fase feita por caminho indireto.
 2. **Cold start de longo prazo não medido.** O medido está documentado —
    2,74 s para a função fria, 4,02 s incluindo o despertar do Neon, 0,50–0,78 s
    quente. O que não dá para medir é o pior caso absoluto: a varredura de quinze
@@ -4474,7 +4475,7 @@ A autorização de uma fase não autoriza automaticamente a fase seguinte.
 | 11 — Segurança Aplicacional | ✅ Concluída (2026-09-07) |
 | 12 — Observabilidade, Resiliência e Performance | ✅ Concluída (2026-09-07) |
 | 13 — Demo e UX Final | ✅ Concluída (2026-09-08) |
-| 14 — Infraestrutura e Deploy | 🟨 Implantada em 2026-09-08; falta publicar o frontend na Vercel |
+| 14 — Infraestrutura e Deploy | ✅ Concluída (2026-09-08) |
 | 15 — Validação Final e Release | ⬜ Não iniciada |
 
 Legenda:
