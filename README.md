@@ -81,6 +81,12 @@ esperado de **US$ 0,00** para uso de portfólio. Ver [Demonstração ao vivo](#d
 
 ## Demonstração ao vivo
 
+### Demonstração em 24 segundos
+
+
+https://github.com/user-attachments/assets/9afe53b9-7b4a-4c3c-8f45-e6d966042673
+
+
 Capturas do ambiente publicado, como Analista de Fraude — a galeria completa em
 [`docs/screenshots/`](docs/screenshots/):
 
