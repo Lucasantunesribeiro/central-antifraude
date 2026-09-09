@@ -58,6 +58,7 @@ public sealed class MatrizDeAutorizacaoTests : IAsyncLifetime
         ["* /health/live"] = Anonima,
         ["* /health/ready"] = Anonima,
         ["POST /api/auth/login"] = Anonima,
+        ["POST /api/auth/demo"] = Anonima,
         ["POST /api/auth/refresh"] = Anonima,
         ["POST /api/auth/logout"] = Anonima,
 
@@ -230,6 +231,7 @@ public sealed class MatrizDeAutorizacaoTests : IAsyncLifetime
             [
                 "* /health/live",
                 "* /health/ready",
+                "POST /api/auth/demo",
                 "POST /api/auth/login",
                 "POST /api/auth/logout",
                 "POST /api/auth/refresh",

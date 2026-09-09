@@ -123,6 +123,18 @@ export function ProvedorDeSessao({ children }: { children: ReactNode }) {
     [aplicarSessao, renovar],
   );
 
+  const entrarComoDemo = useCallback(async () => {
+    // Sem corpo: quem escolhe o usuario de demonstracao e o servidor, e nao o
+    // cliente. Se o cliente mandasse o e-mail, um botao de demo viraria um jeito
+    // de entrar como qualquer conta cujo e-mail se conheca.
+    const sessao = await requisitar<RespostaDeSessao>('/api/auth/demo', {
+      metodo: 'POST',
+      semAutenticacao: true,
+    });
+
+    aplicarSessao(sessao, () => void renovar());
+  }, [aplicarSessao, renovar]);
+
   const sair = useCallback(async () => {
     try {
       await requisitar<void>('/api/auth/logout', {
@@ -144,9 +156,10 @@ export function ProvedorDeSessao({ children }: { children: ReactNode }) {
       carregando,
       autenticado: usuario !== null,
       entrar,
+      entrarComoDemo,
       sair,
     }),
-    [usuario, carregando, entrar, sair],
+    [usuario, carregando, entrar, entrarComoDemo, sair],
   );
 
   return <ContextoDeSessao value={valor}>{children}</ContextoDeSessao>;

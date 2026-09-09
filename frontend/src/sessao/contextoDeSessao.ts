@@ -14,6 +14,13 @@ export interface Sessao {
   carregando: boolean;
   autenticado: boolean;
   entrar: (email: string, senha: string) => Promise<void>;
+  /**
+   * Entra na conta de demonstracao sem senha.
+   *
+   * O backend so aceita quando o ambiente marca a demo como aberta; e o
+   * caminho que deixa qualquer visitante conhecer o produto sem credencial.
+   */
+  entrarComoDemo: () => Promise<void>;
   sair: () => Promise<void>;
 }
 

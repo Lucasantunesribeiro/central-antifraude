@@ -1,0 +1,8 @@
+# Falsos positivos revisados manualmente. Uma entrada por linha, formato
+# caminho:tipo (minusculo). O trecho e o que a varredura casou, nao um segredo.
+#
+# ServicoDeAutenticacao: linhas de atribuicao de CAMPO no construtor
+# (_hashDeSenha = hashDeSenha; _emissorDeAccessToken = ...). A varredura casa a
+# substring "senha"/"token de acesso" no NOME do campo, nao um valor.
+src/centralantifraude.application/identidade/servicodeautenticacao.cs:senha
+src/centralantifraude.application/identidade/servicodeautenticacao.cs:token de acesso

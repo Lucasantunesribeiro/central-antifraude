@@ -15,6 +15,7 @@ public enum OperacaoAuditada
     LoginRecusado = 2,
     Logout = 3,
     ReusoDeRefreshTokenDetectado = 4,
+    LoginDeDemonstracao = 11,
     UsuarioCriado = 5,
     UsuarioAlterado = 6,
     PerfilDeUsuarioAlterado = 7,

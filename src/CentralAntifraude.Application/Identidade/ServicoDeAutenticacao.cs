@@ -201,6 +201,80 @@ public sealed class ServicoDeAutenticacao
         return MontarSessao(usuario, token.Bruto, agora);
     }
 
+    /// <summary>
+    /// Entra na conta de demonstracao sem senha.
+    ///
+    /// **Nao e um atalho do login — e um caminho proprio, com uma trava.** Ele
+    /// so funciona quando o ambiente marca <see cref="OpcoesDeAutenticacao.DemoHabilitado"/>;
+    /// numa instalacao real esse campo e `false` e este metodo responde como se
+    /// o recurso nao existisse, sem revelar que existe um caminho de demo.
+    ///
+    /// Quem escolhe a conta e o SERVIDOR (<see cref="OpcoesDeAutenticacao.EmailDaContaDemo"/>),
+    /// e nunca o cliente. Um endpoint que recebesse o e-mail viraria uma porta
+    /// para entrar em qualquer conta cujo e-mail se conheca. E a conta e um
+    /// Analista de proposito: um visitante ve a operacao, mas nao administra.
+    ///
+    /// Fora a ausencia da senha, o fluxo e o mesmo do login: emite refresh
+    /// token, registra na auditoria e monta a sessao. A diferenca de operacao
+    /// auditada — <see cref="OperacaoAuditada.LoginDeDemonstracao"/> — deixa a
+    /// trilha distinguir um acesso de vitrine de um login de verdade.
+    /// </summary>
+    public async Task<SessaoEmitida> EntrarComoDemoAsync(CancellationToken cancellationToken)
+    {
+        if (!_opcoes.DemoHabilitado)
+        {
+            throw new RecursoNaoEncontrado("Recurso");
+        }
+
+        var agora = _relogio.Agora;
+
+        if (!Email.TentarCriar(_opcoes.EmailDaContaDemo, out var emailDemo, out _))
+        {
+            // Configuracao errada e falha do servidor, nao do visitante: um
+            // e-mail de demo malformado e problema de quem implantou.
+            throw new ConflitoDeEstado(
+                "demo_mal_configurada",
+                "A conta de demonstracao esta mal configurada.");
+        }
+
+        var usuario = await _usuarios.BuscarPorEmailIgnorandoTenantAsync(emailDemo, cancellationToken);
+
+        var organizacao = usuario is null
+            ? null
+            : await _organizacoes.BuscarPorIdAsync(usuario.OrganizacaoId, cancellationToken);
+
+        if (usuario is null || organizacao is null || !usuario.Ativo || !organizacao.Ativa)
+        {
+            // Demo habilitada mas conta ausente/inativa e, de novo, erro de
+            // implantacao — o seed narrativo nao rodou. Nao e 401: o visitante
+            // nao errou credencial nenhuma.
+            throw new ConflitoDeEstado(
+                "demo_indisponivel",
+                "A conta de demonstracao nao esta disponivel.");
+        }
+
+        var token = _protetorDeRefreshToken.Gerar();
+
+        _refreshTokens.Adicionar(RefreshToken.IniciarFamilia(
+            usuario.OrganizacaoId,
+            usuario.Id,
+            token.Hash,
+            agora,
+            _opcoes.ValidadeDoRefreshToken));
+
+        await AuditarAsync(
+            usuario.OrganizacaoId,
+            OperacaoAuditada.LoginDeDemonstracao,
+            usuario,
+            detalhe: null,
+            agora,
+            cancellationToken);
+
+        await _unidadeDeTrabalho.SalvarAsync(cancellationToken);
+
+        return MontarSessao(usuario, token.Bruto, agora);
+    }
+
     public async Task<SessaoEmitida> RenovarAsync(
         string? refreshTokenBruto,
         CancellationToken cancellationToken)

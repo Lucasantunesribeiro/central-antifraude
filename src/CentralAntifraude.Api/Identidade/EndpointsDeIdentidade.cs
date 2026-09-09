@@ -60,6 +60,39 @@ public static class EndpointsDeIdentidade
             .WithName("Login");
 
         // ------------------------------------------------------------------
+        // Acesso de demonstracao
+        // ------------------------------------------------------------------
+        grupo.MapPost("/demo", async (
+                HttpContext contexto,
+                ServicoDeAutenticacao servico,
+                OpcoesDeAutenticacao opcoes,
+                CancellationToken cancellationToken) =>
+            {
+                GarantirOrigemConfiavel(contexto, opcoes);
+
+                // Sem corpo e sem e-mail: o servidor escolhe a conta. Com a demo
+                // desligada, o servico lanca "recurso inexistente" e a resposta
+                // e 404 — o caminho nao se anuncia num ambiente que nao o quer.
+                var sessao = await servico.EntrarComoDemoAsync(cancellationToken);
+
+                SessaoHttp.EscreverCookieDeSessao(
+                    contexto,
+                    sessao.RefreshTokenBruto,
+                    sessao.RefreshTokenExpiraEm);
+
+                return Results.Ok(new RespostaDeSessao(
+                    sessao.AccessToken,
+                    sessao.AccessTokenExpiraEm,
+                    UsuarioAutenticado.De(sessao.Usuario)));
+            })
+            .AllowAnonymous()
+            // Limite mais folgado que o do login: nao ha senha a adivinhar aqui,
+            // entao o unico risco e criar sessoes demais. O teto contem abuso
+            // sem atrapalhar quem so quer ver o produto.
+            .RequireRateLimiting(LimiteDeLogin)
+            .WithName("AcessoDeDemonstracao");
+
+        // ------------------------------------------------------------------
         // Renovacao
         // ------------------------------------------------------------------
         grupo.MapPost("/refresh", async (

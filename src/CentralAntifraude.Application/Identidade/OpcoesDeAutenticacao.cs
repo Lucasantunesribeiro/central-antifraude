@@ -45,6 +45,26 @@ public sealed class OpcoesDeAutenticacao
     /// </summary>
     public string[] OrigensPermitidas { get; set; } = [];
 
+    /// <summary>
+    /// Liga o acesso de demonstracao sem senha.
+    ///
+    /// Desligado por padrao, e a decisao e deliberada: a existencia de um
+    /// caminho que entra sem credencial e uma escolha de ambiente, nao um
+    /// comportamento do produto. Numa instalacao real, isto e `false` e o
+    /// endpoint responde como se nao existisse.
+    /// </summary>
+    public bool DemoHabilitado { get; set; }
+
+    /// <summary>
+    /// A conta em que o acesso de demonstracao entra. So tem efeito com
+    /// <see cref="DemoHabilitado"/>.
+    ///
+    /// E um Analista de proposito — o perfil operacional, que ve a fila e
+    /// investiga, mas nao administra usuarios nem publica regra. Um visitante
+    /// nunca entra como Administrador.
+    /// </summary>
+    public string EmailDaContaDemo { get; set; } = "analista@demo.local";
+
     public TimeSpan ValidadeDoAccessToken => TimeSpan.FromMinutes(MinutosDoAccessToken);
 
     public TimeSpan ValidadeDoRefreshToken => TimeSpan.FromDays(DiasDoRefreshToken);

@@ -1,82 +1,80 @@
 /*
-  Sistema visual do console operacional.
+  Sistema visual do console operacional — tema CLARO.
 
-  A PALETA vem de `DESIGN.md` (o sistema gerado no Stitch) e continua intacta.
-  A ESCALA nao: ela foi refeita depois de o Lucas usar o produto e dizer que
-  estava confuso e apertado demais.
+  A direcao mudou de "console escuro de terminal" para "produto financeiro
+  claro", no estilo Stripe / Mercury / Ramp. O motivo e simples: o Lucas usou o
+  produto, achou o dark denso e sem calor, e escolheu esta direcao. Antifraude
+  e um produto de DINHEIRO, e a estetica clara e clara transmite a confianca que
+  o assunto pede.
 
-  O que a medicao mostrou, e que motivou a mudanca:
+  As tres ideias que sustentam o visual:
 
-    painel   -> 11 blocos, 1.853 caracteres de texto, ZERO acoes principais
-    alertas  -> UMA acao na tela inteira, e a linha da tabela nao clicava
-    fontes   -> 121 dos ~143 textos em 13 px ou menos
+  1. PROFUNDIDADE POR SOMBRA, e nao por tom. Num tema escuro, o que separa uma
+     superficie da outra e o tom (piso escuro, painel menos escuro). Num tema
+     claro premium, quase tudo e branco — o que separa e a SOMBRA suave e a
+     borda de 1px. E o que faz um cartao "flutuar" sobre a pagina em vez de ser
+     um retangulo colado nela.
 
-  A direcao antiga vinha do `CLAUDE.md` secao 79 ("densidade adequada"), e
-  densidade tinha virado desculpa para letra miuda e para espalhar informacao.
-  A referencia agora e outra — Stripe e Vercel: 16 px de corpo, respiro, poucos
-  blocos por tela e uma acao primaria obvia. Cabe menos linha por tela, e essa
-  e a troca aceita de proposito.
-
-  As tres ideias que o sistema carrega, e que a versao anterior nao tinha:
-
-  1. QUATRO PLANOS DE PROFUNDIDADE, e nao dois. Piso do canvas (#080b10),
-     estrutura fixa (#0d1117), painel de dados (#131822) e sobreposicao
-     (#1a2230). A profundidade vem de tom e de borda de 1px — nunca de sombra
-     difusa, que e o que faz uma interface densa parecer inchada.
-
-  2. RAIO ZERO NO QUE E ESTRUTURA. Painel, cabecalho de tabela e divisor tem
-     canto reto; so controle tem 4px. Canto arredondado em painel desperdica o
-     canto da tela e desalinha grade com grade.
+  2. CANTOS SUAVES E CONSISTENTES. Painel com 12px, controle com 8px. Canto reto
+     pertence ao visual de terminal; num produto arejado ele deixa cada bloco
+     com cara de janela de sistema antigo.
 
   3. DUAS FAMILIAS COM PAPEIS SEPARADOS. Inter para o que e linguagem — titulo,
      rotulo, frase. JetBrains Mono para o que e maquina — identificador, score,
-     valor, horario. A separacao nao e estetica: numero em fonte proporcional
-     muda de largura a cada digito, e uma coluna de valores passa a "dancar" a
-     cada linha.
+     valor, horario. Numero em fonte proporcional muda de largura a cada digito,
+     e uma coluna de valores passa a "dancar" a cada linha.
 
-  Os nomes de classe continuam os das fases anteriores. A mudanca e de
-  aparencia, e renomear em massa faria o diff esconder o que de fato mudou.
+  Os nomes de classe sao os mesmos das fases anteriores. So a aparencia mudou —
+  renomear em massa faria o diff esconder o que de fato mudou.
 */
 
 :root {
-  /* ---- quatro planos, do piso a sobreposicao ---- */
-  --cor-canvas: #080b10;
-  --cor-estrutura: #0d1117;
-  --cor-painel: #131822;
-  --cor-elevado: #1a2230;
+  /* ---- superficies, do fundo da pagina ao que flutua sobre ela ---- */
+  --cor-canvas: #f5f6f8; /* fundo geral, levemente cinza para o branco saltar */
+  --cor-estrutura: #ffffff; /* barra lateral e cabecalhos */
+  --cor-painel: #ffffff; /* cartoes e paineis de dado */
+  --cor-elevado: #f3f5f9; /* hover de linha e de item */
 
   /* Herdados: o resto do CSS ainda fala nestes nomes. */
   --cor-fundo: var(--cor-canvas);
   --cor-superficie: var(--cor-painel);
-  --cor-superficie-2: var(--cor-estrutura);
+  --cor-superficie-2: var(--cor-canvas);
   --cor-realce: var(--cor-elevado);
 
-  /* ---- duas forcas de linha: estrutural e interativa ---- */
-  --cor-borda: #1f2937;
-  --cor-borda-forte: #263342;
+  /* ---- duas forcas de linha: sutil e definida ---- */
+  --cor-borda: #e6e8ec;
+  --cor-borda-forte: #d5d9e0;
 
-  /* ---- tres luminancias de texto ---- */
-  --cor-texto: #f3f4f6;
-  --cor-texto-suave: #9ca3af;
-  --cor-texto-fraco: #6b7280;
+  /* ---- tres luminancias de texto, todas acima do minimo WCAG no branco ---- */
+  --cor-texto: #0f172a; /* slate-900, ~16:1 */
+  --cor-texto-suave: #475569; /* slate-600, ~7:1 */
+  --cor-texto-fraco: #64748b; /* slate-500, ~4.8:1 */
 
-  --cor-acento: #3b82f6;
-  --cor-acento-forte: #2563eb;
-  --cor-acento-suave: #93b4fc;
-  --cor-acento-fundo: #0f1d33;
+  --cor-acento: #2563eb; /* azul confiavel de marca */
+  --cor-acento-forte: #1d4ed8;
+  --cor-acento-suave: #1d4ed8; /* para texto de link em fundo branco */
+  --cor-acento-fundo: #eff5ff; /* azul pastel, fundo de item ativo/selecao */
+  --cor-acento-borda: #bfd3fb;
 
-  /* ---- semantica de risco: cor e tonalidade de fundo ---- */
-  --cor-ok: #10b981;
-  --cor-ok-fundo: #092e20;
-  --cor-atencao: #f59e0b;
-  --cor-atencao-fundo: #332104;
-  --cor-falha: #ef4444;
-  --cor-falha-fundo: #361114;
+  /* ---- semantica de risco: cor forte + fundo pastel + borda pastel ---- */
+  --cor-ok: #047857; /* verde escuro o bastante para 14px em pastel */
+  --cor-ok-fundo: #ecfdf5;
+  --cor-ok-borda: #a7f3d0;
 
-  /* Borda dos selos: a propria cor a 25% de opacidade. */
-  --cor-ok-borda: #10b98140;
-  --cor-atencao-borda: #f59e0b40;
-  --cor-falha-borda: #ef444440;
+  --cor-atencao: #b45309; /* ambar-700: o unico tom de ambar legivel em claro */
+  --cor-atencao-fundo: #fff7ed;
+  --cor-atencao-borda: #fed7aa;
+
+  --cor-falha: #dc2626;
+  --cor-falha-fundo: #fef2f2;
+  --cor-falha-borda: #fecaca;
+
+  /* ---- sombras: a profundidade do tema claro ---- */
+  --sombra-sutil: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --sombra-media:
+    0 1px 3px rgba(15, 23, 42, 0.05), 0 6px 16px -4px rgba(15, 23, 42, 0.1);
+  --sombra-controle: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --sombra-acento: 0 1px 2px rgba(37, 99, 235, 0.28);
 
   /* ---- escala de 4px ---- */
   --espaco-1: 4px;
@@ -87,15 +85,11 @@
   --espaco-6: 24px;
   --espaco-8: 32px;
 
-  /*
-    Cantos suaves de novo. Raio zero pertence ao visual de terminal, que era a
-    direcao anterior; num produto arejado ele deixa cada painel com cara de
-    janela de sistema antigo.
-  */
   --raio: 8px;
   --raio-painel: 12px;
+  --raio-selo: 999px; /* pilula: a forma que fintech usa para status */
 
-  --largura-lateral: 248px;
+  --largura-lateral: 256px;
 
   /*
     Linha de 52 px, e nao de 32. A de 32 cabe mais alertas na tela e torna cada
@@ -114,17 +108,16 @@
     'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, 'Cascadia Mono',
     Consolas, monospace;
 
-  color-scheme: dark;
+  color-scheme: light;
   font-family: var(--fonte-sistema);
   font-size: 16px;
   line-height: 24px;
 }
 
 /*
-  Tudo o que e MAQUINA vai em monoespacada, com digito de largura fixa.
-
-  Sem `tabular-nums` uma coluna de valores muda de largura a cada linha e
-  comparar de relance deixa de funcionar — o olho perde a referencia vertical.
+  Tudo o que e MAQUINA vai em monoespacada, com digito de largura fixa. Sem
+  `tabular-nums` uma coluna de valores muda de largura a cada linha e comparar
+  de relance deixa de funcionar.
 */
 .numerico,
 .score__numero,
@@ -149,21 +142,22 @@ body {
   background: var(--cor-canvas);
   color: var(--cor-texto);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 h1 {
-  font-size: 28px;
-  line-height: 36px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
+  font-size: 30px;
+  line-height: 38px;
+  font-weight: 640;
+  letter-spacing: -0.02em;
   margin: 0;
 }
 
 h2 {
   font-size: 19px;
   line-height: 28px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-weight: 620;
+  letter-spacing: -0.012em;
   margin: 0;
 }
 
@@ -179,19 +173,17 @@ code,
   font-size: 14px;
 }
 
-/* Um identificador que E o titulo da pagina herda o tamanho do titulo. Sem
-   isto o `code` puxava 12px e a pagina abria sem manchete. */
+/* Um identificador que E o titulo da pagina herda o tamanho do titulo. */
 h1 code {
   font-size: inherit;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 
-/* Foco: anel de 1px, sem difusao. Halo borrado em interface densa cobre a
-   linha vizinha e atrapalha justamente quem depende dele. */
+/* Foco: anel azul de 2px com folga. Visivel sobre branco sem cobrir o vizinho. */
 :focus-visible {
-  outline: 1px solid var(--cor-acento);
-  outline-offset: 1px;
-  border-radius: 2px;
+  outline: 2px solid var(--cor-acento);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .visualmente-oculto {
@@ -211,6 +203,7 @@ h1 code {
   min-height: 100vh;
   display: grid;
   grid-template-columns: var(--largura-lateral) minmax(0, 1fr);
+  background: var(--cor-canvas);
 }
 
 @media (max-width: 64rem) {
@@ -241,45 +234,49 @@ h1 code {
 .app__marca {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: var(--espaco-3) var(--espaco-4);
+  gap: 3px;
+  padding: var(--espaco-4);
   border-bottom: 1px solid var(--cor-borda);
 }
 
 .app__marca-nome {
   font-size: 16px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-weight: 640;
+  letter-spacing: -0.015em;
+  color: var(--cor-texto);
   display: flex;
   align-items: center;
   gap: var(--espaco-2);
 }
 
-/* O quadrado azul antes da marca: um pip geometrico, nao um logotipo. */
+/* A marca antes do nome: um quadradinho azul com brilho, nao um logotipo. */
 .app__marca-nome::before {
   content: '';
-  width: 8px;
-  height: 8px;
-  background: var(--cor-acento);
-  border-radius: 2px;
+  width: 22px;
+  height: 22px;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  border-radius: 7px;
   flex-shrink: 0;
+  box-shadow:
+    var(--sombra-acento),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 .app__marca-ambiente {
   font-family: var(--fonte-mono);
   font-size: 11px;
   line-height: 14px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--cor-texto-fraco);
   text-transform: uppercase;
-  padding-left: 16px;
+  padding-left: 30px;
 }
 
 .app__navegacao {
   display: flex;
   flex-direction: column;
   gap: var(--espaco-5);
-  padding: var(--espaco-4) var(--espaco-2);
+  padding: var(--espaco-4) var(--espaco-3);
   flex: 1;
   overflow-y: auto;
 }
@@ -295,46 +292,50 @@ h1 code {
 .app__grupo {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
 }
 
 .app__grupo-titulo {
-  font-size: 12px;
+  font-size: 11px;
   line-height: 16px;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.07em;
+  font-weight: 600;
   color: var(--cor-texto-fraco);
-  padding: 0 var(--espaco-2) var(--espaco-2);
+  padding: 0 var(--espaco-3) var(--espaco-2);
 }
 
 .app__navegacao a {
   display: flex;
   align-items: center;
   gap: var(--espaco-3);
-  height: var(--altura-linha);
-  padding: 0 var(--espaco-2);
+  height: 42px;
+  padding: 0 var(--espaco-3);
   color: var(--cor-texto-suave);
   text-decoration: none;
   border-radius: var(--raio);
   font-size: 15px;
+  font-weight: 500;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
 }
 
 .app__navegacao a:hover {
-  background: var(--cor-painel);
+  background: var(--cor-elevado);
   color: var(--cor-texto);
 }
 
-/* Item ativo: fundo elevado e barra de 2px. A barra e o que sobrevive a uma
-   captura em preto e branco. */
+/* Item ativo: pilula azul-pastel com texto azul. A cor de marca marca o lugar. */
 .app__navegacao a.active {
-  background: var(--cor-elevado);
-  color: var(--cor-texto);
-  box-shadow: inset 2px 0 0 var(--cor-acento);
+  background: var(--cor-acento-fundo);
+  color: var(--cor-acento-forte);
+  font-weight: 600;
 }
 
 .app__sessao {
   border-top: 1px solid var(--cor-borda);
-  padding: var(--espaco-3);
+  padding: var(--espaco-3) var(--espaco-4);
   display: flex;
   align-items: center;
   gap: var(--espaco-3);
@@ -343,11 +344,11 @@ h1 code {
 .app__sessao-usuario {
   display: flex;
   flex-direction: column;
-  line-height: 16px;
+  line-height: 18px;
   min-width: 0;
   flex: 1;
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .app__sessao-perfil {
@@ -367,8 +368,6 @@ h1 code {
 
 /* =============================================================== pagina == */
 
-/* Respiro entre blocos: 32 px, e nao 16. O que separa duas coisas na tela e o
-   vazio entre elas — com 16 px o olho le as duas como um bloco so. */
 .pagina {
   display: flex;
   flex-direction: column;
@@ -388,25 +387,29 @@ h1 code {
   margin: 0;
   max-width: var(--medida);
   font-size: 16px;
+  line-height: 25px;
 }
 
 .pagina__migalha {
   font-size: 14px;
   color: var(--cor-texto-fraco);
   margin: 0;
+  font-weight: 500;
 }
 
 /*
-  Painel: canto reto, borda interativa, fundo do plano 2.
+  Cartao: branco, canto suave, borda de 1px e sombra sutil. A sombra e o que o
+  faz flutuar; sem ela, so a borda, ele volta a ser um retangulo colado.
 */
 .cartao {
   background: var(--cor-painel);
-  border: 1px solid var(--cor-borda-forte);
+  border: 1px solid var(--cor-borda);
   border-radius: var(--raio-painel);
   padding: var(--espaco-6);
   display: flex;
   flex-direction: column;
   gap: var(--espaco-4);
+  box-shadow: var(--sombra-sutil);
 }
 
 .cartao > h2 + .pagina__resumo,
@@ -416,6 +419,9 @@ h1 code {
 
 .cartao--destaque {
   border-color: var(--cor-atencao-borda);
+  box-shadow:
+    var(--sombra-sutil),
+    inset 3px 0 0 var(--cor-atencao);
 }
 
 .colunas {
@@ -451,15 +457,17 @@ h1 code {
 
 .tabela thead th {
   height: 44px;
-  font-size: 13px;
-  letter-spacing: 0;
-  color: var(--cor-texto-suave);
-  font-weight: 500;
-  background: var(--cor-estrutura);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--cor-texto-fraco);
+  font-weight: 600;
+  background: var(--cor-canvas);
   position: sticky;
   top: 0;
   z-index: 1;
   white-space: nowrap;
+  border-bottom-color: var(--cor-borda);
 }
 
 /* Cabecalho que ordena continua parecendo cabecalho: sem moldura de botao. */
@@ -500,8 +508,7 @@ h1 code {
 
 /*
   `width: 1%` nao significa 1%: numa tabela de layout automatico e o jeito de
-  dizer "encolha ate o conteudo". Sem isso o navegador reparte a largura
-  igualmente e uma coluna com o numero 20 fica com 200 px.
+  dizer "encolha ate o conteudo".
 */
 .tabela td.numerico,
 .tabela th.numerico {
@@ -517,8 +524,6 @@ h1 code {
   white-space: nowrap;
 }
 
-/* Barra solta numa celula: sem largura declarada a coluna estica e a barra fica
-   perdida a meio metro do numero que ela representa. */
 .tabela td:has(> .score__barra) {
   width: 5rem;
 }
@@ -538,8 +543,10 @@ h1 code {
   flex-direction: column;
   gap: var(--espaco-2);
   padding: var(--espaco-6);
-  border: 1px solid var(--cor-borda-forte);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-painel);
   background: var(--cor-painel);
+  box-shadow: var(--sombra-sutil);
   align-items: flex-start;
 }
 
@@ -548,6 +555,9 @@ h1 code {
   align-items: center;
   color: var(--cor-texto-suave);
   padding: var(--espaco-4);
+  box-shadow: none;
+  background: transparent;
+  border-style: dashed;
 }
 
 .estado--vazio {
@@ -556,16 +566,18 @@ h1 code {
   padding: var(--espaco-8);
   border-style: dashed;
   background: transparent;
+  box-shadow: none;
 }
 
 .estado--erro {
   border-color: var(--cor-falha-borda);
   background: var(--cor-falha-fundo);
+  box-shadow: none;
 }
 
 .estado__titulo {
   margin: 0;
-  font-weight: 600;
+  font-weight: 620;
 }
 
 .estado__descricao {
@@ -575,12 +587,12 @@ h1 code {
 }
 
 .estado__indicador {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   border: 2px solid var(--cor-borda-forte);
   border-top-color: var(--cor-acento);
   border-radius: 50%;
-  animation: girar 0.8s linear infinite;
+  animation: girar 0.7s linear infinite;
 }
 
 @keyframes girar {
@@ -602,26 +614,19 @@ h1 code {
 /* ================================================================== selo == */
 
 /*
-  Um selo carrega TRES codificacoes ao mesmo tempo: texto, cor e FORMA.
-
-  A forma e a que costuma faltar, e e a que salva a leitura quando a cor nao
-  chega — daltonismo, captura em preto e branco, projetor ruim. Circulo para
-  permitir, losango para revisar, triangulo para bloquear.
-*/
-/*
-  Sem caixa alta e sem monoespacada. As duas juntas, em 10 px, faziam o selo
-  pedir esforco para ser lido — e ele e a informacao mais importante da linha.
-  Texto normal de 14 px se le de relance.
+  Um selo carrega TRES codificacoes: texto, cor e FORMA. A forma e a que salva a
+  leitura quando a cor nao chega — daltonismo, preto e branco, projetor ruim.
+  Circulo para permitir, losango para revisar, triangulo para bloquear.
 */
 .selo {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: 28px;
-  padding: 0 10px;
-  font-size: 14px;
-  font-weight: 500;
-  border-radius: 6px;
+  gap: 7px;
+  height: 26px;
+  padding: 0 11px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--raio-selo);
   border: 1px solid var(--cor-borda-forte);
   color: var(--cor-texto-suave);
   background: var(--cor-painel);
@@ -678,6 +683,7 @@ h1 code {
 .selo--ausente {
   color: var(--cor-texto-fraco);
   border-style: dashed;
+  background: transparent;
 }
 
 .selo--ausente::before {
@@ -686,8 +692,8 @@ h1 code {
 }
 
 .selo--caso-novo {
-  color: var(--cor-acento-suave);
-  border-color: #3b82f640;
+  color: var(--cor-acento-forte);
+  border-color: var(--cor-acento-borda);
   background: var(--cor-acento-fundo);
 }
 
@@ -709,9 +715,9 @@ h1 code {
 
 .score__barra {
   width: 80px;
-  height: 6px;
+  height: 7px;
   background: var(--cor-elevado);
-  border-radius: 2px;
+  border-radius: var(--raio-selo);
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -719,7 +725,7 @@ h1 code {
 .score__preenchimento {
   display: block;
   height: 100%;
-  border-radius: 2px;
+  border-radius: var(--raio-selo);
   background: var(--cor-acento);
 }
 
@@ -733,36 +739,36 @@ h1 code {
 .avaliacao__resultado {
   display: flex;
   align-items: center;
-  gap: var(--espaco-4);
+  gap: var(--espaco-5);
   flex-wrap: wrap;
 }
 
 /* O score da tela de detalhe e a maior coisa da pagina: e a resposta que a
    pessoa veio buscar. */
 .avaliacao__resultado .score__numero {
-  font-size: 64px;
+  font-size: 72px;
   line-height: 1;
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-weight: 720;
+  letter-spacing: -0.04em;
   min-width: auto;
+  color: var(--cor-texto);
 }
 
 .avaliacao__resultado .score__barra {
   width: 14rem;
-  height: 8px;
+  height: 10px;
 }
 
 .avaliacao__aviso {
   margin: 0;
-  color: var(--cor-texto-suave);
-  font-size: 12px;
+  color: var(--cor-texto-fraco);
+  font-size: 13px;
   max-width: var(--medida);
 }
 
 /*
   Lista de definicao como FAIXA DE INDICADORES: rotulo pequeno em cima, valor
-  embaixo. Antes o rotulo ficava a esquerda e o valor encostado na borda
-  direita, com um vao no meio — os dois pertencem um ao outro.
+  embaixo.
 */
 .avaliacao__procedencia,
 .descricao {
@@ -775,16 +781,18 @@ h1 code {
 
 .avaliacao__procedencia dt,
 .descricao dt {
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--cor-texto-suave);
-  margin-bottom: 2px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--cor-texto-fraco);
+  margin-bottom: 3px;
+  font-weight: 500;
 }
 
 .avaliacao__procedencia dd,
 .descricao dd {
   margin: 0;
   font-size: 16px;
+  font-weight: 500;
 }
 
 .descricao dd.numerico {
@@ -805,17 +813,16 @@ h1 code {
 }
 
 /*
-  Cada sinal e uma LINHA de grade, e nao um cartao. Tres cartoes empilhados com
-  borda e respiro proprio somariam mais moldura do que conteudo; a linha deixa
-  os pontos alinhados em coluna, e a soma pode ser conferida a olho — que e o
-  que esta tela precisa provar.
+  Cada sinal e uma LINHA de grade, e nao um cartao. Tres cartoes empilhados
+  somariam mais moldura do que conteudo; a linha deixa os pontos alinhados em
+  coluna, e a soma pode ser conferida a olho.
 */
 .sinal {
   display: grid;
-  grid-template-columns: 60px minmax(0, 1fr);
+  grid-template-columns: 64px minmax(0, 1fr);
   gap: var(--espaco-3);
   align-items: baseline;
-  padding: var(--espaco-3) 0;
+  padding: var(--espaco-4) 0;
   border-bottom: 1px solid var(--cor-borda);
 }
 
@@ -834,7 +841,7 @@ h1 code {
 
 .sinal__tipo {
   font-size: 17px;
-  font-weight: 600;
+  font-weight: 620;
 }
 
 .sinal__pontos {
@@ -844,13 +851,13 @@ h1 code {
   display: inline-flex;
   align-items: center;
   height: 28px;
-  padding: 0 10px;
-  font-size: 16px;
-  font-weight: 600;
+  padding: 0 11px;
+  font-size: 15px;
+  font-weight: 700;
   color: var(--cor-atencao);
   background: var(--cor-atencao-fundo);
   border: 1px solid var(--cor-atencao-borda);
-  border-radius: 3px;
+  border-radius: var(--raio-selo);
 }
 
 .sinal__explicacao {
@@ -858,6 +865,7 @@ h1 code {
   margin: var(--espaco-1) 0 0;
   color: var(--cor-texto-suave);
   font-size: 15px;
+  line-height: 22px;
 }
 
 .sinal__evidencia {
@@ -871,7 +879,7 @@ h1 code {
 .sinal__par {
   display: flex;
   gap: var(--espaco-1);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .sinal__par dt {
@@ -888,23 +896,20 @@ h1 code {
 }
 
 /*
-  O tipo da regra como etiqueta de maquina — e o codigo real do catalogo, e nao
-  um identificador inventado.
-
-  `grid-column: 2` nao e detalhe: sem isso ela caia na primeira coluna da
-  grade, junto dos pontos, e virava uma caixinha vertical solta embaixo do
-  texto. A etiqueta pertence ao cabecalho do sinal, ao lado do nome da regra.
+  O tipo da regra como etiqueta de maquina — o codigo real do catalogo. Pertence
+  ao cabecalho do sinal, ao lado do nome da regra.
 */
 .sinal__origem {
   grid-column: 2;
   justify-self: start;
   margin-top: var(--espaco-2);
   font-family: var(--fonte-mono);
-  font-size: 13px;
+  font-size: 12px;
   color: var(--cor-texto-fraco);
+  background: var(--cor-canvas);
   border: 1px solid var(--cor-borda);
-  border-radius: 3px;
-  padding: 1px 5px;
+  border-radius: 6px;
+  padding: 2px 7px;
 }
 
 /* Etiquetas de sinal dentro de uma linha de tabela. */
@@ -918,12 +923,12 @@ h1 code {
 }
 
 .sinais-resumidos > * {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--cor-texto-suave);
-  background: var(--cor-estrutura);
+  background: var(--cor-canvas);
   border: 1px solid var(--cor-borda);
-  border-radius: 3px;
-  padding: 1px 6px;
+  border-radius: 6px;
+  padding: 2px 8px;
   white-space: nowrap;
 }
 
@@ -947,12 +952,12 @@ h1 code {
   display: flex;
   align-items: center;
   gap: var(--espaco-3);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .faixa__intervalo {
   font-family: var(--fonte-mono);
-  color: var(--cor-texto-suave);
+  color: var(--cor-texto-fraco);
 }
 
 /* ============================================================== ligacoes == */
@@ -960,6 +965,7 @@ h1 code {
 .ligacao {
   color: var(--cor-acento-suave);
   text-decoration: none;
+  font-weight: 500;
   border-bottom: 1px solid transparent;
 }
 
@@ -974,9 +980,11 @@ h1 code {
   align-items: flex-end;
   flex-wrap: wrap;
   gap: var(--espaco-2) var(--espaco-3);
-  padding: var(--espaco-3);
-  border: 1px solid var(--cor-borda-forte);
+  padding: var(--espaco-4);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-painel);
   background: var(--cor-painel);
+  box-shadow: var(--sombra-sutil);
 }
 
 .filtros .campo {
@@ -1000,12 +1008,10 @@ h1 code {
   gap: var(--espaco-1);
 }
 
-/* Rotulo em texto normal: caixa alta de 11 px e o tipo de coisa que se le
-   duas vezes. */
 .campo__rotulo {
   font-size: 14px;
   line-height: 20px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--cor-texto-suave);
 }
 
@@ -1019,18 +1025,30 @@ h1 code {
 .campo textarea {
   font: inherit;
   color: var(--cor-texto);
-  background: var(--cor-estrutura);
-  border: 1px solid var(--cor-borda);
+  background: var(--cor-painel);
+  border: 1px solid var(--cor-borda-forte);
   border-radius: var(--raio);
   padding: 0 var(--espaco-3);
   height: var(--altura-campo);
   font-size: 15px;
+  box-shadow: var(--sombra-controle);
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
 }
 
 .campo input:hover,
 .campo select:hover,
 .campo textarea:hover {
-  border-color: var(--cor-borda-forte);
+  border-color: #b9c0cc;
+}
+
+.campo input:focus,
+.campo select:focus,
+.campo textarea:focus {
+  outline: none;
+  border-color: var(--cor-acento);
+  box-shadow: 0 0 0 3px var(--cor-acento-fundo);
 }
 
 .campo input::placeholder,
@@ -1040,16 +1058,17 @@ h1 code {
 
 .campo textarea {
   resize: vertical;
-  min-height: 72px;
+  min-height: 80px;
   height: auto;
-  padding: var(--espaco-2);
-  line-height: 18px;
+  padding: var(--espaco-2) var(--espaco-3);
+  line-height: 21px;
 }
 
 .campo input:disabled,
 .campo select:disabled,
 .campo textarea:disabled {
-  opacity: 0.55;
+  opacity: 0.6;
+  background: var(--cor-elevado);
 }
 
 .campo input[aria-invalid='true'] {
@@ -1058,10 +1077,6 @@ h1 code {
 
 /*
   Caixa de marcar: a caixa e o texto na MESMA linha.
-
-  Antes o campo herdava `flex-direction: column` do `.campo`, a caixa ficava
-  sozinha em cima e o rotulo quebrava em tres linhas embaixo — parecia dois
-  controles diferentes, e o alvo de clique do texto ficava longe da caixa.
 */
 .campo--caixa {
   flex-direction: row;
@@ -1079,6 +1094,7 @@ h1 code {
   margin: 0;
   padding: 0;
   flex-shrink: 0;
+  box-shadow: none;
 }
 
 .campo--caixa span {
@@ -1109,7 +1125,7 @@ h1 code {
   padding: 0 var(--espaco-4);
   font-family: var(--fonte-sistema);
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--cor-texto);
   background: var(--cor-painel);
   border: 1px solid var(--cor-borda-forte);
@@ -1117,17 +1133,23 @@ h1 code {
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
+  box-shadow: var(--sombra-controle);
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
 }
 
 .botao:hover {
   background: var(--cor-elevado);
-  border-color: #374151;
+  border-color: #b9c0cc;
 }
 
 .botao--principal {
   background: var(--cor-acento);
   border-color: var(--cor-acento-forte);
   color: #ffffff;
+  box-shadow: var(--sombra-acento);
 }
 
 .botao--principal:hover {
@@ -1137,13 +1159,27 @@ h1 code {
 
 .botao:disabled,
 .botao--principal:disabled {
-  opacity: 0.5;
+  opacity: 0.55;
   cursor: default;
+  box-shadow: none;
 }
 
 .botao:disabled:hover {
   background: var(--cor-painel);
   border-color: var(--cor-borda-forte);
+}
+
+/* Variante suave: acao secundaria clara, azul sobre pastel, sem peso de borda. */
+.botao--suave {
+  background: var(--cor-acento-fundo);
+  border-color: var(--cor-acento-borda);
+  color: var(--cor-acento-forte);
+  box-shadow: none;
+}
+
+.botao--suave:hover {
+  background: #e0ecfe;
+  border-color: var(--cor-acento);
 }
 
 .acoes {
@@ -1155,41 +1191,84 @@ h1 code {
 
 .acoes--caso {
   border-top: 1px solid var(--cor-borda);
-  padding-top: var(--espaco-3);
+  padding-top: var(--espaco-4);
 }
 
 /* =============================================================== entrada == */
 
+/*
+  A porta de entrada. E a primeira tela que qualquer pessoa ve, entao ela
+  carrega peso proprio: cartao branco flutuando sobre o canvas, respiro
+  generoso, e o botao de demonstracao em destaque para quem so quer olhar.
+*/
 .entrada {
   display: flex;
+  align-items: center;
   justify-content: center;
-  padding-top: 12vh;
+  min-height: 100vh;
+  padding: var(--espaco-6);
+  background:
+    radial-gradient(1200px 600px at 50% -10%, #eaf1ff 0%, transparent 60%),
+    var(--cor-canvas);
+}
+
+.entrada__cartao {
+  width: min(26rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-5);
+}
+
+.entrada__marca {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-3);
+  font-size: 17px;
+  font-weight: 640;
+  letter-spacing: -0.015em;
+}
+
+.entrada__marca::before {
+  content: '';
+  width: 30px;
+  height: 30px;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  border-radius: 9px;
+  box-shadow:
+    var(--sombra-acento),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 .entrada__formulario {
   display: flex;
   flex-direction: column;
   gap: var(--espaco-4);
-  width: min(23rem, 100%);
   background: var(--cor-painel);
-  border: 1px solid var(--cor-borda-forte);
-  padding: var(--espaco-6);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-painel);
+  padding: var(--espaco-8);
+  box-shadow: var(--sombra-media);
+}
+
+.entrada__formulario h1 {
+  font-size: 24px;
+  line-height: 30px;
 }
 
 .entrada__resumo {
-  margin: -12px 0 0;
-  color: var(--cor-texto-suave);
-  font-size: 12px;
+  margin: -10px 0 var(--espaco-1);
+  color: var(--cor-texto-fraco);
+  font-size: 14px;
 }
 
 .entrada__erro {
   margin: 0;
-  padding: var(--espaco-2) var(--espaco-3);
+  padding: var(--espaco-3);
   border: 1px solid var(--cor-falha-borda);
   background: var(--cor-falha-fundo);
   border-radius: var(--raio);
   color: var(--cor-falha);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .entrada__correlacao {
@@ -1197,11 +1276,46 @@ h1 code {
   margin-top: var(--espaco-1);
   font-family: var(--fonte-mono);
   color: var(--cor-texto-suave);
+  font-size: 12px;
 }
 
 .entrada .botao--principal {
   align-self: stretch;
-  height: 32px;
+  height: 44px;
+  font-size: 15px;
+}
+
+/* Separador "ou" entre o login real e o acesso de demonstracao. */
+.entrada__ou {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-3);
+  color: var(--cor-texto-fraco);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.entrada__ou::before,
+.entrada__ou::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--cor-borda);
+}
+
+.entrada__demo {
+  align-self: stretch;
+  height: 44px;
+  font-size: 15px;
+}
+
+.entrada__rodape {
+  margin: 0;
+  text-align: center;
+  color: var(--cor-texto-fraco);
+  font-size: 13px;
+  line-height: 19px;
 }
 
 /* ============================================================== timeline == */
@@ -1214,27 +1328,22 @@ h1 code {
   list-style: none;
 }
 
-/*
-  O eixo e a borda esquerda do item, e o marcador e um ::before sobre ela. Um
-  elemento vazio so para desenhar a linha seria conteudo sem significado para
-  um leitor de tela.
-*/
 .timeline__item {
   position: relative;
-  padding: 0 0 var(--espaco-4) var(--espaco-4);
-  border-left: 1px solid var(--cor-borda-forte);
+  padding: 0 0 var(--espaco-4) var(--espaco-5);
+  border-left: 2px solid var(--cor-borda);
   margin-left: 4px;
 }
 
 .timeline__item::before {
   content: '';
   position: absolute;
-  left: -5px;
-  top: 4px;
-  width: 9px;
-  height: 9px;
+  left: -6px;
+  top: 3px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: var(--cor-estrutura);
+  background: var(--cor-painel);
   border: 2px solid var(--cor-borda-forte);
 }
 
@@ -1245,16 +1354,18 @@ h1 code {
 
 .timeline__item--Resolvido::before {
   border-color: var(--cor-ok);
+  background: var(--cor-ok);
 }
 
 .timeline__origem {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--cor-texto-fraco);
 }
 
 .timeline__descricao {
   margin: var(--espaco-1) 0 0;
   font-size: 16px;
+  font-weight: 500;
 }
 
 /* ================================================================= notas == */
@@ -1262,7 +1373,7 @@ h1 code {
 .notas {
   display: flex;
   flex-direction: column;
-  gap: var(--espaco-2);
+  gap: var(--espaco-3);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1270,27 +1381,30 @@ h1 code {
 
 .nota {
   border: 1px solid var(--cor-borda);
-  border-left: 2px solid var(--cor-borda-forte);
-  padding: var(--espaco-2) var(--espaco-3);
-  background: var(--cor-estrutura);
+  border-left: 3px solid var(--cor-acento-borda);
+  border-radius: var(--raio);
+  padding: var(--espaco-3) var(--espaco-4);
+  background: var(--cor-canvas);
 }
 
 .nota__cabecalho {
   display: flex;
   gap: var(--espaco-2);
   align-items: baseline;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--cor-texto-fraco);
 }
 
 .nota__autor {
   color: var(--cor-texto-suave);
+  font-weight: 600;
 }
 
 .nota__conteudo {
   margin: var(--espaco-2) 0 0;
   white-space: pre-wrap;
-  font-size: 16px;
+  font-size: 15px;
+  line-height: 22px;
 }
 
 .nota__formulario {
@@ -1318,36 +1432,37 @@ h1 code {
   display: flex;
   align-items: center;
   gap: var(--espaco-3);
-  padding: var(--espaco-2) var(--espaco-3);
-  border: 1px solid #3b82f640;
+  padding: var(--espaco-3) var(--espaco-4);
+  border: 1px solid var(--cor-acento-borda);
+  border-radius: var(--raio-painel);
   background: var(--cor-acento-fundo);
 }
 
 .barra-de-selecao__contagem {
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--cor-acento-forte);
 }
 
 /* ============================================================ integracoes = */
 
 .chave {
   display: block;
-  padding: var(--espaco-2) var(--espaco-3);
-  background: var(--cor-canvas);
-  border: 1px solid var(--cor-borda-forte);
+  padding: var(--espaco-3) var(--espaco-4);
+  background: #0f172a;
+  border: 1px solid #1e293b;
   border-radius: var(--raio);
   word-break: break-all;
-  color: var(--cor-atencao);
+  color: #7dd3fc;
+  font-size: 14px;
 }
 
 /* ========================================================== indicadores == */
 
 /*
-  Quatro caixas, e nao uma lista dentro de um painel.
-
-  Cada indicador tem moldura propria porque sao quatro perguntas diferentes, e
-  o olho precisa poder pular direto para a que interessa. Numa lista corrida,
-  os quatro se leem como um paragrafo de numeros.
+  Quatro caixas, e nao uma lista dentro de um painel. Cada indicador tem moldura
+  propria porque sao quatro perguntas diferentes, e o olho precisa poder pular
+  direto para a que interessa.
 */
 .indicadores {
   display: grid;
@@ -1362,26 +1477,30 @@ h1 code {
   padding: var(--espaco-5) var(--espaco-6);
   border-radius: var(--raio-painel);
   background: var(--cor-painel);
-  border: 1px solid var(--cor-borda-forte);
+  border: 1px solid var(--cor-borda);
+  box-shadow: var(--sombra-sutil);
 }
 
-/* Destaque so significa alguma coisa quando UM item o tem e os outros nao. */
 .indicador--destaque {
   border-color: var(--cor-atencao-borda);
+  box-shadow:
+    var(--sombra-sutil),
+    inset 3px 0 0 var(--cor-atencao);
 }
 
 .indicador__rotulo {
-  font-size: 15px;
+  font-size: 14px;
   line-height: 20px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--cor-texto-suave);
 }
 
 .indicador__valor {
   font-size: 44px;
   line-height: 52px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-weight: 720;
+  letter-spacing: -0.025em;
+  color: var(--cor-texto);
 }
 
 .indicador--destaque .indicador__valor {
@@ -1403,14 +1522,14 @@ h1 code {
   padding: var(--espaco-3) var(--espaco-4);
   border: 1px solid var(--cor-borda);
   border-radius: var(--raio);
-  background: var(--cor-estrutura);
+  background: var(--cor-canvas);
   font-size: 14px;
   color: var(--cor-texto-fraco);
 }
 
 .rodape-tecnico strong {
   color: var(--cor-texto-suave);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .rodape-tecnico__fim {
@@ -1420,33 +1539,34 @@ h1 code {
 /* ============================================================== detalhe == */
 
 /*
-  Faixa de identificacao: rotulo pequeno em cima, valor embaixo, tudo numa
-  linha so acima das colunas.
-
-  Quem chega nesta tela quer confirmar que esta olhando a transacao certa
-  antes de ler qualquer analise — por isso ela vem antes, e nao dentro de uma
-  das colunas.
+  Faixa de identificacao: rotulo pequeno em cima, valor embaixo, tudo numa linha
+  so acima das colunas. Quem chega quer confirmar que esta na transacao certa
+  antes de ler a analise.
 */
 .faixa-meta {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-  gap: var(--espaco-3) var(--espaco-4);
+  gap: var(--espaco-4);
   margin: 0;
-  padding: var(--espaco-3) var(--espaco-4);
-  border: 1px solid var(--cor-borda-forte);
+  padding: var(--espaco-4) var(--espaco-5);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-painel);
   background: var(--cor-painel);
+  box-shadow: var(--sombra-sutil);
 }
 
 .faixa-meta dt {
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--cor-texto-suave);
-  margin-bottom: 2px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--cor-texto-fraco);
+  margin-bottom: 3px;
+  font-weight: 500;
 }
 
 .faixa-meta dd {
   margin: 0;
   font-size: 16px;
+  font-weight: 500;
   overflow-wrap: anywhere;
 }
 
@@ -1468,21 +1588,14 @@ h1 code {
 .detalhe__inspetor {
   display: flex;
   flex-direction: column;
-  gap: var(--espaco-3);
+  gap: var(--espaco-4);
   min-width: 0;
 }
 
-/*
-  Uma tabela larga dentro de uma coluna estreita rola DENTRO dela, e nao empurra
-  a pagina inteira. Sem isto a janela ganhava barra horizontal e a tela toda
-  deslizava de lado para mostrar uma coluna de tabela.
-*/
 .detalhe__inspetor .cartao {
   overflow-x: auto;
 }
 
-/* A coluna da direita acompanha a rolagem: numa investigacao longa, o estado
-   do alerta e a referencia que a pessoa consulta o tempo todo. */
 @media (min-width: 75.01rem) {
   .detalhe__inspetor {
     position: sticky;
@@ -1493,12 +1606,9 @@ h1 code {
 /* ============================================================== chamada == */
 
 /*
-  A unica coisa que o painel PEDE que voce faca.
-
-  Um painel sem acao principal transforma quem chega em espectador: fica
-  sabendo o estado do mundo e nao sabe por onde comecar. O numero e a pergunta,
-  o botao ao lado e a resposta — e os dois moram na mesma faixa para que a
-  ligacao entre eles nao dependa de ninguem juntar as pontas.
+  A unica coisa que o painel PEDE que voce faca. O numero e a pergunta, o botao
+  ao lado e a resposta — e os dois moram na mesma faixa para que a ligacao entre
+  eles nao dependa de ninguem juntar as pontas.
 */
 .chamada {
   display: flex;
@@ -1507,21 +1617,22 @@ h1 code {
   gap: var(--espaco-6);
   flex-wrap: wrap;
   padding: var(--espaco-6) var(--espaco-8);
-  border: 1px solid var(--cor-borda-forte);
+  border: 1px solid var(--cor-borda);
   border-radius: var(--raio-painel);
   background: var(--cor-painel);
+  box-shadow: var(--sombra-sutil);
 }
 
 /*
-  Destaque pela BORDA e pelo numero, nao pelo fundo.
-
-  Gradiente esta proibido pelo `CLAUDE.md` secao 79 — e e a assinatura visual
-  de interface gerada sem criterio. Mas fundo colorido inteiro tambem nao
-  servia: uma faixa ambar de ponta a ponta vira banner de aviso, e banner e o
-  que as pessoas aprendem a ignorar. A borda marca sem gritar.
+  Destaque pela BORDA lateral e pelo numero, nao pelo fundo inteiro. Uma faixa
+  ambar de ponta a ponta vira banner de aviso, e banner e o que as pessoas
+  aprendem a ignorar.
 */
 .chamada--urgente {
   border-color: var(--cor-atencao-borda);
+  box-shadow:
+    var(--sombra-sutil),
+    inset 4px 0 0 var(--cor-atencao);
 }
 
 .chamada__numero {
@@ -1532,10 +1643,10 @@ h1 code {
 }
 
 .chamada__valor {
-  font-size: 64px;
+  font-size: 60px;
   line-height: 1;
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-weight: 720;
+  letter-spacing: -0.04em;
 }
 
 .chamada--urgente .chamada__valor {
@@ -1543,7 +1654,7 @@ h1 code {
 }
 
 .chamada__rotulo {
-  font-size: 19px;
+  font-size: 18px;
   color: var(--cor-texto-suave);
 }
 
@@ -1551,20 +1662,13 @@ h1 code {
 .botao--grande {
   height: 52px;
   padding: 0 var(--espaco-6);
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 640;
   border-radius: var(--raio);
 }
 
 /* ================================================================= abas == */
 
-/*
-  Abas em vez de rolagem.
-
-  Nada foi removido do painel: tendencia, regras e saude do sistema continuam
-  ali. O que mudou e que a tela deixou de exigir que se leia tudo para achar
-  uma coisa.
-*/
 .abas {
   display: flex;
   flex-direction: column;
@@ -1573,21 +1677,22 @@ h1 code {
 
 .abas__lista {
   display: flex;
-  gap: var(--espaco-2);
+  gap: var(--espaco-1);
   border-bottom: 1px solid var(--cor-borda);
 }
 
 .abas__aba {
   font: inherit;
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--cor-texto-suave);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cor-texto-fraco);
   background: none;
   border: 0;
   border-bottom: 2px solid transparent;
   padding: var(--espaco-3) var(--espaco-4);
   margin-bottom: -1px;
   cursor: pointer;
+  transition: color 0.12s ease;
 }
 
 .abas__aba:hover {
@@ -1595,7 +1700,7 @@ h1 code {
 }
 
 .abas__aba--ativa {
-  color: var(--cor-texto);
+  color: var(--cor-acento-forte);
   border-bottom-color: var(--cor-acento);
 }
 
@@ -1608,12 +1713,8 @@ h1 code {
 /* ====================================================== linha clicavel === */
 
 /*
-  A linha inteira abre o registro, e nao um link de seis letras no canto.
-
-  Numa fila de trabalho o alvo tem que ser a linha: mirar um link estreito no
-  fim de oito colunas e o que fazia a tela parecer um relatorio em vez de uma
-  ferramenta. O link continua la para quem navega por teclado — ele e quem
-  carrega o destino de verdade; a linha so o aciona.
+  A linha inteira abre o registro, e nao um link de seis letras no canto. Numa
+  fila de trabalho o alvo tem que ser a linha inteira.
 */
 .tabela tbody tr.linha-clicavel {
   cursor: pointer;

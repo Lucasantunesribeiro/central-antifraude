@@ -193,6 +193,13 @@ Resources:
       Environment:
         Variables:
           Autenticacao__OrigensPermitidas__0: !Ref OrigemDoFrontend
+          # A demonstracao e ABERTA de proposito: este e um projeto de
+          # portfolio, e a barreira de login afastava quem so queria ver. O
+          # endpoint /api/auth/demo emite sessao de Analista sem credencial, e o
+          # servico so o atende porque esta flag esta ligada. Numa instalacao
+          # real de cliente, seria 'false'.
+          Autenticacao__DemoHabilitado: 'true'
+          Autenticacao__EmailDaContaDemo: analista@demo.local
           Mensageria__FilaOperacional: !Ref FilaOperacional
           Mensageria__FilaDeBacktests: !Ref FilaDeBacktests
           Mensageria__FuncaoDoDespachante: !Ref FuncaoDoDespachante
