@@ -39,19 +39,17 @@ export function Rotas() {
               sobre um caso e outra coisa, e quem recusa e a API. */}
           <Route path="casos" element={<PaginaDeCasos />} />
           <Route path="casos/:id" element={<PaginaDoCaso />} />
-          {/* O catalogo de regras e leitura para todos os perfis: o
-              analista precisa dele para entender o proprio score. A mesma
-              tela vira administracao para a supervisao — e quem recusa a
-              escrita e a API, nao a tela. */}
-          <Route path="regras" element={<PaginaDeRegras />} />
         </Route>
 
-        {/* O detalhe da regra so faz sentido para quem administra: ele e
-            rascunho, publicacao e historico. O backend responde 403 a
-            qualquer outro perfil. */}
+        {/* Regras e administracao — a tela cria, edita e publica versao, e
+            chama /api/regras/gestao, que o backend so abre para a supervisao.
+            Por isso ela vive sob a mesma protecao de perfil que o detalhe e o
+            backtest: um Analista que digitasse /regras na barra caia numa tela
+            que respondia 403; agora ele e levado de volta, sem erro. */}
         <Route
           element={<RotaProtegida perfis={['Administrador', 'SupervisorDeFraude']} />}
         >
+          <Route path="regras" element={<PaginaDeRegras />} />
           <Route path="regras/:id" element={<PaginaDaRegra />} />
           {/* Backtest e supervisao inteira, leitura inclusive: e um ensaio
               sobre uma decisao que ainda nao foi tomada, e nao uma decisao. O

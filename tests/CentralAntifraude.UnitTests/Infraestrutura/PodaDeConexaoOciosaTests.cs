@@ -33,7 +33,7 @@ public sealed class PodaDeConexaoOciosaTests
     public void Aplica_o_tempo_de_vida_ocioso_quando_ele_nao_foi_escolhido()
     {
         var resultado = new NpgsqlConnectionStringBuilder(
-            OpcoesDoDbContext.ComPodaDeConexaoOciosa(Base));
+            OpcoesDoDbContext.AjustarConexaoParaAmbiente(Base));
 
         Assert.Equal(
             OpcoesDoDbContext.SegundosDeVidaOciosaDaConexao,
@@ -73,7 +73,7 @@ public sealed class PodaDeConexaoOciosaTests
     public void Respeita_o_valor_que_ja_estava_na_string_de_conexao()
     {
         var resultado = new NpgsqlConnectionStringBuilder(
-            OpcoesDoDbContext.ComPodaDeConexaoOciosa(
+            OpcoesDoDbContext.AjustarConexaoParaAmbiente(
                 Base + ";Connection Idle Lifetime=17"));
 
         Assert.Equal(17, resultado.ConnectionIdleLifetime);
@@ -88,12 +88,43 @@ public sealed class PodaDeConexaoOciosaTests
     public void Preserva_os_demais_parametros()
     {
         var resultado = new NpgsqlConnectionStringBuilder(
-            OpcoesDoDbContext.ComPodaDeConexaoOciosa(
+            OpcoesDoDbContext.AjustarConexaoParaAmbiente(
                 Base + ";SSL Mode=Require;Maximum Pool Size=3"));
 
         Assert.Equal("localhost", resultado.Host);
         Assert.Equal("x", resultado.Database);
         Assert.Equal(SslMode.Require, resultado.SslMode);
         Assert.Equal(3, resultado.MaxPoolSize);
+    }
+
+    /// <summary>
+    /// Fora do Lambda, o pool local continua ligado.
+    ///
+    /// Este teste roda num processo comum — nao ha `AWS_LAMBDA_FUNCTION_NAME` —,
+    /// entao a resiliencia especifica de serverless (desligar o pool) NAO se
+    /// aplica. Ali o processo nao congela, o timer de poda funciona, e o pool
+    /// vale a latencia que economiza. O desligamento e verificado indiretamente:
+    /// se ele valesse aqui, `Pooling` viria `false`.
+    /// </summary>
+    [Fact]
+    public void Fora_do_Lambda_o_pool_continua_ligado()
+    {
+        var resultado = new NpgsqlConnectionStringBuilder(
+            OpcoesDoDbContext.AjustarConexaoParaAmbiente(Base));
+
+        Assert.True(resultado.Pooling);
+    }
+
+    /// <summary>
+    /// Uma escolha explicita de `Pooling` na string prevalece — o ambiente nao
+    /// a sobrescreve. E a mesma deferencia dada ao tempo ocioso.
+    /// </summary>
+    [Fact]
+    public void Respeita_pooling_escolhido_na_string()
+    {
+        var resultado = new NpgsqlConnectionStringBuilder(
+            OpcoesDoDbContext.AjustarConexaoParaAmbiente(Base + ";Pooling=false"));
+
+        Assert.False(resultado.Pooling);
     }
 }

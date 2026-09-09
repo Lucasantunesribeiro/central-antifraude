@@ -31,7 +31,16 @@ const GRUPOS: readonly { titulo: string; itens: readonly ItemDeNavegacao[] }[] =
   {
     titulo: 'Risco',
     itens: [
-      { para: '/regras', rotulo: 'Regras' },
+      {
+        // A tela de Regras e ADMINISTRACAO: cria, edita e publica versao. Ela
+        // chama /api/regras/gestao, que o backend so abre para a supervisao.
+        // Sem esta restricao, o item aparecia para o Analista, e clicar nele
+        // levava a uma tela que respondia 403 — um erro na cara de quem so
+        // queria olhar. O menu agora espelha a autorizacao real.
+        para: '/regras',
+        rotulo: 'Regras',
+        perfis: ['Administrador', 'SupervisorDeFraude'],
+      },
       {
         para: '/backtests',
         rotulo: 'Backtests',

@@ -58,7 +58,7 @@ public static class OpcoesDoDbContext
 
         construtor
             .UseNpgsql(
-                ComPodaDeConexaoOciosa(stringDeConexao),
+                AjustarConexaoParaAmbiente(stringDeConexao),
                 npgsql => npgsql.MigrationsAssembly(
                     typeof(CentralAntifraudeDbContext).Assembly.GetName().Name))
             // Nomes em snake_case sem aspas: um analista ou auditor abrindo o
@@ -68,21 +68,39 @@ public static class OpcoesDoDbContext
     }
 
     /// <summary>
-    /// Aplica o tempo de vida ocioso, preservando um valor ja escolhido.
+    /// Ajusta a string de conexao ao ambiente onde ela vai rodar.
     ///
-    /// Se a string de conexao ja trouxer `Connection Idle Lifetime`, quem a
-    /// escreveu decidiu de proposito e a decisao vale — este metodo so preenche
-    /// a ausencia. Sem essa deferencia, um ambiente com necessidade diferente
-    /// nao teria como expressa-la.
+    /// **Duas correcoes, e a segunda so apareceu em producao.**
+    ///
+    /// A primeira e a poda por tempo ocioso: sem ela, o padrao do Npgsql (300s)
+    /// empata com a suspensao do Neon (300s), e o servidor quase sempre ganha.
+    /// Preenchida so quando a string nao a traz — quem escreveu um valor
+    /// proprio decidiu de proposito.
+    ///
+    /// A segunda e maior: **dentro de um Lambda, o POOL LOCAL e desligado.** O
+    /// motivo e sutil. O Neon suspende o compute apos 5 min e fecha as conexoes;
+    /// a poda por tempo ocioso deveria descartar a conexao morta, mas ela roda
+    /// num timer de fundo — e o Lambda CONGELA o processo inteiro entre
+    /// invocacoes, timer incluido. Quando a funcao descongela, o pool entrega
+    /// uma conexao que morreu durante o congelamento, e a primeira query falha
+    /// com `EndOfStreamException`. A segunda funciona, porque o pool ja
+    /// descartou a morta — e um 500 na primeira visita depois de um tempo
+    /// parado, que numa demonstracao e A visita.
+    ///
+    /// Sem pool local, cada `DbContext` abre a conexao na hora e a fecha ao
+    /// terminar. Nao ha conexao guardada para morrer no congelamento. O pool de
+    /// verdade passa a ser o PgBouncer do proprio Neon, do outro lado da
+    /// conexao — que e onde o pool deve ficar num ambiente serverless de
+    /// qualquer forma. Fora do Lambda (testes, migrations, execucao local) o
+    /// pool continua ligado: ali o processo nao congela, e o pool vale a pena.
     /// </summary>
-    public static string ComPodaDeConexaoOciosa(string stringDeConexao)
+    public static string AjustarConexaoParaAmbiente(string stringDeConexao)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stringDeConexao);
 
         // `DbConnectionStringBuilder`, e nao o do Npgsql, para descobrir o que
         // foi REALMENTE escrito: o builder tipado responde `ContainsKey` para
-        // toda chave que ele conhece, tenha sido informada ou nao, entao com ele
-        // nao ha como distinguir "escolheu 300" de "nao escolheu nada".
+        // toda chave que ele conhece, tenha sido informada ou nao.
         var informadas = new DbConnectionStringBuilder { ConnectionString = stringDeConexao };
 
         var construtor = new NpgsqlConnectionStringBuilder(stringDeConexao);
@@ -91,6 +109,12 @@ public static class OpcoesDoDbContext
             !informadas.ContainsKey("ConnectionIdleLifetime"))
         {
             construtor.ConnectionIdleLifetime = SegundosDeVidaOciosaDaConexao;
+        }
+
+        if (Configuracao.ConfiguracaoDaNuvem.DentroDoLambda &&
+            !informadas.ContainsKey("Pooling"))
+        {
+            construtor.Pooling = false;
         }
 
         return construtor.ConnectionString;
