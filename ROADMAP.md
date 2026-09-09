@@ -4247,9 +4247,11 @@ Reabrir apenas para:
 
 ## 15.13 Resultado da Fase 15
 
-**Validação final concluída em 2026-09-08.** O que restou (vídeo, metadata,
-release) depende de push ou de gravação de tela — nenhum dos dois autorizado
-nem executável por mim.
+**Fase 15 concluída em 2026-09-09, com a release `v1.0.0` publicada.** A
+validação final fechou em 2026-09-08; o que restava — vídeo, metadata e release —
+dependia de gravação de tela e de push, e foi concluído quando ambos foram
+autorizados. Com isso, as 16 fases (0 a 15) da Central Antifraude v1.0.0 estão
+encerradas.
 
 ### O que foi provado
 
@@ -4280,13 +4282,14 @@ real impõe. Nenhum é bug de domínio.
 
 ### Débito técnico não bloqueante
 
-1. **Vídeo (15.9) não gravado.** Gravação de tela é ação do usuário. O roteiro
-   de 25–40 s está em `docs/demonstracao.md`, e as seis screenshots cobrem a
-   mesma sequência.
-2. **Metadata do GitHub (15.10) e release `v1.0.0` (15.11) não criados.** Ambos
-   exigem `git push` e um repositório remoto, que continuam não autorizados. O
-   `CHANGELOG`/notas de release podem ser montados a partir dos commits desta
-   fase quando o push for autorizado.
+Nenhum. Os três itens que restavam foram concluídos:
+
+1. **Vídeo (15.9).** Gravado e embutido no README, na seção "Demonstração ao
+   vivo", à frente das seis screenshots que cobrem a mesma sequência.
+2. **Metadata do GitHub (15.10).** Descrição, website, tópicos, Dependabot e
+   proteção de branch aplicados no repositório publicado.
+3. **Release `v1.0.0` (15.11).** Criada em 2026-09-09 sobre `main` com CI verde,
+   com notas montadas a partir das 16 fases.
 
 ---
 
