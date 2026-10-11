@@ -65,7 +65,8 @@ public sealed class ServicoDoPainel
             await _operacao.ContarCasosAntigosAsync(
                 _relogio.Agora.AddDays(-DiasParaCasoAntigo),
                 cancellationToken),
-            await _operacao.ContarEventosPendentesAsync(cancellationToken));
+            await _operacao.ContarEventosPendentesAsync(cancellationToken),
+            await _operacao.ObterLimitesDeAtividadeAsync(cancellationToken));
     }
 
     /// <summary>

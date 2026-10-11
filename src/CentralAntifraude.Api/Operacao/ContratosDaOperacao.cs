@@ -35,7 +35,10 @@ public sealed record PainelResposta(
     IReadOnlyList<ContagemResposta> Casos,
     int CasosAntigos,
     int DiasParaCasoAntigo,
-    int EventosPendentes)
+    int EventosPendentes,
+    DateTimeOffset? PrimeiraAtividadeEm,
+    DateTimeOffset? UltimaAtividadeEm,
+    bool PeriodoDeDemonstracao)
 {
     public static PainelResposta De(ResumoOperacional resumo)
     {
@@ -65,7 +68,10 @@ public sealed record PainelResposta(
             [.. resumo.Casos.Select(c => new ContagemResposta(c.Status.ToString(), c.Quantidade))],
             resumo.CasosAntigos,
             ServicoDoPainel.DiasParaCasoAntigo,
-            resumo.EventosPendentes);
+            resumo.EventosPendentes,
+            resumo.Atividade.Primeira,
+            resumo.Atividade.Ultima,
+            resumo.Atividade.EhDemonstracao);
     }
 }
 

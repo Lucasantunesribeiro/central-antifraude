@@ -35,11 +35,13 @@ public static class EndpointsDaOperacao
 
         grupo.MapGet("/", async (
                 [FromQuery] int? dias,
+                [FromQuery] DateTimeOffset? de,
+                [FromQuery] DateTimeOffset? ate,
                 ServicoDoPainel servico,
                 IRelogio relogio,
                 CancellationToken cancellationToken) =>
             {
-                var janela = LerJanela(dias, relogio);
+                var janela = LerJanela(dias, de, ate, relogio);
 
                 return Results.Ok(PainelResposta.De(
                     await servico.ResumirAsync(janela, cancellationToken)));
@@ -48,11 +50,16 @@ public static class EndpointsDaOperacao
 
         grupo.MapGet("/regras", async (
                 [FromQuery] int? dias,
+                [FromQuery] DateTimeOffset? de,
+                [FromQuery] DateTimeOffset? ate,
                 ServicoDoPainel servico,
                 IRelogio relogio,
                 CancellationToken cancellationToken) =>
             {
-                var janela = LerJanela(dias, relogio);
+                // O mesmo periodo do painel precisa chegar aqui: se as metricas
+                // de regra usassem outra janela, duas partes da mesma tela
+                // falariam de intervalos diferentes.
+                var janela = LerJanela(dias, de, ate, relogio);
 
                 var metricas = await servico.ApurarMetricasDeRegraAsync(janela, cancellationToken);
 
@@ -124,12 +131,38 @@ public static class EndpointsDaOperacao
     /// <summary>
     /// Le a janela do painel, recusando periodo fora da faixa.
     ///
+    /// Dois caminhos: um intervalo absoluto `de`/`ate` (usado pelo salto "ver o
+    /// periodo com atividade") ou um numero de `dias` ancorado em agora. Informar
+    /// so uma das pontas do intervalo e erro — meia janela nao define periodo.
+    ///
     /// Recusar, e nao limitar em silencio: um pedido de dez anos reduzido para
     /// noventa dias devolveria numeros que nao respondem a pergunta feita.
     /// </summary>
-    private static JanelaDoPainel LerJanela(int? dias, IRelogio relogio)
+    private static JanelaDoPainel LerJanela(
+        int? dias,
+        DateTimeOffset? de,
+        DateTimeOffset? ate,
+        IRelogio relogio)
     {
         ArgumentNullException.ThrowIfNull(relogio);
+
+        if (de.HasValue != ate.HasValue)
+        {
+            throw new ErroDeValidacao(
+                "periodo",
+                "Informe as duas datas do intervalo (de e ate) ou nenhuma.");
+        }
+
+        if (de.HasValue && ate.HasValue)
+        {
+            if (!JanelaDoPainel.TentarCriarComIntervalo(
+                    de.Value, ate.Value, relogio.Agora, out var janelaAbsoluta, out var erroAbsoluto))
+            {
+                throw new ErroDeValidacao("periodo", erroAbsoluto);
+            }
+
+            return janelaAbsoluta;
+        }
 
         if (!JanelaDoPainel.TentarCriar(dias, relogio.Agora, out var janela, out var erro))
         {

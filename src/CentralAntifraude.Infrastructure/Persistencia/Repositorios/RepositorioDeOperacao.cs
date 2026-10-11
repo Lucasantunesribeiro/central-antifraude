@@ -1,4 +1,5 @@
 using CentralAntifraude.Application.Comum;
+using CentralAntifraude.Application.Identidade;
 using CentralAntifraude.Application.Operacao;
 using CentralAntifraude.Domain.Alertas;
 using CentralAntifraude.Domain.Investigacao;
@@ -25,8 +26,15 @@ namespace CentralAntifraude.Infrastructure.Persistencia.Repositorios;
 public sealed class RepositorioDeOperacao : IRepositorioDeOperacao
 {
     private readonly CentralAntifraudeDbContext _contexto;
+    private readonly IContextoDoUsuarioAtual _identidade;
 
-    public RepositorioDeOperacao(CentralAntifraudeDbContext contexto) => _contexto = contexto;
+    public RepositorioDeOperacao(
+        CentralAntifraudeDbContext contexto,
+        IContextoDoUsuarioAtual identidade)
+    {
+        _contexto = contexto;
+        _identidade = identidade;
+    }
 
     public Task<int> ContarTransacoesRecebidasAsync(
         JanelaDoPainel janela,
@@ -40,6 +48,34 @@ public sealed class RepositorioDeOperacao : IRepositorioDeOperacao
         return _contexto.Transacoes
             .AsNoTracking()
             .CountAsync(t => t.RecebidaEm >= janela.De && t.RecebidaEm <= janela.Ate, cancellationToken);
+    }
+
+    public async Task<LimitesDeAtividade> ObterLimitesDeAtividadeAsync(
+        CancellationToken cancellationToken)
+    {
+        // Extremos de AvaliadaEm do tenant, numa consulta so. Em tenant sem
+        // avaliacao, nao ha grupo e o resultado e nulo — "nada", e nao "agora".
+        var extremos = await _contexto.AvaliacoesDeRisco
+            .AsNoTracking()
+            .Select(a => a.AvaliadaEm)
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Primeira = (DateTimeOffset?)g.Min(),
+                Ultima = (DateTimeOffset?)g.Max(),
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        // So muda o rotulo na tela. Consulta explicita pelo Id da identidade
+        // porque a raiz Organizacao nao carrega o filtro global de tenant.
+        var ehDemonstracao = await _contexto.Organizacoes
+            .AsNoTracking()
+            .AnyAsync(
+                o => o.Id == _identidade.OrganizacaoId
+                    && o.Codigo == SeedDeDesenvolvimento.CodigoDaOrganizacao,
+                cancellationToken);
+
+        return new LimitesDeAtividade(extremos?.Primeira, extremos?.Ultima, ehDemonstracao);
     }
 
     public async Task<IReadOnlyList<ContagemPorDecisao>> ContarDecisoesAsync(

@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using CentralAntifraude.Application.Operacao;
 using CentralAntifraude.Domain.Identidade;
 using CentralAntifraude.Domain.Investigacao;
 using CentralAntifraude.Domain.Risco;
@@ -453,6 +454,85 @@ public sealed class ConsoleOperacionalTests : IAsyncLifetime
     }
 
     // -----------------------------------------------------------------------
+    // Janela absoluta e limites de atividade (o que faz a demo nao abrir vazia)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task A_janela_absoluta_filtra_pelo_intervalo_e_nao_por_agora()
+    {
+        await IngerirAsync("abs", quantidade: 3, cliente: "cli-abs");
+
+        var agora = DateTimeOffset.UtcNow;
+
+        // Intervalo que cerca o instante da avaliacao: traz as tres.
+        var dentro = await GetAsync(
+            $"{Painel}?de={Iso(agora.AddHours(-2))}&ate={Iso(agora.AddMinutes(1))}");
+        Assert.Equal(3, dentro.GetProperty("transacoesAvaliadas").GetInt32());
+
+        // Intervalo no passado: as mesmas tres avaliacoes de hoje nao caem nele.
+        // Prova que de/ate filtra pelo periodo pedido, e nao por "agora".
+        var passado = await GetAsync(
+            $"{Painel}?de={Iso(agora.AddDays(-10))}&ate={Iso(agora.AddDays(-9))}");
+        Assert.Equal(0, passado.GetProperty("transacoesAvaliadas").GetInt32());
+    }
+
+    [Fact]
+    public async Task O_painel_expoe_os_limites_de_atividade_do_tenant()
+    {
+        await IngerirAsync("lim", quantidade: 2, cliente: "cli-lim");
+
+        var painel = await GetAsync($"{Painel}?dias=7");
+
+        var primeira = painel.GetProperty("primeiraAtividadeEm");
+        var ultima = painel.GetProperty("ultimaAtividadeEm");
+
+        Assert.NotEqual(JsonValueKind.Null, primeira.ValueKind);
+        Assert.NotEqual(JsonValueKind.Null, ultima.ValueKind);
+        Assert.True(primeira.GetDateTimeOffset() <= ultima.GetDateTimeOffset());
+
+        // Um tenant comum nao e a organizacao de demonstracao: o rotulo da tela
+        // sera "ver atividade anterior", e nao "periodo da demonstracao".
+        Assert.False(painel.GetProperty("periodoDeDemonstracao").GetBoolean());
+    }
+
+    [Fact]
+    public async Task As_metricas_de_regra_aceitam_o_mesmo_intervalo_absoluto()
+    {
+        await IngerirRajadaAsync("abs-regra");
+
+        var agora = DateTimeOffset.UtcNow;
+
+        var dentro = await GetAsync(
+            $"{Painel}/regras?de={Iso(agora.AddHours(-2))}&ate={Iso(agora.AddMinutes(1))}");
+        Assert.NotEqual(0, dentro.GetArrayLength());
+
+        var passado = await GetAsync(
+            $"{Painel}/regras?de={Iso(agora.AddDays(-10))}&ate={Iso(agora.AddDays(-9))}");
+        Assert.Equal(0, passado.GetArrayLength());
+    }
+
+    [Theory]
+    // Invertido, meia janela (so uma ponta) e mais largo que o teto: todos 400.
+    [InlineData("?de=2026-10-08T00:00:00Z&ate=2026-10-01T00:00:00Z")]
+    [InlineData("?de=2026-10-01T00:00:00Z")]
+    [InlineData("?ate=2026-10-08T00:00:00Z")]
+    public async Task Intervalo_invalido_no_painel_e_recusado(string consulta)
+    {
+        Assert.Equal(400, await StatusDoPainelAsync($"{Painel}{consulta}"));
+    }
+
+    [Fact]
+    public async Task Intervalo_mais_largo_que_o_teto_e_recusado()
+    {
+        var agora = DateTimeOffset.UtcNow;
+
+        var consulta =
+            $"{Painel}?de={Iso(agora.AddDays(-(JanelaDoPainel.DiasMaximos + 10)))}&ate={Iso(agora)}";
+
+        Assert.Equal(400, await StatusDoPainelAsync(consulta));
+    }
+
+    // -----------------------------------------------------------------------
     // Metricas de regra
     // -----------------------------------------------------------------------
 
@@ -671,6 +751,23 @@ public sealed class ConsoleOperacionalTests : IAsyncLifetime
                 + string.Join(" || ", _fabrica.Registros.Where(r => r.Contains("Exception", StringComparison.Ordinal)).TakeLast(1)).Replace(System.Environment.NewLine, " ~ ", StringComparison.Ordinal));
 
         return JsonDocument.Parse(corpo).RootElement.Clone();
+    }
+
+    // Em UTC e url-encoded: o "Z" evita o "+" do offset, que numa query viraria
+    // espaco. O binder de DateTimeOffset le o formato round-trip ("O").
+    private static string Iso(DateTimeOffset instante) =>
+        Uri.EscapeDataString(instante.ToUniversalTime().ToString("O"));
+
+    private async Task<int> StatusDoPainelAsync(
+        string caminho,
+        PerfilDeUsuario perfil = PerfilDeUsuario.AnalistaDeFraude)
+    {
+        var token = await TokenAsync(perfil);
+
+        using var requisicao = CenarioDeIdentidade.Autenticada(HttpMethod.Get, caminho, token);
+        using var resposta = await _cliente.SendAsync(requisicao, Cancelamento);
+
+        return (int)resposta.StatusCode;
     }
 
     private async Task<string> TokenAsync(PerfilDeUsuario perfil)

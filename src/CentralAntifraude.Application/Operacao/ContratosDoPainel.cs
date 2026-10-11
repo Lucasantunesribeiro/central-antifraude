@@ -6,9 +6,18 @@ namespace CentralAntifraude.Application.Operacao;
 /// <summary>
 /// A janela que o painel resume.
 ///
-/// Um numero de dias, e nao duas datas livres: o painel responde "como esta a
-/// operacao", e essa pergunta tem um horizonte curto. Intervalos arbitrarios
-/// pertencem ao console de transacoes, que ja os aceita.
+/// Por padrao e um numero de dias ancorado em "agora": o painel responde "como
+/// esta a operacao", e essa pergunta tem horizonte curto.
+///
+/// **Por que tambem aceita um intervalo absoluto.** Um tenant cujo historico e
+/// mais antigo que a janela padrao — o caso de uma organizacao de demonstracao,
+/// mas tambem de qualquer cliente que passou um tempo sem atividade — abriria o
+/// painel vazio e sem caminho ate os proprios dados. O intervalo absoluto existe
+/// para esse salto: "mostre o periodo onde ha atividade". Continua limitado ao
+/// mesmo teto de <see cref="DiasMaximos"/> dias, para nao virar a consulta
+/// arbitraria que pertence ao console de transacoes. Os dois caminhos produzem o
+/// mesmo tipo de janela (`De`/`Ate`), entao todas as consultas da tela recebem o
+/// mesmo periodo.
 /// </summary>
 public sealed record JanelaDoPainel
 {
@@ -49,6 +58,51 @@ public sealed record JanelaDoPainel
 
         return true;
     }
+
+    /// <summary>
+    /// Cria a janela a partir de um intervalo absoluto `[de, ate]`.
+    ///
+    /// Recusa — e nao conserta em silencio — intervalo invertido, futuro ou mais
+    /// largo que o teto: devolver numeros de um periodo diferente do pedido
+    /// responderia a pergunta errada. O teto e o mesmo <see cref="DiasMaximos"/>
+    /// do caminho por dias, para que o botao "ver o periodo" nunca produza um
+    /// intervalo que o proprio painel rejeitaria.
+    /// </summary>
+    public static bool TentarCriarComIntervalo(
+        DateTimeOffset de,
+        DateTimeOffset ate,
+        DateTimeOffset agora,
+        out JanelaDoPainel janela,
+        out string erro)
+    {
+        janela = new JanelaDoPainel(DiasPadrao, agora.AddDays(-DiasPadrao), agora);
+
+        if (ate < de)
+        {
+            erro = "A data final do periodo nao pode ser anterior a inicial.";
+            return false;
+        }
+
+        // Pequena tolerancia para desvio de relogio entre cliente e servidor.
+        if (ate > agora.AddMinutes(1))
+        {
+            erro = "O periodo do painel nao pode terminar no futuro.";
+            return false;
+        }
+
+        if (ate - de > TimeSpan.FromDays(DiasMaximos))
+        {
+            erro = $"O periodo do painel nao pode exceder {DiasMaximos} dias.";
+            return false;
+        }
+
+        var dias = Math.Max(1, (int)Math.Ceiling((ate - de).TotalDays));
+
+        janela = new JanelaDoPainel(dias, de, ate);
+        erro = string.Empty;
+
+        return true;
+    }
 }
 
 /// <summary>Quantas avaliacoes cairam em cada decisao.</summary>
@@ -65,6 +119,21 @@ public sealed record SinalFrequente(TipoDeRegra Tipo, int Acionamentos);
 
 /// <summary>Quantos casos existem em cada situacao.</summary>
 public sealed record ContagemPorStatusDeCaso(StatusDoCaso Status, int Quantidade);
+
+/// <summary>
+/// Os extremos da atividade avaliada do tenant, e se ele e a organizacao de
+/// demonstracao.
+///
+/// Serve ao painel para oferecer um salto ate onde ha dados quando a janela
+/// padrao (ancorada em "agora") vem vazia. <c>Primeira</c>/<c>Ultima</c> sao
+/// nulos quando o tenant nunca teve avaliacao. <c>EhDemonstracao</c> muda apenas
+/// o rotulo na tela ("periodo da demonstracao" x "ver atividade anterior"); nao
+/// altera numero nenhum.
+/// </summary>
+public sealed record LimitesDeAtividade(
+    DateTimeOffset? Primeira,
+    DateTimeOffset? Ultima,
+    bool EhDemonstracao);
 
 /// <summary>
 /// O que o painel operacional responde.
@@ -84,7 +153,8 @@ public sealed record ResumoOperacional(
     int AlertasAbertos,
     IReadOnlyList<ContagemPorStatusDeCaso> Casos,
     int CasosAntigos,
-    int EventosPendentes);
+    int EventosPendentes,
+    LimitesDeAtividade Atividade);
 
 /// <summary>
 /// Quantas vezes uma regra acionou, e o que a investigacao humana concluiu
@@ -112,6 +182,12 @@ public interface IRepositorioDeOperacao
 {
     /// <summary>Transacoes cujo <c>RecebidaEm</c> cai na janela.</summary>
     Task<int> ContarTransacoesRecebidasAsync(JanelaDoPainel janela, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Extremos da atividade avaliada do tenant (min/max de <c>AvaliadaEm</c>) e
+    /// se ele e a organizacao de demonstracao. Independe da janela.
+    /// </summary>
+    Task<LimitesDeAtividade> ObterLimitesDeAtividadeAsync(CancellationToken cancellationToken);
 
     /// <summary>
     /// Avaliacoes por decisao, ancoradas em <c>AvaliadaEm</c>.
