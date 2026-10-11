@@ -33,7 +33,7 @@ solução certificada de compliance.
 | 12 | Observabilidade, Resiliência e Performance | ✅ concluída |
 | 13 | Dados de Demonstração e UX Final | ✅ concluída |
 | 14 | Infraestrutura, Custo e Deploy | ✅ concluída — **em produção** |
-| **15** | **Validação Final, Pentest e Release** | 🟨 validada; falta a release `v1.0.0` |
+| **15** | **Validação Final, Pentest e Release** | ✅ concluída — release [`v1.0.0`](https://github.com/Lucasantunesribeiro/central-antifraude/releases/tag/v1.0.0) publicada |
 
 Hoje a plataforma recebe transações de sistemas externos autenticados por
 credencial própria, registra cada tentativa **exatamente uma vez** mesmo sob
@@ -659,8 +659,9 @@ Docker no ar. SQLite não é aceito como substituto: as fases seguintes dependem
 de `SERIALIZABLE`, `FOR UPDATE SKIP LOCKED` e constraints que só o PostgreSQL
 tem — um teste de concorrência verde no SQLite não provaria nada.
 
-A suíte tem **1.211 testes** — 546 unitários, 51 de arquitetura, 480 de
-integração, 134 de frontend. O número não é a meta; cobrir risco real é. Vários
+A suíte tem **1.244 testes** (medidos em 2026-10-11) — 560 unitários, 51 de
+arquitetura, 490 de integração contra PostgreSQL real (Testcontainers) e 143 de
+frontend. O número não é a meta; cobrir risco real é. Vários
 testes nasceram de defeitos concretos, e cada um prova que falha sem a correção:
 o `CorrelationId` que sumia num endpoint com tratador de exceção, a conexão
 morta que o Neon fechava, o CORS declarado em dois lugares, o handler do Lambda
@@ -720,8 +721,12 @@ alta severidade.** O relatório, com escopo e limitações — e a afirmação
 explícita de que "100% seguro" não é uma alegação sustentável —, está em
 [`docs/pentest-v1.md`](docs/pentest-v1.md).
 
-Dependências: **zero vulnerabilidades** conhecidas nos dois ecossistemas, com
-Dependabot vigiando semanalmente.
+Dependências: auditoria limpa em **2026-10-11** — `npm audit` sem alta ou
+crítica (tanto em produção quanto na cadeia de desenvolvimento) e NuGet sem
+vulnerabilidade conhecida. Duas altas que haviam surgido na toolchain de build e
+teste (`source-map-js` via Vite/PostCSS, `undici` via jsdom) foram resolvidas
+atualizando os pacotes-pai. O CI roda a auditoria em duas camadas — produção e
+toolchain — e **bloqueia** em alta ou crítica; o Dependabot vigia semanalmente.
 
 ---
 

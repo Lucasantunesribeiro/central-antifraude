@@ -199,24 +199,31 @@ Nomeado para não ser confundido com cobertura:
 
 ---
 
-## 7. Guardrails a configurar no dia do deploy
+## 7. Guardrails planejados para o dia do deploy
 
-Nenhum deles foi criado — exigem autorização (`CLAUDE.md` seção 109):
+> Esta seção era o **plano** pré-deploy. O que de fato foi aplicado está na
+> seção 9 ("O que foi implantado"), e um item abaixo mudou na prática.
 
 - **AWS Budget** de US$ 1,00 com alerta por e-mail em 80%. Um dólar é
   deliberadamente baixo: a meta é zero, então qualquer centavo é anomalia.
 - **Retenção de log** de 14 dias em todos os grupos.
-- **Concorrência reservada** de 5 na API e 2 em cada worker. Não é para
-  economizar — é para que um laço acidental não consuma a cota mensal numa
-  tarde.
+- **Concorrência reservada** ~~de 5 na API e 2 em cada worker~~ — **abandonada no
+  deploy**: a conta de portfólio tem limite de 10 execuções simultâneas, e a AWS
+  exige deixar 10 **não** reservados, então reservar qualquer coisa é
+  impossível. Nenhuma função reserva concorrência (ver seção 9.3 e o teste
+  `Nenhuma_funcao_reserva_concorrencia`). O controle de custo passou a ser o
+  Budget e a suspensão automática do Neon.
 - **Alarme de fila de mortas** com limiar 1: qualquer mensagem morta merece
   aviso.
 
 ---
 
-## 8. O que precisa existir antes do primeiro deploy
+## 8. O que precisava existir antes do primeiro deploy
 
-Nada disto foi criado — todos exigem autorização (`CLAUDE.md` seção 109). A
+> Também escrita antes do deploy. Tudo abaixo **já foi provisionado** — a
+> seção 9 registra o resultado real, com recursos e custo observado.
+
+A
 lista existe porque o template **não** cria nenhum deles de propósito.
 
 ### 8.1 Os parâmetros no SSM

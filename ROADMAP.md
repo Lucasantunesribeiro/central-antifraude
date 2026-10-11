@@ -4232,16 +4232,16 @@ Reabrir apenas para:
 ## 15.12 Critérios de conclusão
 
 - [x] Jornada completa validada — 18/18 passos no ambiente publicado.
-- [x] Todas as suítes verdes — 550 + 51 + 480 + 134 = 1.215.
+- [x] Todas as suítes verdes — em 2026-10-11, 560 + 51 + 490 + 143 = 1.244 (ver `docs/evidencias-portfolio-95.md`).
 - [x] Pentest executado e documentado — 19 vetores, [`docs/pentest-v1.md`](docs/pentest-v1.md).
 - [x] Nenhuma vulnerabilidade crítica conhecida aberta.
 - [x] README final.
 - [x] Screenshots — [`docs/screenshots/`](docs/screenshots/), seis telas.
-- [ ] Vídeo. — *gravação de tela é ação do usuário; roteiro pronto em `docs/demonstracao.md`*
-- [ ] GitHub metadata. — *description/topics/website exigem `gh` sobre o repositório remoto, que não existe até o push*
-- [x] CI final verde — a suíte local passa; o workflow roda no primeiro push.
-- [ ] Release `v1.0.0`. — *tag e release exigem push, não autorizado*
-- [ ] Projeto congelado. — *depende da release*
+- [x] Vídeo — gravado e embutido no README (seção "Demonstração ao vivo").
+- [x] GitHub metadata — description, topics e website aplicados no repositório publicado.
+- [x] CI final verde — os três jobs passam no GitHub Actions a cada push.
+- [x] Release `v1.0.0` — [publicada](https://github.com/Lucasantunesribeiro/central-antifraude/releases/tag/v1.0.0) em 2026-09-09.
+- [x] Projeto congelado na v1.0.0 (manutenção evolutiva posterior registrada em `AUDITORIA_PORTFOLIO_95.md`).
 
 ---
 
@@ -4258,7 +4258,7 @@ encerradas.
 | Critério | Evidência |
 |---|---|
 | Jornada completa | 18/18 passos contra a API publicada: integração → transação `Bloquear`(75)/3 sinais → alerta → caso → nota → resolução `Legítima` → regra → backtest → publicação → histórico → auditoria |
-| Regressão | 1.215 testes verdes; build Release 0 avisos |
+| Regressão | 1.215 testes verdes no fecho da fase; 1.244 após a manutenção de 2026-10-11; build Release 0 avisos |
 | Pentest | 19 vetores defendidos, 0 achados de alta severidade; relatório com escopo e limitações |
 | Dependências | 0 vulnerabilidades (nuget + npm); Dependabot configurado |
 | README | reescrito para produto, com URLs de produção, deploy, custo e screenshots |
@@ -4524,7 +4524,7 @@ A autorização de uma fase não autoriza automaticamente a fase seguinte.
 | 12 — Observabilidade, Resiliência e Performance | ✅ Concluída (2026-09-07) |
 | 13 — Demo e UX Final | ✅ Concluída (2026-09-08) |
 | 14 — Infraestrutura e Deploy | ✅ Concluída (2026-09-08) |
-| 15 — Validação Final e Release | 🟨 Validação concluída (2026-09-08); vídeo e release pendentes de push |
+| 15 — Validação Final e Release | ✅ Concluída (2026-09-09); release v1.0.0 publicada, vídeo no README |
 
 Legenda:
 

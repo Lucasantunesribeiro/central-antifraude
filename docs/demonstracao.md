@@ -121,21 +121,30 @@ nunca está no código nem neste documento.
 | `auditor@demo.local` | Auditor | leitura e trilha |
 | `admin@demo.local` | Administrador | usuários, integrações, auditoria |
 
-**Sobre uma conta pública de demonstração** (ROADMAP 13.4): o perfil adequado é
-o **Auditor** — leitura, sem ação destrutiva. O Analista altera estado (assume
-casos, resolve investigações), e uma demonstração pública com ele exigiria uma
-estratégia de reset. Enquanto não houver deploy público, esta é a
-recomendação registrada, e não uma configuração aplicada.
+**Conta pública de demonstração** (ROADMAP 13.4): o botão **"Explorar a
+demonstração"** do site publicado entra sem senha como **Analista de Fraude**
+(endpoint `/api/auth/demo`, habilitado por `Autenticacao__DemoHabilitado`). A
+recomendação inicial era usar o Auditor — só leitura —, mas o Analista mostra o
+que diferencia o produto: assumir um caso, registrar nota e concluir uma
+investigação. O estado que ele altera é dado fictício de demonstração, e o
+visitante não alcança gestão de regras nem administração (o backend recusa com
+403). Visto em produção em `central-antifraude.vercel.app`.
 
 ---
 
-## 4. Reproduzir a demonstração do zero
+## 4. Reproduzir a demonstração do zero (apenas em ambiente local)
+
+> ⚠️ **Somente desenvolvimento.** Os comandos abaixo apagam o banco **local** de
+> Docker. Eles **não** se aplicam ao ambiente publicado: produção roda em
+> Neon/Lambda (`ASPNETCORE_ENVIRONMENT=Production`), onde o seed nem sequer
+> executa e nada aqui tem efeito. Nunca aponte estes passos para o banco de
+> produção.
 
 O seed é **idempotente**: rodar de novo não duplica nada. O marcador é a própria
 primeira transação da história A.
 
 ```bash
-# 1. Banco limpo (destrói os dados locais — só faça em desenvolvimento).
+# 1. Banco LOCAL limpo (destrói os dados de desenvolvimento no Docker).
 docker rm -f central-antifraude-postgres
 docker volume rm central-antifraude-dados
 

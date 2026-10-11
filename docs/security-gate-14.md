@@ -258,9 +258,17 @@ A quinta linha é a que vale mais: detectar reuso e derrubar **toda a família**
 tokens é o que transforma um refresh vazado num incidente que termina, em vez de
 num acesso permanente. Funciona em produção.
 
-A sétima linha é a defesa de CSRF da Fase 11: o cookie é `SameSite=Lax`, mas a
-verificação de `Origin` é a segunda tranca — e ela responde 403, não 401, porque
-a credencial era válida e o que faltou foi procedência.
+A sétima linha é a defesa de CSRF da Fase 11: a verificação de `Origin` é a
+segunda tranca — e ela responde 403, não 401, porque a credencial era válida e o
+que faltou foi procedência.
+
+> **Correção registrada (Fase 15).** Este teste observou `SameSite=Lax`. Depois,
+> o fix `481a21b` mudou o cookie para **`SameSite=None`** em HTTPS: front
+> (`vercel.app`) e API (`on.aws`) são sites diferentes, e um cookie `Lax` não
+> viaja no `fetch` cross-site, então o F5 deslogava. Com `SameSite=None`, a
+> defesa de CSRF passa a depender **inteiramente** da verificação de `Origin`
+> acima — que é justamente o que as linhas seis e sete provam. Confirmado em
+> `tests/CentralAntifraude.UnitTests/Api/DesenhoDoCookieDeSessaoTests.cs`.
 
 ### 9.5 No navegador de verdade
 
