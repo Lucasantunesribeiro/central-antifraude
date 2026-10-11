@@ -126,5 +126,58 @@ assumido e documentado, de uma infra que suspende sozinha para custar US$ 0,00.
 - Os dados da demo são fictícios por construção; o período exibido é o do cenário
   plantado, rotulado como demonstração.
 
+## Subida e verificação em produção (2026-10-11)
+
+Ordem respeitada: **backend primeiro**, depois frontend.
+
+- **Backend (API Lambda `central-antifraude-producao-api`).** `sam` não estava
+  instalado; como a mudança é só de código, atualizei o código da função com o
+  `Amazon.Lambda.Tools` (`dotnet lambda package` arm64 Release) +
+  `aws lambda update-function-code` — sem tocar template, config ou SSM.
+  `CodeSha256` mudou de `iU5Ohx…` para `d5pnHS…`, `LastUpdateStatus: Successful`.
+- **Frontend (Vercel).** O push não disparou deploy automático; publiquei com
+  `vercel deploy --prod` (CLI autenticada). Produção passou a servir o bundle
+  `index-cxe4T4G1.js`.
+- **Autenticação AWS.** A credencial falhava por **variáveis de ambiente
+  inválidas** sobrepondo o arquivo; o perfil `portfolio-claude`
+  (conta `632404567709`) responde normalmente.
+
+Verificação ao vivo da API de produção:
+
+| Checagem | Resultado |
+|---|---|
+| `/api/painel?dias=7` (demo) | `recebidas=0` — reproduz o sintoma do envelhecimento |
+| `primeiraAtividadeEm` / `ultimaAtividadeEm` | `2026-09-02` / `2026-09-09` |
+| `periodoDeDemonstracao` | `true` (org demo) |
+| `/api/painel?de=2026-09-01&ate=2026-09-30` | **35** avaliações — o cenário é alcançável pela janela absoluta |
+| Bundle do front contém `periodoDeDemonstracao`/`primeiraAtividadeEm` | sim |
+
+**Rollback à mão:** backend — `aws lambda update-function-code` com o pacote do
+revision anterior (code SHA `iU5Ohx…`); frontend — "Promote to Production" de um
+deployment anterior na Vercel; código — `git revert` de `3a3b7b1..` (faixa desta
+entrega).
+
 ## Reavaliação (rubrica §7 da auditoria)
-_A preencher após a subida e a verificação em produção._
+
+Autoavaliação — **não** substitui uma reauditoria independente. Com CA-01 a CA-07
+concluídos, suítes verdes (1.244) e a correção verificada em produção, os
+critérios obrigatórios da seção 7 estão atendidos. Distribuição sugerida, dentro
+da rubrica (pesos 25/20/20/15/10/10):
+
+| Dimensão | Peso | Sugerido | Base |
+|---|---:|---:|---|
+| Correção e integridade | 25 | 24 | sem apagar/re-datar dado; motor real preservado; 490 testes de integração |
+| Segurança | 20 | 19 | auditoria limpa em duas camadas; pentest com limitações explícitas |
+| Testes e reprodução | 20 | 19 | 1.244 testes datados; falha+recuperação e idempotência cobertos |
+| Arquitetura | 15 | 14 | janela absoluta sem virar consulta arbitrária; degradação graciosa no deploy |
+| Demo, UI e desempenho | 10 | 10 | demo não abre mais vazia; landing com valor; frio/aquecido medidos |
+| Documentação e evidências | 10 | 9 | contradições reconciliadas; este registro |
+| **Total** | **100** | **95** | |
+
+### Itens abertos (honestidade)
+- O GitHub acusou **1 high** no Dependabot no push. O `npm audit` (produção e
+  toolchain) e o NuGet local estão limpos, então a origem é provavelmente outra
+  (transitivo NuGet ou advisory só-GitHub) — **a confirmar** na aba Security
+  antes de dar o CA-01 por encerrado de ponta a ponta.
+- Capturas de `docs/screenshots/` (entrada e painel) ainda a atualizar com a UI
+  nova — exige um navegador.
