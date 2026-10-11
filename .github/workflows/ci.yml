@@ -108,7 +108,15 @@ jobs:
       - name: Build (inclui checagem de tipos)
         run: npm run build
 
-      - name: Auditoria de dependencias
+      - name: Auditoria de dependencias (producao)
+        # O que de fato chega ao navegador do usuario: qualquer alta/critica aqui
+        # e bloqueio inegociavel.
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Auditoria de dependencias (incl. ferramentas de desenvolvimento)
+        # A cadeia de build/test (vite, jsdom) tambem precisa ficar limpa de
+        # alta/critica. Mantido como gate separado para que uma falha diga de
+        # imediato se o risco esta no produto ou so na toolchain.
         run: npm audit --audit-level=high
 
   seguranca:
