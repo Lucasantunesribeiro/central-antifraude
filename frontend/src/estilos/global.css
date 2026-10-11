@@ -1723,3 +1723,212 @@ h1 code {
 .tabela tbody tr.linha-clicavel:hover td {
   background: var(--cor-elevado);
 }
+
+/* ============================================================= skip-link == */
+
+/*
+  Primeiro foco da pagina: pular a navegacao e ir direto ao conteudo. Fica fora
+  da tela ate receber foco pelo teclado, entao nao muda o visual e atende quem
+  navega sem mouse.
+*/
+.pular-para-conteudo {
+  position: absolute;
+  left: var(--espaco-4);
+  top: -56px;
+  z-index: 50;
+  padding: var(--espaco-2) var(--espaco-4);
+  background: var(--cor-painel);
+  border: 1px solid var(--cor-acento);
+  border-radius: var(--raio);
+  color: var(--cor-acento-forte);
+  font-weight: 600;
+  box-shadow: var(--sombra-media);
+  transition: top 0.15s ease;
+}
+
+.pular-para-conteudo:focus {
+  top: var(--espaco-4);
+}
+
+/* ====================================================== tabela rolavel == */
+
+/*
+  Tabela larga em tela estreita rola DENTRO do seu proprio container, em vez de
+  empurrar a pagina e criar rolagem horizontal do documento inteiro.
+*/
+.tabela-rolavel {
+  overflow-x: auto;
+}
+
+/* ============================================================ botao grande = */
+
+.botao--grande {
+  height: 48px;
+  padding: 0 var(--espaco-6);
+  font-size: 16px;
+}
+
+/* Um botao que age como link (ex.: "voltar ao periodo recente"): sem moldura. */
+button.ligacao {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* ================================================================= capa == */
+
+.capa {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+  max-width: 720px;
+  padding: var(--espaco-6) 0;
+}
+
+.capa__selo {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cor-texto-fraco);
+}
+
+.capa__titulo {
+  margin: 0;
+  font-size: 40px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.capa__resumo {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--cor-texto-suave);
+}
+
+.capa__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-3);
+  margin-top: var(--espaco-2);
+}
+
+.capa__nota,
+.capa__erro {
+  margin: 0;
+  font-size: 14px;
+  color: var(--cor-texto-suave);
+}
+
+.capa__erro {
+  color: var(--cor-falha);
+  font-weight: 600;
+}
+
+/* ============================================================== roteiro == */
+
+.roteiro {
+  margin-top: var(--espaco-6);
+}
+
+.roteiro__passos {
+  list-style: none;
+  margin: var(--espaco-4) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--espaco-4);
+}
+
+.roteiro__passo {
+  padding: var(--espaco-5);
+  background: var(--cor-painel);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-painel);
+  box-shadow: var(--sombra-sutil);
+}
+
+.roteiro__passo h3 {
+  margin: var(--espaco-3) 0 var(--espaco-2);
+  font-size: 16px;
+}
+
+.roteiro__passo p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--cor-texto-suave);
+}
+
+.roteiro__numero {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--raio-selo);
+  background: var(--cor-acento-fundo);
+  color: var(--cor-acento-forte);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+/* =========================================================== diagnostico = */
+
+.diagnostico {
+  margin-top: var(--espaco-8);
+  border-top: 1px solid var(--cor-borda);
+  padding-top: var(--espaco-5);
+}
+
+.diagnostico > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--cor-texto-suave);
+}
+
+.diagnostico > *:not(summary) {
+  margin-top: var(--espaco-4);
+}
+
+/* ========================================================= painel periodo = */
+
+.painel__periodo {
+  margin: 0 0 var(--espaco-4);
+  font-size: 14px;
+  color: var(--cor-texto-suave);
+}
+
+/* ======================================================== tela estreita == */
+
+/*
+  Celular estreito (ate 480px): a margem lateral cai para 16px e nenhum bloco
+  deixa a pagina rolar na horizontal. As tabelas largas ja rolam no proprio
+  container (.tabela-rolavel).
+*/
+@media (max-width: 30rem) {
+  .app__conteudo {
+    padding: var(--espaco-4) var(--espaco-4) 48px;
+  }
+
+  .capa {
+    padding: var(--espaco-4) 0;
+  }
+
+  .capa__titulo {
+    font-size: 30px;
+  }
+
+  .capa__resumo {
+    font-size: 16px;
+  }
+
+  .capa__acoes .botao--grande {
+    width: 100%;
+  }
+}

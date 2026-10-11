@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { requisitar } from '../api/clienteHttp';
@@ -6,6 +6,7 @@ import {
   DECISOES,
   ROTULO_DO_STATUS_DE_CASO,
   pico,
+  periodoComAtividade,
   proporcao,
   quantidadeDe,
   type MetricaDeRegra,
@@ -13,9 +14,34 @@ import {
 } from '../api/operacao';
 import { rotularTipoDeRegra } from '../api/risco';
 import { SeloDeDecisao } from '../componentes/Risco';
-import { EstadoDeCarregamento, EstadoDeErro } from '../componentes/Estados';
+import {
+  EstadoDeCarregamento,
+  EstadoDeErro,
+  EstadoVazio,
+} from '../componentes/Estados';
 
 const PERIODOS = [1, 7, 30, 90] as const;
+
+/**
+ * A janela escolhida. Por `dias` é ancorada em "agora" (o caminho normal); por
+ * `intervalo` é um período absoluto — usado pelo salto "ver o período com
+ * atividade", que impede a demonstração de abrir vazia quando o cenário fica
+ * mais velho que a janela padrão.
+ */
+type Selecao =
+  | { modo: 'dias'; dias: number }
+  | { modo: 'intervalo'; de: string; ate: string; rotulo: string };
+
+function consultaDaSelecao(selecao: Selecao): string {
+  return selecao.modo === 'dias'
+    ? `dias=${selecao.dias}`
+    : `de=${encodeURIComponent(selecao.de)}&ate=${encodeURIComponent(selecao.ate)}`;
+}
+
+const formatadorDeMes = new Intl.DateTimeFormat('pt-BR', {
+  month: 'long',
+  year: 'numeric',
+});
 
 /**
  * Painel operacional.
@@ -30,12 +56,13 @@ const PERIODOS = [1, 7, 30, 90] as const;
  * produto existe para tratar (CLAUDE.md seção 15).
  */
 export function PaginaDoPainel() {
-  const [dias, definirDias] = useState<number>(7);
+  const [selecao, definirSelecao] = useState<Selecao>({ modo: 'dias', dias: 7 });
+  const consulta = consultaDaSelecao(selecao);
 
   const painel = useQuery({
-    queryKey: ['painel', dias],
+    queryKey: ['painel', consulta],
     queryFn: ({ signal }) =>
-      requisitar<Painel>(`/api/painel?dias=${dias}`, { sinal: signal }),
+      requisitar<Painel>(`/api/painel?${consulta}`, { sinal: signal }),
   });
 
   return (
@@ -43,18 +70,34 @@ export function PaginaDoPainel() {
       <h1>Painel operacional</h1>
 
       <div className="filtros" role="group" aria-label="Período do painel">
-        {PERIODOS.map((periodo) => (
-          <button
-            key={periodo}
-            type="button"
-            className={periodo === dias ? 'botao botao--principal' : 'botao'}
-            aria-pressed={periodo === dias}
-            onClick={() => definirDias(periodo)}
-          >
-            {periodo === 1 ? '24 horas' : `${periodo} dias`}
-          </button>
-        ))}
+        {PERIODOS.map((periodo) => {
+          const ativo = selecao.modo === 'dias' && selecao.dias === periodo;
+          return (
+            <button
+              key={periodo}
+              type="button"
+              className={ativo ? 'botao botao--principal' : 'botao'}
+              aria-pressed={ativo}
+              onClick={() => definirSelecao({ modo: 'dias', dias: periodo })}
+            >
+              {periodo === 1 ? '24 horas' : `${periodo} dias`}
+            </button>
+          );
+        })}
       </div>
+
+      {selecao.modo === 'intervalo' ? (
+        <p className="painel__periodo" role="status">
+          Mostrando {selecao.rotulo}.{' '}
+          <button
+            type="button"
+            className="ligacao"
+            onClick={() => definirSelecao({ modo: 'dias', dias: 7 })}
+          >
+            Voltar ao período recente
+          </button>
+        </p>
+      ) : null}
 
       {painel.isPending ? <EstadoDeCarregamento rotulo="Carregando painel..." /> : null}
 
@@ -67,6 +110,17 @@ export function PaginaDoPainel() {
 
       {painel.isSuccess ? (
         <>
+          {/*
+            Quando a janela padrao abre vazia mas ha atividade antes dela — o
+            caso da demonstracao, cujo cenario envelhece —, um salto leva o
+            visitante direto ao periodo com dados, em vez de deixa-lo diante de
+            zeros sem explicacao.
+          */}
+          <SaltoDeAtividade
+            painel={painel.data}
+            selecao={selecao}
+            aoSaltar={definirSelecao}
+          />
           {/*
             O que abre a tela: quantos alertas esperam alguem e o botao para ir
             trabalha-los. Antes esta pagina tinha ONZE blocos e nenhuma acao
@@ -104,7 +158,7 @@ export function PaginaDoPainel() {
                 conteudo: (
                   <>
                     <Sinais painel={painel.data} />
-                    <MetricasDeRegra dias={dias} />
+                    <MetricasDeRegra consulta={consulta} />
                   </>
                 ),
               },
@@ -132,6 +186,63 @@ export function PaginaDoPainel() {
  * texto. Esconde-lo faria a tela mudar de forma conforme o dia, e quem usa
  * todo dia aprende pela posicao das coisas.
  */
+/**
+ * O salto para o período com atividade.
+ *
+ * Só aparece quando a janela atual (ancorada em "agora") veio vazia mas existe
+ * atividade antes dela — o caso da demonstração, cujo cenário fica mais velho
+ * que a janela padrão a cada dia que passa. Em vez de deixar o visitante diante
+ * de zeros, oferece um clique até onde há dados. O rótulo muda conforme o tenant
+ * seja ou não a organização de demonstração.
+ *
+ * Degrada com elegância: se a resposta não trouxer os limites de atividade — um
+ * backend mais antigo no ar durante a janela de deploy —, nada é renderizado.
+ */
+function SaltoDeAtividade({
+  painel,
+  selecao,
+  aoSaltar,
+}: {
+  painel: Painel;
+  selecao: Selecao;
+  aoSaltar: (selecao: Selecao) => void;
+}) {
+  // Já estamos num intervalo absoluto, ou a janela tem dados: nada a oferecer.
+  if (selecao.modo !== 'dias') return null;
+  if (painel.transacoesRecebidas > 0 || painel.transacoesAvaliadas > 0) return null;
+  if (!painel.primeiraAtividadeEm || !painel.ultimaAtividadeEm) return null;
+
+  const alvo = periodoComAtividade(
+    painel.primeiraAtividadeEm,
+    painel.ultimaAtividadeEm,
+  );
+  const mes = formatadorDeMes.format(new Date(painel.ultimaAtividadeEm));
+  const rotulo = painel.periodoDeDemonstracao
+    ? `o período da demonstração (${mes})`
+    : `a atividade anterior (${mes})`;
+  const acao = painel.periodoDeDemonstracao
+    ? 'Ver o período da demonstração'
+    : 'Ver atividade anterior';
+
+  return (
+    <EstadoVazio
+      titulo="Nada neste período"
+      descricao={`Não houve atividade na janela atual, mas há ${rotulo}.`}
+      acao={
+        <button
+          type="button"
+          className="botao botao--principal"
+          onClick={() =>
+            aoSaltar({ modo: 'intervalo', de: alvo.de, ate: alvo.ate, rotulo })
+          }
+        >
+          {acao} →
+        </button>
+      }
+    />
+  );
+}
+
 function Chamada({ painel }: { painel: Painel }) {
   const esperando = painel.alertasAbertos;
 
@@ -166,20 +277,45 @@ function Abas({
   abas: readonly { id: string; rotulo: string; conteudo: React.ReactNode }[];
 }) {
   const [ativa, definirAtiva] = useState(abas[0]!.id);
+  const referencias = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  // Teclado no tablist (padrao ARIA Tabs): setas movem entre abas, Home/End vao
+  // aos extremos. Sem isso, so o mouse alcanca tendencia, regras e sistema.
+  function aoTeclar(evento: KeyboardEvent<HTMLButtonElement>, indice: number) {
+    const ultimo = abas.length - 1;
+    let destino: number | null = null;
+
+    if (evento.key === 'ArrowRight') destino = indice === ultimo ? 0 : indice + 1;
+    else if (evento.key === 'ArrowLeft') destino = indice === 0 ? ultimo : indice - 1;
+    else if (evento.key === 'Home') destino = 0;
+    else if (evento.key === 'End') destino = ultimo;
+
+    if (destino === null) return;
+
+    evento.preventDefault();
+    const id = abas[destino]!.id;
+    definirAtiva(id);
+    referencias.current[id]?.focus();
+  }
 
   return (
     <div className="abas">
       <div className="abas__lista" role="tablist" aria-label="Seções do painel">
-        {abas.map((aba) => (
+        {abas.map((aba, indice) => (
           <button
             key={aba.id}
+            ref={(elemento) => {
+              referencias.current[aba.id] = elemento;
+            }}
             type="button"
             role="tab"
             id={`aba-${aba.id}`}
             aria-selected={aba.id === ativa}
             aria-controls={`painel-${aba.id}`}
+            tabIndex={aba.id === ativa ? 0 : -1}
             className={aba.id === ativa ? 'abas__aba abas__aba--ativa' : 'abas__aba'}
             onClick={() => definirAtiva(aba.id)}
+            onKeyDown={(evento) => aoTeclar(evento, indice)}
           >
             {aba.rotulo}
           </button>
@@ -455,29 +591,29 @@ function Sinais({ painel }: { painel: Painel }) {
  * o motor as marcou. A tela mostra os números brutos com o denominador à vista
  * e não calcula taxa nenhuma.
  */
-function MetricasDeRegra({ dias }: { dias: number }) {
-  const consulta = useQuery({
-    queryKey: ['painel', 'regras', dias],
+function MetricasDeRegra({ consulta }: { consulta: string }) {
+  const metricas = useQuery({
+    queryKey: ['painel', 'regras', consulta],
     queryFn: ({ signal }) =>
-      requisitar<MetricaDeRegra[]>(`/api/painel/regras?dias=${dias}`, {
+      requisitar<MetricaDeRegra[]>(`/api/painel/regras?${consulta}`, {
         sinal: signal,
       }),
   });
 
-  if (consulta.isPending) {
+  if (metricas.isPending) {
     return <EstadoDeCarregamento rotulo="Carregando métricas de regra..." />;
   }
 
-  if (consulta.isError) {
+  if (metricas.isError) {
     return (
       <EstadoDeErro
-        erro={consulta.error}
-        aoTentarDeNovo={() => void consulta.refetch()}
+        erro={metricas.error}
+        aoTentarDeNovo={() => void metricas.refetch()}
       />
     );
   }
 
-  if (consulta.data.length === 0) {
+  if (metricas.data.length === 0) {
     return null;
   }
 
@@ -485,34 +621,36 @@ function MetricasDeRegra({ dias }: { dias: number }) {
     <div className="cartao">
       <h2>Regras no período</h2>
 
-      <table className="tabela">
-        <thead>
-          <tr>
-            <th scope="col">Regra</th>
-            <th scope="col">Acionamentos</th>
-            <th scope="col">Fraude confirmada</th>
-            <th scope="col">Legítima</th>
-            <th scope="col">Inconclusiva</th>
-            <th scope="col">Sem investigação</th>
-          </tr>
-        </thead>
-        <tbody>
-          {consulta.data.map((metrica) => (
-            <tr key={metrica.regraId}>
-              <th scope="row">
-                <Link to={`/regras/${metrica.regraId}`} className="ligacao">
-                  {metrica.nome}
-                </Link>
-              </th>
-              <td className="numerico">{metrica.acionamentos}</td>
-              <td className="numerico">{metrica.fraudeConfirmada}</td>
-              <td className="numerico">{metrica.legitima}</td>
-              <td className="numerico">{metrica.inconclusiva}</td>
-              <td className="numerico">{metrica.semResultadoConhecido}</td>
+      <div className="tabela-rolavel">
+        <table className="tabela">
+          <thead>
+            <tr>
+              <th scope="col">Regra</th>
+              <th scope="col">Acionamentos</th>
+              <th scope="col">Fraude confirmada</th>
+              <th scope="col">Legítima</th>
+              <th scope="col">Inconclusiva</th>
+              <th scope="col">Sem investigação</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {metricas.data.map((metrica) => (
+              <tr key={metrica.regraId}>
+                <th scope="row">
+                  <Link to={`/regras/${metrica.regraId}`} className="ligacao">
+                    {metrica.nome}
+                  </Link>
+                </th>
+                <td className="numerico">{metrica.acionamentos}</td>
+                <td className="numerico">{metrica.fraudeConfirmada}</td>
+                <td className="numerico">{metrica.legitima}</td>
+                <td className="numerico">{metrica.inconclusiva}</td>
+                <td className="numerico">{metrica.semResultadoConhecido}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <p className="pagina__resumo">
         <strong>Acionamento</strong> é um sinal produzido por essa regra numa avaliação

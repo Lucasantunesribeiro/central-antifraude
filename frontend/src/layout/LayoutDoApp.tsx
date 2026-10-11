@@ -87,6 +87,9 @@ export function LayoutDoApp() {
 
   return (
     <div className="app">
+      <a className="pular-para-conteudo" href="#conteudo">
+        Pular para o conteúdo
+      </a>
       <header className="app__cabecalho">
         <div className="app__marca">
           <span className="app__marca-nome">Central Antifraude</span>
@@ -142,7 +145,7 @@ export function LayoutDoApp() {
         </div>
       </header>
 
-      <main className="app__conteudo">
+      <main className="app__conteudo" id="conteudo" tabIndex={-1}>
         <LimiteDeErro>
           <Outlet />
         </LimiteDeErro>

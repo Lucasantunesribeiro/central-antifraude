@@ -223,48 +223,50 @@ function Tabela({
   );
 
   return (
-    <table className="tabela">
-      <caption className="tabela__legenda">{lista.total} transação(ões)</caption>
-      <thead>
-        <tr>
-          <th scope="col">Identificador</th>
-          <th scope="col">Cliente</th>
-          {cabecalho('valor', 'Valor')}
-          {cabecalho('ocorridaEm', 'Ocorrida em')}
-          {cabecalho('recebidaEm', 'Recebida em')}
-          <th scope="col">País</th>
-          {cabecalho('score', 'Score')}
-          <th scope="col">Decisão</th>
-        </tr>
-      </thead>
-      <tbody>
-        {lista.itens.map((transacao) => (
-          <tr key={transacao.id}>
-            <th scope="row">
-              <Link to={`/transacoes/${transacao.id}`} className="ligacao">
-                <code>{transacao.identificadorExterno}</code>
-              </Link>
-            </th>
-            <td>{transacao.clienteExternoId}</td>
-            <td className="numerico">
-              {transacao.valor.toLocaleString('pt-BR', {
-                style: 'currency',
-                currency: transacao.moeda,
-              })}
-            </td>
-            <td>{new Date(transacao.ocorridaEm).toLocaleString('pt-BR')}</td>
-            <td>{new Date(transacao.recebidaEm).toLocaleString('pt-BR')}</td>
-            <td>{transacao.paisDeOrigem ?? '—'}</td>
-            <td>
-              <Score valor={transacao.score} />
-            </td>
-            <td>
-              <SeloDeDecisao decisao={transacao.decisao} />
-            </td>
+    <div className="tabela-rolavel">
+      <table className="tabela">
+        <caption className="tabela__legenda">{lista.total} transação(ões)</caption>
+        <thead>
+          <tr>
+            <th scope="col">Identificador</th>
+            <th scope="col">Cliente</th>
+            {cabecalho('valor', 'Valor')}
+            {cabecalho('ocorridaEm', 'Ocorrida em')}
+            {cabecalho('recebidaEm', 'Recebida em')}
+            <th scope="col">País</th>
+            {cabecalho('score', 'Score')}
+            <th scope="col">Decisão</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {lista.itens.map((transacao) => (
+            <tr key={transacao.id}>
+              <th scope="row">
+                <Link to={`/transacoes/${transacao.id}`} className="ligacao">
+                  <code>{transacao.identificadorExterno}</code>
+                </Link>
+              </th>
+              <td>{transacao.clienteExternoId}</td>
+              <td className="numerico">
+                {transacao.valor.toLocaleString('pt-BR', {
+                  style: 'currency',
+                  currency: transacao.moeda,
+                })}
+              </td>
+              <td>{new Date(transacao.ocorridaEm).toLocaleString('pt-BR')}</td>
+              <td>{new Date(transacao.recebidaEm).toLocaleString('pt-BR')}</td>
+              <td>{transacao.paisDeOrigem ?? '—'}</td>
+              <td>
+                <Score valor={transacao.score} />
+              </td>
+              <td>
+                <SeloDeDecisao decisao={transacao.decisao} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

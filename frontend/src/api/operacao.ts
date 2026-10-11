@@ -27,6 +27,30 @@ export interface SinalFrequente {
   acionamentos: number;
 }
 
+/** Teto de dias da janela do painel — o mesmo do backend (`JanelaDoPainel`). */
+export const DIAS_MAXIMOS_DO_PAINEL = 90;
+
+/**
+ * Janela-alvo para o salto "ver o período com atividade", limitada ao teto.
+ *
+ * Usa `[max(primeira, última − teto), última]`: para o cenário da demonstração
+ * (poucos dias) cobre tudo; para um tenant cujo histórico é mais longo que o
+ * teto, cai nos últimos `DIAS_MAXIMOS_DO_PAINEL` dias de atividade. Em nenhum
+ * caso excede o teto — então o botão nunca pede um intervalo que o backend
+ * recusaria. Datas em ISO-8601 (UTC), prontas para a query.
+ */
+export function periodoComAtividade(
+  primeira: string,
+  ultima: string,
+): { de: string; ate: string } {
+  const fim = new Date(ultima);
+  const tetoEmMs = DIAS_MAXIMOS_DO_PAINEL * 24 * 60 * 60 * 1000;
+  const limiteInferior = fim.getTime() - tetoEmMs;
+  const inicio = Math.max(new Date(primeira).getTime(), limiteInferior);
+
+  return { de: new Date(inicio).toISOString(), ate: fim.toISOString() };
+}
+
 export interface Painel {
   dias: number;
   inicio: string;
@@ -44,6 +68,16 @@ export interface Painel {
   diasParaCasoAntigo: number;
   /** Eventos que ainda não saíram da Outbox. Zero é o estado saudável. */
   eventosPendentes: number;
+  /**
+   * Extremos da atividade avaliada do tenant, independentes da janela. Nulos
+   * quando o tenant nunca teve avaliação. Servem para oferecer um salto até o
+   * período com dados quando a janela padrão (ancorada em "agora") abre vazia —
+   * é o que impede a demonstração de parecer morta quando o cenário envelhece.
+   */
+  primeiraAtividadeEm: string | null;
+  ultimaAtividadeEm: string | null;
+  /** Muda só o rótulo do salto: demonstração vs. "ver atividade anterior". */
+  periodoDeDemonstracao: boolean;
 }
 
 export interface MetricaDeRegra {

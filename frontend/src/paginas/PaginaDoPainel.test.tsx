@@ -250,4 +250,51 @@ describe('cálculos do painel', () => {
     expect(rotularOperacao('VersaoDeRegraPublicada')).toBe('Versao de regra publicada');
     expect(rotularOperacao('LoginBemSucedido')).toBe('Login bem sucedido');
   });
+
+  it('oferece o período da demonstração quando a janela abre vazia', async () => {
+    // A demonstração envelhece: a janela padrão (ancorada em "agora") fica sem
+    // nada, mas há atividade antes dela. Em vez de zeros sem explicação, o
+    // painel oferece o salto até o cenário.
+    const vazio = {
+      ...PAINEL,
+      transacoesRecebidas: 0,
+      transacoesAvaliadas: 0,
+      primeiraAtividadeEm: '2026-09-07T00:00:00.000Z',
+      ultimaAtividadeEm: '2026-09-09T00:00:00.000Z',
+      periodoDeDemonstracao: true,
+    };
+
+    const urls = montar(vazio);
+
+    const botao = await screen.findByRole('button', {
+      name: /ver o período da demonstração/i,
+    });
+
+    await userEvent.click(botao);
+
+    // O salto vira uma consulta por intervalo absoluto.
+    await waitFor(() =>
+      expect(urls.some((u) => u.includes('de=') && u.includes('ate='))).toBe(true),
+    );
+  });
+
+  it('para um tenant comum, o rótulo é "ver atividade anterior"', async () => {
+    const vazio = {
+      ...PAINEL,
+      transacoesRecebidas: 0,
+      transacoesAvaliadas: 0,
+      primeiraAtividadeEm: '2026-09-07T00:00:00.000Z',
+      ultimaAtividadeEm: '2026-09-09T00:00:00.000Z',
+      periodoDeDemonstracao: false,
+    };
+
+    montar(vazio);
+
+    expect(
+      await screen.findByRole('button', { name: /ver atividade anterior/i }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: /período da demonstração/i }),
+    ).toBeNull();
+  });
 });
